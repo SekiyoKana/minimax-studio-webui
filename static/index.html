@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="MiniMax H3 FP8 多模态视频生成工作台">
+    <meta name="theme-color" content="#f4f5f2">
+    <title>H3 Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/styles.css?v=18">
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
+    <script src="/assets/app.js?v=20" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#conversationFeed">跳到对话</a>
+
+    <div class="app-shell">
+      <aside class="asset-sidebar" id="assetSidebar">
+        <header class="brand-row">
+          <button class="brand" id="brandTrigger" type="button" aria-label="H3 Studio">
+            <span class="brand-mark">H3</span>
+            <span>STUDIO</span>
+          </button>
+          <button class="icon-button mobile-only" id="closeAssets" type="button" title="关闭素材库" aria-label="关闭素材库"><i data-lucide="x"></i></button>
+        </header>
+
+        <div class="library-heading">
+          <div><h2>素材库</h2><span id="assetTotal">0</span></div>
+          <button class="icon-button" id="newTaskButton" type="button" title="新建生成" aria-label="新建生成"><i data-lucide="square-pen"></i></button>
+        </div>
+
+        <div class="library-tools">
+          <div class="search-wrap">
+            <i data-lucide="search"></i>
+            <input id="assetSearch" type="search" placeholder="搜索素材" aria-label="搜索素材">
+          </div>
+          <select id="assetStatusFilter" aria-label="素材状态筛选">
+            <option value="">全部状态</option>
+            <option value="queued">排队中</option>
+            <option value="running">生成中</option>
+            <option value="completed">已完成</option>
+            <option value="failed">失败</option>
+            <option value="cancelled">已取消</option>
+          </select>
+        </div>
+
+        <section class="asset-grid" id="assetGrid" aria-label="生成素材"></section>
+        <nav class="pagination" aria-label="素材库分页">
+          <button class="icon-button" id="previousAssetPage" type="button" title="上一页" aria-label="上一页"><i data-lucide="chevron-left"></i></button>
+          <span id="assetPageLabel">1 / 1</span>
+          <button class="icon-button" id="nextAssetPage" type="button" title="下一页" aria-label="下一页"><i data-lucide="chevron-right"></i></button>
+        </nav>
+
+        <footer class="sidebar-footer">
+          <a href="/docs" target="_blank" rel="noreferrer"><i data-lucide="braces"></i><span>API 文档</span></a>
+        </footer>
+      </aside>
+
+      <main class="conversation-column">
+        <header class="conversation-header">
+          <div class="header-leading">
+            <button class="icon-button mobile-only" id="openAssets" type="button" title="素材库" aria-label="素材库"><i data-lucide="panel-left"></i></button>
+            <div>
+              <div class="title-line">
+                <h1>H3 对话</h1>
+                <button class="incognito-status" id="incognitoStatus" type="button" title="退出无痕模式" hidden><i data-lucide="scan-eye"></i><span>无痕</span></button>
+              </div>
+              <div class="engine-state" aria-live="polite">
+                <span class="status-dot" id="healthDot"></span>
+                <span id="healthText">连接 FP8 推理引擎</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <section class="conversation-feed" id="conversationFeed" aria-live="polite">
+          <div class="feed-loading"><span></span><span></span><span></span></div>
+        </section>
+
+        <form class="composer" id="generationForm" novalidate>
+          <div class="edit-banner" id="editBanner" hidden>
+            <span><i data-lucide="pencil"></i>正在修改排队任务</span>
+            <button type="button" id="exitEdit">退出修改</button>
+          </div>
+
+          <div class="reference-strip" id="referenceList" aria-live="polite"></div>
+          <input id="referenceInput" type="file" accept="image/*" multiple hidden>
+
+          <div class="composer-box" id="dropZone">
+            <textarea id="prompt" name="prompt" rows="3" maxlength="12000" placeholder="输入自然语言，描述场景、人物、动作、镜头与声音…" required></textarea>
+
+            <div class="composer-toolbar">
+              <div class="toolbar-left">
+                <button class="icon-button attach-button" id="addReference" type="button" title="添加参考素材" aria-label="添加参考素材"><i data-lucide="paperclip"></i></button>
+
+                <label class="compact-control" title="生成模型">
+                  <i data-lucide="sparkles"></i>
+                  <select id="modelVariant" aria-label="生成模型">
+                    <option value="fl2va-fp8">H3 FL2VA FP8</option>
+                    <option value="ref2va-fp8">H3 Ref2VA FP8</option>
+                  </select>
+                </label>
+
+                <label class="compact-control execution-control" title="执行方案">
+                  <i data-lucide="workflow"></i>
+                  <select id="executionMode" aria-label="执行方案">
+                    <option value="native">普通流 · 原生 H3</option>
+                    <option value="turbo-lora">Turbo LoRA · 4+ 步</option>
+                    <option value="h3-nsfw" id="nsfwExecutionOption" hidden disabled>H3 NSFW · NaughtyTimes LoRA</option>
+                  </select>
+                </label>
+
+                <label class="compact-control" title="画面比例">
+                  <i data-lucide="panels-top-left"></i>
+                  <select id="aspectRatio" aria-label="画面比例">
+                    <option value="16:9">16:9</option>
+                    <option value="9:16">9:16</option>
+                    <option value="1:1">1:1</option>
+                  </select>
+                </label>
+
+                <label class="compact-control" title="分辨率">
+                  <i data-lucide="video"></i>
+                  <select id="resolution" aria-label="分辨率">
+                    <option value="608x352">0.2 MP · 608 × 352</option>
+                    <option value="736x416">0.3 MP · 736 × 416</option>
+                    <option value="864x480" selected>0.4 MP · 864 × 480</option>
+                    <option value="960x544">0.5 MP · 960 × 544</option>
+                    <option value="1056x608">0.6 MP · 1056 × 608</option>
+                    <option value="1152x640">0.7 MP · 1152 × 640</option>
+                    <option value="1216x672">0.8 MP · 1216 × 672</option>
+                    <option value="1280x736">0.9 MP · 1280 × 736</option>
+                    <option value="1344x768">0.98 MP · 1344 × 768</option>
+                    <option value="1376x768">1.0 MP · 1376 × 768</option>
+                    <option value="1504x832">1.2 MP · 1504 × 832</option>
+                    <option value="1664x928">1.5 MP · 1664 × 928</option>
+                    <option value="1824x1024">1.8 MP · 1824 × 1024</option>
+                    <option value="1920x1088">2.0 MP · 1920 × 1088</option>
+                  </select>
+                </label>
+
+                <label class="compact-control" title="视频时长">
+                  <i data-lucide="clock-3"></i>
+                  <select id="duration" aria-label="视频时长">
+                    <option value="1">1s</option><option value="2">2s</option><option value="3">3s</option><option value="4">4s</option>
+                    <option value="5" selected>5s</option><option value="6">6s</option><option value="7">7s</option><option value="8">8s</option>
+                    <option value="9">9s</option><option value="10">10s</option><option value="11">11s</option><option value="12">12s</option>
+                    <option value="13">13s</option><option value="14">14s</option><option value="15">15s</option>
+                  </select>
+                </label>
+
+                <label class="compact-control" title="采样步数">
+                  <i data-lucide="gauge"></i>
+                  <input id="steps" name="steps" type="number" inputmode="numeric" min="4" max="50" step="1" value="10" aria-label="采样步数">
+                </label>
+
+              </div>
+
+              <div class="toolbar-actions">
+                <details class="settings-popover" id="advancedSettings">
+                  <summary class="icon-button" title="更多设置" aria-label="更多设置"><i data-lucide="sliders-horizontal"></i></summary>
+                  <div class="popover-panel">
+                    <label>随机种子<input id="seed" name="seed" type="number" min="0" max="2147483647" placeholder="自动"></label>
+                    <div class="popover-divider"></div>
+                    <label class="switch-row"><span>启用 AI 提示词优化</span><input id="aiEnabled" type="checkbox"><span class="switch"></span></label>
+                    <label>OpenAI Base URL<input id="aiBaseUrl" type="url" placeholder="https://api.openai.com/v1"></label>
+                    <label>模型<input id="aiModel" type="text" placeholder="gpt-4.1-mini"></label>
+                    <label>API Key<input id="aiApiKey" type="password" autocomplete="off" placeholder="sk-…"></label>
+                  </div>
+                </details>
+                <button class="optimize-button" id="optimizePrompt" type="button"><i data-lucide="wand-sparkles"></i><span>优化提示词</span></button>
+                <button class="send-button" id="generateButton" type="submit" title="开始生成" aria-label="开始生成"><i data-lucide="arrow-up"></i></button>
+              </div>
+            </div>
+          </div>
+          <p class="form-error" id="formError" role="alert"></p>
+        </form>
+      </main>
+    </div>
+
+    <button class="ops-launcher" id="opsLauncher" type="button" aria-label="打开运行日志">
+      <span class="launcher-signal"><i data-lucide="activity"></i></span>
+      <span class="launcher-copy"><strong id="launcherTitle">运行日志</strong><small id="launcherMeta">队列为空</small></span>
+      <b id="launcherQueueCount" hidden>0</b>
+    </button>
+
+    <aside class="ops-window" id="opsWindow" hidden aria-label="运行状态和日志">
+      <header class="ops-header" id="opsDragHandle">
+        <div><span class="live-dot"></span><div><h2>运行状态</h2><p id="activeTaskSummary">当前没有执行任务</p></div></div>
+        <button class="icon-button" id="closeOps" type="button" title="关闭运行日志" aria-label="关闭运行日志"><i data-lucide="x"></i></button>
+      </header>
+
+      <section class="ops-section queue-section">
+        <div class="ops-section-title"><span>执行与排队</span><b id="queueCount">0</b></div>
+        <div class="queue-list" id="queueList"><p class="quiet">队列为空</p></div>
+      </section>
+
+      <section class="ops-section log-section">
+        <div class="ops-section-title"><span>实时日志</span><button id="clearVisibleLogs" type="button">清屏</button></div>
+        <div class="log-list" id="logList" role="log" aria-live="polite"><p class="quiet">等待事件</p></div>
+      </section>
+    </aside>
+
+    <div class="secret-overlay" id="secretOverlay" hidden>
+      <form class="secret-dialog" id="secretForm">
+        <header><div><span class="secret-mark">H3</span><h2>无痕授权</h2></div><button class="icon-button" id="closeSecret" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
+        <label for="secretCode">授权码</label>
+        <input id="secretCode" type="password" autocomplete="off" required>
+        <p id="secretError" role="alert"></p>
+        <button class="secret-submit" type="submit">进入无痕模式</button>
+      </form>
+    </div>
+
+    <div class="mobile-scrim" id="mobileScrim" hidden></div>
+  </body>
+</html>

@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-07",
+  "models": [
+    {
+      "id": "fl2va-fp8",
+      "required": true,
+      "target": "diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
+      "size_bytes": 20958205608,
+      "sha256": "12944c1f7791637e7de12208aef04da82bd26b95271b1b47d817364315ade993",
+      "license": "MiniMax H3 Community License Agreement",
+      "sources": {
+        "modelscope": "https://modelscope.cn/models/Comfy-Org/MiniMax-H3/resolve/76ec60097dff950063c12c76e1cd895a238f144d/diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
+        "huggingface": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/eb8a16107c595128b3a578f82d2ce2f75920c355/diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors"
+      }
+    },
+    {
+      "id": "ref2va-fp8",
+      "required": true,
+      "target": "diffusion_models/minimax_h3_ref2va_pruned_fp8_scaled.safetensors",
+      "size_bytes": 20958205608,
+      "sha256": "f86f2f79ebd2d76eb8eeb46091e83982e6ff51d255747e7b16e92834b392b8e9",
+      "license": "MiniMax H3 Community License Agreement",
+      "sources": {
+        "modelscope": "https://modelscope.cn/models/Comfy-Org/MiniMax-H3/resolve/0eb85c07af38ed6e0388fcd94b196338845781d6/diffusion_models/minimax_h3_ref2va_pruned_fp8_scaled.safetensors",
+        "huggingface": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/eb8a16107c595128b3a578f82d2ce2f75920c355/diffusion_models/minimax_h3_ref2va_pruned_fp8_scaled.safetensors"
+      }
+    },
+    {
+      "id": "qwen3vl-text-encoder",
+      "required": true,
+      "target": "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "size_bytes": 15687142551,
+      "sha256": "35a88d51044231fe332301d7a62aa81e3f2cba62febeb446e2c1e3e0ef76f2c6",
+      "license": "MiniMax H3 Community License Agreement and upstream Qwen terms",
+      "sources": {
+        "modelscope": "https://modelscope.cn/models/Comfy-Org/MiniMax-H3/resolve/160418ce87d04db418a33a0dbe904d5a2d774e3f/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "huggingface": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/eb8a16107c595128b3a578f82d2ce2f75920c355/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
+      }
+    },
+    {
+      "id": "audio-vae",
+      "required": true,
+      "target": "vae/minimax_h3_audio_vae_fp32.safetensors",
+      "size_bytes": 605254808,
+      "sha256": "8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48",
+      "license": "MiniMax H3 Community License Agreement",
+      "sources": {
+        "modelscope": "https://modelscope.cn/models/Comfy-Org/MiniMax-H3/resolve/dcdcca14e93e72d8cba0b6312771cf0779e85cc1/vae/minimax_h3_audio_vae_fp32.safetensors",
+        "huggingface": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/eb8a16107c595128b3a578f82d2ce2f75920c355/vae/minimax_h3_audio_vae_fp32.safetensors"
+      }
+    },
+    {
+      "id": "video-vae",
+      "required": true,
+      "target": "vae/minimax_h3_video_vae_fp16.safetensors",
+      "size_bytes": 5207808496,
+      "sha256": "7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522",
+      "license": "MiniMax H3 Community License Agreement",
+      "sources": {
+        "modelscope": "https://modelscope.cn/models/Comfy-Org/MiniMax-H3/resolve/76fce18cb387285747955c88756974596c9a5bb8/vae/minimax_h3_video_vae_fp16.safetensors",
+        "huggingface": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/eb8a16107c595128b3a578f82d2ce2f75920c355/vae/minimax_h3_video_vae_fp16.safetensors"
+      }
+    },
+    {
+      "id": "turbo-lora",
+      "required": true,
+      "target": "loras/minimax_h3_turbo_4step_ckpt500.safetensors",
+      "size_bytes": 779849872,
+      "sha256": "82d0acff583b04ad9a4238a7440b584b56094bfb7c4fdb2981f67c7a4784b62d",
+      "license": "Apache-2.0",
+      "sources": {
+        "huggingface": "https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/resolve/7a44622816e16032cb0b6d044d8820da39a1dfdc/minimax_h3_turbo_4step_ckpt500.safetensors"
+      }
+    },
+    {
+      "id": "naughtytimes-lora",
+      "required": false,
+      "target": "loras/NaughtyTimes-lora-MINIMAXH3.safetensors",
+      "size_bytes": 2479265096,
+      "sha256": "69bf5e2158021b81d7519260ea1b6fdd66b6787211eaad3afa3375d57087effb",
+      "license": "Author terms apply",
+      "page_url": "https://huggingface.co/SexGod1979/NaughtyTimes_MiniMax-H3",
+      "availability": "The author repository returned HTTP 401 on 2026-08-07. Supply an authorized local file or URL when installing."
+    }
+  ]
+}

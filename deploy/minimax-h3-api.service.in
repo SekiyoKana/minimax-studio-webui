@@ -1,0 +1,17 @@
+[Unit]
+Description=MiniMax H3 FP8 Web and API Service
+After=network-online.target comfyui.service
+Wants=network-online.target comfyui.service
+
+[Service]
+Type=simple
+WorkingDirectory=@@API_ROOT@@
+EnvironmentFile=@@ENV_FILE@@
+Environment=PYTHONUNBUFFERED=1
+ExecStart=@@API_ROOT@@/run.sh
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

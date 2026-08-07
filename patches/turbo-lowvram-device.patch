@@ -1,0 +1,17 @@
+diff --git a/__init__.py b/__init__.py
+index 41df4fa..abd2e2f 100644
+--- a/__init__.py
++++ b/__init__.py
+@@ -141,7 +141,10 @@ class _AdalnDelta(torch.nn.Module):
+         x = base.linear(F.silu(t_emb) if base.apply_silu else t_emb)
+         st = self.shared.get("silu_temb")
+         if st is not None:
+-            a, b = self.a.to(x.dtype), self.b.to(x.dtype)
+-            x = x + (b @ (a @ st.to(a.device, x.dtype).T)).T          # [M, out]
++            device = x.device
++            dtype = x.dtype
++            a = self.a.to(device=device, dtype=dtype)
++            b = self.b.to(device=device, dtype=dtype)
++            x = x + (b @ (a @ st.to(device=device, dtype=dtype).T)).T  # [M, out]
+         x = x.view(x.shape[0] * base.modalities, base.expand * base.hidden)
+         return x.chunk(base.expand, dim=-1)

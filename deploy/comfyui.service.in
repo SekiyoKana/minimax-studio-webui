@@ -1,0 +1,18 @@
+[Unit]
+Description=ComfyUI for MiniMax H3
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@@COMFY_ROOT@@
+EnvironmentFile=@@ENV_FILE@@
+Environment=PYTHONUNBUFFERED=1
+ExecStart=@@COMFY_PYTHON@@ main.py --listen @@COMFY_HOST@@ --port @@COMFY_PORT@@ --reserve-vram @@COMFY_RESERVE_VRAM_GB@@ --lowvram
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGINT
+
+[Install]
+WantedBy=default.target
