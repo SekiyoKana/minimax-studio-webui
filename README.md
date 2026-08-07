@@ -37,7 +37,7 @@ MiniMax H3 FP8 视频生成服务，包含客户网页、HTTP API、任务队列
 以下命令需要在云 GPU 服务器中执行：
 
 ```bash
-git clone YOUR_GITHUB_REPOSITORY_URL
+git clone https://github.com/SekiyoKana/minimax-h3-api.git
 cd minimax-h3-api
 INSTALL_ROOT=/data/minimax-h3-stack GPU_ID=0 bash scripts/install.sh
 ```
