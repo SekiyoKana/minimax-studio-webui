@@ -1,28 +1,28 @@
-# API 请求
+# API Requests
 
-[English](en/API.md)
+[中文](../API.md)
 
-交互文档位于 `http://SERVER_IP:8193/docs`。
+Interactive API documentation is available at `http://SERVER_IP:8193/docs`.
 
-设置了 `H3_API_KEY` 时，所有 `/api/v1/*` 请求需要以下请求头：
+When `H3_API_KEY` is set, every `/api/v1/*` request requires the following header:
 
 ```http
 Authorization: Bearer YOUR_API_KEY
 ```
 
-当前网页没有服务级 API Key 输入项。对外部署可以保持 `H3_API_KEY` 为空，并在反向代理层完成身份验证。
+The current web interface has no service-level API-key field. Public deployments may leave `H3_API_KEY` empty and apply authentication at the reverse-proxy layer.
 
-## 健康检查
+## Health Check
 
 ```bash
 curl http://127.0.0.1:8193/health
 ```
 
-## 创建 FL2VA Turbo 任务
+## Create an FL2VA Turbo Job
 
 ```bash
 curl -X POST http://127.0.0.1:8193/api/v1/generations \
-  -F 'prompt=固定镜头，一名角色站在窗边，窗帘随风轻微摆动，环境安静。' \
+  -F 'prompt=Locked camera. A character stands beside a window while the curtain moves slightly in the breeze. The room is quiet.' \
   -F 'reference_manifest=[{"type":"image"}]' \
   -F 'references=@first-frame.png;type=image/png' \
   -F 'model_variant=fl2va-fp8' \
@@ -33,7 +33,7 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
   -F 'steps=10'
 ```
 
-FL2VA 尾帧请求需要按顺序提交两张图片：
+For an FL2VA last-frame request, submit two images in order:
 
 ```bash
 -F 'reference_manifest=[{"type":"image"},{"type":"image"}]' \
@@ -41,11 +41,11 @@ FL2VA 尾帧请求需要按顺序提交两张图片：
 -F 'references=@last-frame.png;type=image/png'
 ```
 
-## 创建 Ref2VA 任务
+## Create a Ref2VA Job
 
 ```bash
 curl -X POST http://127.0.0.1:8193/api/v1/generations \
-  -F 'prompt=角色在工作室内面向镜头说话，保持参考人物外观和参考声音。' \
+  -F 'prompt=The character faces the camera and speaks in a studio while preserving the referenced appearance and voice.' \
   -F 'reference_manifest=[{"type":"image"},{"type":"video"},{"type":"audio"}]' \
   -F 'references=@character.png;type=image/png' \
   -F 'references=@motion.mp4;type=video/mp4' \
@@ -58,64 +58,64 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
   -F 'steps=20'
 ```
 
-## 查询任务
+## Query Jobs
 
 ```bash
 curl http://127.0.0.1:8193/api/v1/generations/JOB_ID
 ```
 
-列表与分页：
+List jobs with pagination:
 
 ```bash
 curl 'http://127.0.0.1:8193/api/v1/generations?page=1&page_size=20&status_filter=completed'
 ```
 
-## 修改排队任务
+## Update a Queued Job
 
 ```bash
 curl -X PATCH http://127.0.0.1:8193/api/v1/generations/JOB_ID \
   -H 'Content-Type: application/json' \
-  -d '{"steps":12,"title":"更新后的任务名称"}'
+  -d '{"steps":12,"title":"Updated job title"}'
 ```
 
-任务开始执行后仅允许修改标题。
+After execution starts, only the title can be changed.
 
-## 取消与删除
+## Cancel and Delete
 
 ```bash
 curl -X POST http://127.0.0.1:8193/api/v1/generations/JOB_ID/cancel
 curl -X DELETE http://127.0.0.1:8193/api/v1/generations/JOB_ID
 ```
 
-## 下载产物
+## Download an Artifact
 
 ```bash
 curl http://127.0.0.1:8193/api/v1/generations/JOB_ID/result -o result.mp4
 ```
 
-## 日志与事件
+## Logs and Events
 
-当前日志和队列：
+Current logs and queue state:
 
 ```bash
 curl http://127.0.0.1:8193/api/v1/logs
 ```
 
-Server-Sent Events：
+Server-Sent Events:
 
 ```bash
 curl -N http://127.0.0.1:8193/api/v1/events
 ```
 
-无痕任务在公共日志中不返回任务标识、标题、提示词和参考素材信息。
+Public logs omit the job ID, title, prompt, and reference-asset information for incognito jobs.
 
-## OpenAI 兼容提示词优化
+## OpenAI-compatible Prompt Optimization
 
 ```bash
 curl -X POST http://127.0.0.1:8193/api/v1/prompts/optimize \
   -H 'Content-Type: application/json' \
   -d '{
-    "prompt":"角色走进房间并说话",
+    "prompt":"A character enters the room and speaks",
     "base_url":"https://api.openai.com/v1",
     "api_key":"YOUR_OPENAI_API_KEY",
     "model":"gpt-4.1-mini",
@@ -125,4 +125,4 @@ curl -X POST http://127.0.0.1:8193/api/v1/prompts/optimize \
   }'
 ```
 
-AI 服务配置保存在浏览器 `sessionStorage`，API Key 不写入服务端任务文件。
+AI-service settings are stored in browser `sessionStorage`. The API key is not written to server-side job files.

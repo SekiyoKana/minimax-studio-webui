@@ -1,5 +1,7 @@
 # MiniMax H3 API
 
+中文 | [English](README.en.md)
+
 MiniMax H3 FP8 视频生成服务，包含客户网页、HTTP API、任务队列、生成进度、素材库、无痕任务、OpenAI 兼容提示词优化、FL2VA、Ref2VA 和 Turbo LoRA 工作流。
 
 推理由独立 ComfyUI 服务执行。Web 与 API 服务负责参数校验、素材上传、任务队列、进度同步、产物管理和隐私隔离。
@@ -99,5 +101,10 @@ model-manifest.json  模型链接、大小、SHA-256 和许可信息
 5. [运行维护](docs/OPERATIONS.md)
 6. [验证快照](docs/PROJECT_SNAPSHOT.md)
 7. [第三方项目与许可](THIRD_PARTY_NOTICES.md)
+8. [英文文档](README.en.md)
 
 模型权重不会提交到 Git。使用前需要阅读 MiniMax H3 Community License Agreement 及各 LoRA 作者条款。
+
+## 许可
+
+本项目自有源码采用 [MIT License](LICENSE)。模型权重、ComfyUI、自定义节点、字体和其他第三方组件适用各自许可，详情见[第三方项目与许可](THIRD_PARTY_NOTICES.md)。

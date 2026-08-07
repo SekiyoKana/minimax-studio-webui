@@ -1,5 +1,7 @@
 # 安全配置
 
+[English](SECURITY.en.md)
+
 1. `.env`、模型、上传素材、生成产物和任务 JSON 已加入 `.gitignore`。
 2. 安装脚本生成随机无痕授权码，并将 `.env` 权限限制为当前用户。
 3. ComfyUI 默认仅监听 `127.0.0.1`。

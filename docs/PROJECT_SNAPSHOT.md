@@ -1,5 +1,7 @@
 # 项目验证快照
 
+[English](en/PROJECT_SNAPSHOT.md)
+
 记录日期：2026-08-07，Asia/Shanghai。
 
 ## 固定版本

@@ -1,5 +1,7 @@
 # 模型清单
 
+[English](en/MODELS.md)
+
 结构化清单位于 [`model-manifest.json`](../model-manifest.json)。所有固定链接和 SHA-256 已在 2026-08-07 核对。
 
 ## 核心模型

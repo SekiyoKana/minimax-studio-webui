@@ -1,5 +1,7 @@
 # 第三方项目与许可
 
+[English](THIRD_PARTY_NOTICES.en.md)
+
 本仓库不包含模型权重，也不复制 ComfyUI 或自定义节点源码。安装脚本从原始项目检出固定 commit。
 
 | 项目 | 来源 | 固定版本 | 许可 |
@@ -16,4 +18,4 @@
 
 `patches/turbo-lowvram-device.patch` 是对 Turbo 节点固定版本的运行兼容修改。部署时需要保留上游 Apache-2.0 许可和修改说明。
 
-本项目源码尚未由所有者指定仓库级许可。上传 GitHub 前可以根据发布范围补充项目自身的 `LICENSE`。
+本项目自有源码采用 [MIT License](LICENSE)。MIT License 不改变模型权重、ComfyUI、自定义节点、字体和其他第三方组件的许可条件。

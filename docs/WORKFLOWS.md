@@ -1,5 +1,7 @@
 # 工作流清单
 
+[English](en/WORKFLOWS.md)
+
 所有文件均为 ComfyUI API 格式 JSON，可直接提交给 `/prompt`。
 
 基础节点和模型目录参考 [ComfyUI MiniMax H3 官方教程](https://docs.comfy.org/tutorials/partner-nodes/minimax/minimax-h3)。本目录中的 API 工作流加入了服务端动态参数、任务编号输出和 Turbo LoRA 节点。
