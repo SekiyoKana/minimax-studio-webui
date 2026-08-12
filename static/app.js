@@ -209,6 +209,15 @@ function showError(message) {
   el("formError").textContent = message || "";
 }
 
+function positionDurationTooltip() {
+  if (!isDigitalHuman()) return;
+  const control = el("duration").closest(".duration-control");
+  const tooltip = el("durationHint");
+  const bounds = control.getBoundingClientRect();
+  tooltip.style.left = `${bounds.left + bounds.width / 2}px`;
+  tooltip.style.bottom = `${window.innerHeight - bounds.top + 8}px`;
+}
+
 async function api(url, options = {}) {
   const response = await fetch(url, { cache: "no-store", ...options });
   let payload = null;
@@ -232,7 +241,10 @@ function updateModelUi() {
   el("steps").value = accelerated ? "8" : digitalHuman ? "20" : el("steps").value;
   el("steps").disabled = accelerated || digitalHuman;
   el("duration").disabled = digitalHuman;
-  el("duration").title = digitalHuman ? "由驱动音频时长确定" : "视频时长";
+  const durationControl = el("duration").closest(".duration-control");
+  durationControl.classList.toggle("digital-human", digitalHuman);
+  durationControl.title = digitalHuman ? "视频长度由驱动音频长度决定" : "视频时长";
+  el("durationHint").hidden = !digitalHuman;
   referenceInput.accept = digitalHuman ? "image/*,audio/*" : ref2va ? "image/*,video/*,audio/*" : "image/*";
   el("addReference").title = digitalHuman ? "添加人物图片和驱动音频" : ref2va ? "添加图片、视频或音频参考" : "添加首帧或尾帧";
   el("addReference").setAttribute("aria-label", el("addReference").title);
@@ -1031,6 +1043,8 @@ el("assetSearch").addEventListener("input", () => {
 el("optimizePrompt").addEventListener("click", optimizePrompt);
 el("modelVariant").addEventListener("change", updateModelUi);
 el("executionMode").addEventListener("change", updateModelUi);
+el("duration").closest(".duration-control").addEventListener("mouseenter", positionDurationTooltip);
+el("duration").closest(".duration-control").addEventListener("focusin", positionDurationTooltip);
 
 el("brandTrigger").addEventListener("click", () => {
   const now = Date.now();

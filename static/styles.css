@@ -211,6 +211,11 @@ svg { width: 16px; height: 16px; stroke-width: 1.7; }
 .compact-control { display: inline-flex; height: 34px; flex: 0 0 auto; align-items: center; gap: 4px; padding: 0 5px 0 7px; border-radius: 6px; color: var(--muted); }
 .compact-control:hover { background: var(--surface-soft); color: var(--ink); }
 .compact-control svg { width: 14px; flex: 0 0 auto; }
+.duration-control { position: relative; }
+.duration-control.digital-human { background: #fff3cf; color: #8a5b16; }
+.duration-control.digital-human select { color: inherit; cursor: not-allowed; }
+.control-tooltip { position: fixed; z-index: 70; width: max-content; max-width: 220px; padding: 7px 9px; transform: translateX(-50%) translateY(3px); border: 1px solid #e5cc91; border-radius: 5px; background: #fffaf0; color: #694b1d; box-shadow: 0 8px 20px rgba(73, 56, 20, .14); font-size: 10px; line-height: 1.4; opacity: 0; pointer-events: none; visibility: hidden; transition: opacity .15s ease, transform .15s ease, visibility .15s ease; }
+.duration-control.digital-human:hover .control-tooltip, .duration-control.digital-human:focus-within .control-tooltip { transform: translateX(-50%) translateY(0); opacity: 1; visibility: visible; }
 .compact-control select { max-width: 104px; height: 28px; padding: 0 15px 0 0; border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 10px; outline: 0; }
 .compact-control input[type="number"] { width: 34px; height: 28px; padding: 0; border: 0; appearance: textfield; background: transparent; color: inherit; font: 400 10px/1 var(--mono); outline: 0; text-align: center; }
 .compact-control input[type="number"]::-webkit-inner-spin-button,

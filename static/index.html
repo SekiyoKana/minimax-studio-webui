@@ -9,9 +9,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/assets/styles.css?v=19">
+    <link rel="stylesheet" href="/assets/styles.css?v=20">
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
-    <script src="/assets/app.js?v=22" defer></script>
+    <script src="/assets/app.js?v=23" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -142,14 +142,15 @@
                   </select>
                 </label>
 
-                <label class="compact-control" title="视频时长">
+                <label class="compact-control duration-control" title="视频时长" tabindex="0" aria-label="视频时长">
                   <i data-lucide="clock-3"></i>
-                  <select id="duration" aria-label="视频时长">
+                  <select id="duration" aria-label="视频时长" aria-describedby="durationHint">
                     <option value="1">1s</option><option value="2">2s</option><option value="3">3s</option><option value="4">4s</option>
                     <option value="5" selected>5s</option><option value="6">6s</option><option value="7">7s</option><option value="8">8s</option>
                     <option value="9">9s</option><option value="10">10s</option><option value="11">11s</option><option value="12">12s</option>
                     <option value="13">13s</option><option value="14">14s</option><option value="15">15s</option>
                   </select>
+                  <span class="control-tooltip" id="durationHint" role="tooltip" hidden>视频长度由驱动音频长度决定</span>
                 </label>
 
                 <label class="compact-control" title="采样步数">
