@@ -28,7 +28,7 @@ class ContractTests(unittest.TestCase):
             styles,
             r"\.conversation-column \{[^}]*height: 100%;[^}]*overflow: hidden;",
         )
-        self.assertIn('/assets/styles.css?v=18', index)
+        self.assertIn('/assets/styles.css?v=19', index)
 
     def test_settings_popover_is_outside_horizontal_scroll_container(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -119,7 +119,7 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(public["request"]["execution_mode"], "native")
             self.assertEqual(public["elapsed_seconds"], 123.4)
 
-    def test_native_and_nsfw_workflows_remain_available(self):
+    def test_generation_workflows_remain_available(self):
         project_root = Path(__file__).resolve().parents[1]
         workflow_dir = project_root / "workflows"
         configured = Settings()
@@ -149,6 +149,10 @@ class ContractTests(unittest.TestCase):
                 "minimax_h3_ref2va_fp8_nsfw_lora_api.json",
                 configured.comfy_nsfw_workflow,
             ),
+            comfy_digital_human_workflow=local_or_configured(
+                "minimax_h3_ref2va_fp8_digital_human_api.json",
+                configured.comfy_digital_human_workflow,
+            ),
         )
         engine = ComfyUIH3Engine(settings)
 
@@ -157,15 +161,28 @@ class ContractTests(unittest.TestCase):
             self.assertNotIn("140", native)
 
             turbo = engine._load_workflow(variant, "turbo-lora")
-            self.assertEqual(turbo["123"]["class_type"], "MiniMaxH3TurboSampler")
-            self.assertEqual(turbo["142"]["class_type"], "MiniMaxH3TurboLoRA")
+            self.assertEqual(turbo["123"]["class_type"], "KSamplerSelect")
+            self.assertEqual(turbo["123"]["inputs"]["sampler_name"], "res_multistep")
+            self.assertEqual(turbo["124"]["inputs"]["scheduler"], "simple")
+            self.assertEqual(turbo["142"]["class_type"], "LoraLoaderModelOnly")
             self.assertEqual(
                 turbo["142"]["inputs"]["lora_name"],
-                "minimax_h3_turbo_4step_ckpt500.safetensors",
+                "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
             )
-            self.assertEqual(turbo["142"]["inputs"]["strength"], 1.0)
-            self.assertEqual(turbo["124"]["inputs"]["model"], ["142", 0])
-            self.assertEqual(turbo["126"]["inputs"]["model"], ["142", 0])
+            self.assertEqual(turbo["142"]["inputs"]["strength_model"], 1.0)
+            self.assertEqual(turbo["143"]["class_type"], "MiniMaxH3SigmaShift")
+            self.assertEqual(turbo["143"]["inputs"]["shift_video"], 12.0)
+            self.assertEqual(turbo["143"]["inputs"]["shift_audio"], 3.0)
+            self.assertEqual(turbo["143"]["inputs"]["model"], ["142", 0])
+            self.assertEqual(turbo["124"]["inputs"]["model"], ["143", 0])
+            self.assertEqual(turbo["124"]["inputs"]["steps"], 8)
+            self.assertEqual(turbo["126"]["inputs"]["model"], ["143", 0])
+            expected_model = (
+                "minimax_h3_fl2va_pruned_fp8_scaled.safetensors"
+                if variant == "fl2va-fp8"
+                else "minimax_h3_ref2va_pruned_fp8_scaled.safetensors"
+            )
+            self.assertEqual(turbo["127"]["inputs"]["unet_name"], expected_model)
 
         with self.assertRaises(ValueError):
             engine._load_workflow("ref2va-fp8", "speed-cache")
@@ -182,6 +199,12 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(nsfw["126"]["inputs"]["model"], ["141", 0])
         self.assertEqual(nsfw["136"]["inputs"]["clip"], ["141", 1])
 
+        digital_human = engine._load_workflow("ref2va-fp8", "digital-human")
+        self.assertEqual(digital_human["172"]["class_type"], "VRGDG_MiniMaxH3AudioDrive")
+        self.assertEqual(digital_human["125"]["inputs"]["latent_image"], ["172", 0])
+        self.assertEqual(digital_human["130"]["inputs"]["audio"], ["172", 1])
+        self.assertNotIn("121", digital_human)
+
     def test_nsfw_mode_requires_incognito_ref2va(self):
         validate_execution_mode("h3-nsfw", "ref2va-fp8", True)
         validate_execution_mode("turbo-lora", "fl2va-fp8", False)
@@ -196,9 +219,16 @@ class ContractTests(unittest.TestCase):
             validate_execution_mode("speed-cache", "ref2va-fp8", False)
         self.assertEqual(retired_context.exception.status_code, 422)
 
+    def test_digital_human_mode_requires_ref2va(self):
+        validate_execution_mode("digital-human", "ref2va-fp8", False)
+        with self.assertRaises(HTTPException) as fl2va_context:
+            validate_execution_mode("digital-human", "fl2va-fp8", False)
+        self.assertEqual(fl2va_context.exception.status_code, 422)
+
     def test_speed_cache_is_removed_from_frontend_and_service(self):
         project_root = Path(__file__).resolve().parents[1]
         index = (project_root / "static" / "index.html").read_text(encoding="utf-8")
+        app_js = (project_root / "static" / "app.js").read_text(encoding="utf-8")
         service = (project_root / "deploy" / "minimax-h3-api.service.in").read_text(encoding="utf-8")
         environment = (project_root / ".env.example").read_text(encoding="utf-8")
         deployment = service + environment
@@ -207,8 +237,26 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn("H3_COMFY_SPEED_WORKFLOW", deployment)
         self.assertNotIn("H3_COMFY_REF2VA_SPEED_WORKFLOW", deployment)
         self.assertIn('option value="turbo-lora"', index)
+        self.assertIn('option value="turbo-lora">8-step LoRA · 1.0', index)
+        self.assertIn('const accelerated = selectedExecutionMode() === "turbo-lora";', app_js)
+        self.assertIn('el("steps").value = accelerated ? "8"', app_js)
+        self.assertIn('el("steps").disabled = accelerated || digitalHuman;', app_js)
+        self.assertIn('selectedExecutionMode() === "turbo-lora" ? 8', app_js)
         self.assertIn("H3_COMFY_TURBO_WORKFLOW", deployment)
         self.assertIn("H3_COMFY_REF2VA_TURBO_WORKFLOW", deployment)
+
+    def test_digital_human_frontend_contract(self):
+        project_root = Path(__file__).resolve().parents[1]
+        index = (project_root / "static" / "index.html").read_text(encoding="utf-8")
+        app_js = (project_root / "static" / "app.js").read_text(encoding="utf-8")
+        environment = (project_root / ".env.example").read_text(encoding="utf-8")
+
+        self.assertIn('option value="digital-human">数字人 · 音频驱动', index)
+        self.assertIn('/assets/app.js?v=22', index)
+        self.assertIn('return { image: 1, video: 0, audio: 1 };', app_js)
+        self.assertIn('el("duration").disabled = digitalHuman;', app_js)
+        self.assertIn('el("steps").disabled = accelerated || digitalHuman;', app_js)
+        self.assertIn("H3_COMFY_DIGITAL_HUMAN_WORKFLOW", environment)
 
     def test_nsfw_frontend_option_is_incognito_only(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -365,8 +413,8 @@ class ContractTests(unittest.TestCase):
         self.assertIn("function isAnonymousQueueJob(job)", app_js)
         self.assertIn('? "有任务正在运行中"', app_js)
         self.assertIn('const progress = item.progress == null ? ""', app_js)
-        self.assertIn('/assets/app.js?v=20', index)
-        self.assertIn('/assets/styles.css?v=18', index)
+        self.assertIn('/assets/app.js?v=22', index)
+        self.assertIn('/assets/styles.css?v=19', index)
         self.assertIn('id="steps" name="steps" type="number"', index)
         self.assertIn('min="4" max="50" step="1" value="10"', index)
         self.assertNotIn('<select id="steps"', index)
@@ -468,6 +516,39 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(workflow["201"]["inputs"]["force_rate"], 24)
         self.assertEqual(workflow["201"]["inputs"]["frame_load_cap"], 360)
 
+    def test_digital_human_workflow_uses_source_audio(self):
+        engine = ComfyUIH3Engine(Settings())
+        job = {
+            "id": "digital-human-test",
+            "request": {
+                "model_variant": "ref2va-fp8",
+                "execution_mode": "digital-human",
+                "prompt": "人物面对镜头自然说话，保持固定机位。",
+                "width": 864,
+                "height": 480,
+                "num_frames": 209,
+                "steps": 20,
+                "seed": 789,
+                "references": [{"type": "audio"}, {"type": "image"}],
+            },
+        }
+        names = [
+            "minimax-h3-api/digital-human-test/01_audio.wav",
+            "minimax-h3-api/digital-human-test/02_image.png",
+        ]
+
+        workflow = engine._build_workflow(job, names)
+
+        self.assertEqual(workflow["137"]["inputs"]["image"], names[1])
+        self.assertEqual(workflow["171"]["inputs"]["audio"], names[0])
+        self.assertEqual(workflow["136"]["inputs"]["ref_images.ref_image_0"], ["137", 0])
+        self.assertEqual(workflow["136"]["inputs"]["ref_audios.ref_audio_0"], ["171", 0])
+        self.assertIn("<Picture 1>", workflow["136"]["inputs"]["prompt"])
+        self.assertIn("<Audio 1>", workflow["136"]["inputs"]["prompt"])
+        self.assertIn(job["request"]["prompt"], workflow["136"]["inputs"]["prompt"])
+        self.assertEqual(workflow["172"]["inputs"]["source_audio"], ["171", 0])
+        self.assertEqual(workflow["130"]["inputs"]["audio"], ["172", 1])
+
     def test_generation_and_reference_limits(self):
         for duration in (1, 15):
             for steps in (4, 10, 50):
@@ -478,6 +559,14 @@ class ContractTests(unittest.TestCase):
         for steps in (3, 51):
             with self.assertRaises(HTTPException):
                 validate_generation(608, 352, 5, steps)
+        validate_generation(608, 352, 5, 8, "turbo-lora")
+        for steps in (4, 10, 50):
+            with self.assertRaises(HTTPException):
+                validate_generation(608, 352, 5, steps, "turbo-lora")
+        validate_generation(608, 352, 5, 20, "digital-human")
+        for steps in (8, 19, 21):
+            with self.assertRaises(HTTPException):
+                validate_generation(608, 352, 5, steps, "digital-human")
         validate_references(
             "ref2va-fp8",
             ["image"] * 9 + ["video"] * 3 + ["audio"] * 3,
@@ -489,6 +578,15 @@ class ContractTests(unittest.TestCase):
         validate_references("fl2va-fp8", ["image", "image"])
         with self.assertRaises(HTTPException):
             validate_references("fl2va-fp8", ["video"])
+        validate_references("ref2va-fp8", ["image", "audio"], "digital-human")
+        validate_references("ref2va-fp8", ["audio", "image"], "digital-human")
+        for variant, kinds in (
+            ("fl2va-fp8", ["image", "audio"]),
+            ("ref2va-fp8", ["image"]),
+            ("ref2va-fp8", ["image", "audio", "audio"]),
+        ):
+            with self.assertRaises(HTTPException):
+                validate_references(variant, kinds, "digital-human")
 
     def test_comfy_result_becomes_api_managed_artifact(self):
         with TemporaryDirectory() as temp:
@@ -523,6 +621,39 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(result.read_bytes(), b"test-video")
             self.assertFalse(source.exists())
             self.assertTrue(result.with_suffix(".json").exists())
+
+    def test_comfy_engine_releases_vram_after_each_job(self):
+        engine = ComfyUIH3Engine(Settings(comfy_url="http://comfy.test:8188"))
+
+        with patch("httpx.Client") as client_class:
+            client = client_class.return_value.__enter__.return_value
+            engine._release_vram()
+
+        client_class.assert_called_once()
+        client.post.assert_called_once_with(
+            "/free",
+            json={"unload_models": True, "free_memory": True},
+        )
+        client.post.return_value.raise_for_status.assert_called_once_with()
+
+        with (
+            patch("httpx.Client", side_effect=RuntimeError("connection failed")),
+            patch("app.engine.logger.exception") as log_exception,
+        ):
+            engine._release_vram()
+        log_exception.assert_called_once_with("ComfyUI VRAM 释放失败")
+
+        with (
+            patch.object(engine, "_prepare_inputs", side_effect=RuntimeError("prepare failed")),
+            patch.object(engine, "_release_vram") as release_vram,
+            self.assertRaisesRegex(RuntimeError, "prepare failed"),
+        ):
+            engine.generate(
+                {"id": "failed-job"},
+                lambda _percent, _stage: None,
+                lambda: False,
+            )
+        release_vram.assert_called_once_with()
 
 
 if __name__ == "__main__":

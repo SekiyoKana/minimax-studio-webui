@@ -12,11 +12,11 @@ Inference runs through an independent ComfyUI service. The web and API service h
 |---|---|---|---|
 | Native FL2VA | FP8 Scaled | Native sampler | 1 first-frame image and an optional last-frame image |
 | Native Ref2VA | FP8 Scaled | Native sampler | Up to 9 images, 3 videos, and 3 audio clips |
-| Turbo FL2VA | FP8 Scaled + Turbo LoRA | Dual-timeline sampler, 4 to 50 steps | 1 first-frame image and an optional last-frame image |
-| Turbo Ref2VA | FP8 Scaled + Turbo LoRA | Dual-timeline sampler, 4 to 50 steps | Up to 9 images, 3 videos, and 3 audio clips |
+| Turbo FL2VA | FP8 Scaled + 8-step LoRA v1.0 | `res_multistep`, fixed at 8 steps | 1 first-frame image and an optional last-frame image |
+| Turbo Ref2VA | Ref2VA FP8 Scaled + FL2VA 8-step LoRA v1.0 | `res_multistep`, fixed at 8 steps | Up to 9 images, 3 videos, and 3 audio clips |
 | Optional H3 NSFW | Ref2VA FP8 Scaled + NaughtyTimes LoRA | Native sampler | Available only in incognito mode |
 
-The web interface defaults to 10 sampling steps. The Turbo LoRA strength is 1.0. The NaughtyTimes LoRA strength is 0.5.
+The web interface defaults to 10 sampling steps. The 8-step LoRA acceleration mode is fixed at 8 steps with LoRA strength 1.0. Ref2VA acceleration temporarily reuses the FL2VA 8-step LoRA until a dedicated Ref2VA release is available. The NaughtyTimes LoRA strength is 0.5.
 
 ## Minimum Configuration
 
@@ -48,7 +48,7 @@ The installer performs the following operations:
 
 1. Checks out the verified ComfyUI and custom-node revisions.
 2. Creates isolated Python environments.
-3. Downloads approximately 64.2 GB of core models from ModelScope.
+3. Downloads approximately 65.4 GB of required models from ModelScope or Hugging Face.
 4. Verifies every model's file size and SHA-256 checksum.
 5. Installs and starts the ComfyUI and API systemd user services.
 6. Generates a random incognito access code and stores it in `.env`.
@@ -77,7 +77,7 @@ INSTALL_ROOT=/data/minimax-h3-stack bash scripts/verify_install.sh
 INSTALL_ROOT=/data/minimax-h3-stack bash scripts/smoke_generation.sh
 ```
 
-`verify_install.sh` checks source tests, model checksums, ComfyUI nodes, service health, and queue state. `smoke_generation.sh` submits a 608x352, 5-second, 10-step Turbo incognito job.
+`verify_install.sh` checks source tests, model checksums, ComfyUI nodes, service health, and queue state. `smoke_generation.sh` submits a 608x352, 5-second, 8-step LoRA incognito job.
 
 ## Repository Structure
 
@@ -87,7 +87,7 @@ static/              Customer-facing web interface
 workflows/           Five ComfyUI API-format workflows
 scripts/             Installation, model download, verification, smoke test
 deploy/              systemd service templates
-patches/             Turbo-node low-VRAM compatibility patch
+patches/             Historical compatibility patches
 docs/                Model, workflow, API, deployment, and operations docs
 model-manifest.json  Model URLs, sizes, SHA-256 checksums, and licenses
 ```

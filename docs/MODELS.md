@@ -2,7 +2,7 @@
 
 [English](en/MODELS.md)
 
-结构化清单位于 [`model-manifest.json`](../model-manifest.json)。所有固定链接和 SHA-256 已在 2026-08-07 核对。
+结构化清单位于 [`model-manifest.json`](../model-manifest.json)。所有固定链接和 SHA-256 已在 2026-08-12 核对。
 
 ## 核心模型
 
@@ -24,14 +24,14 @@
 
 | 文件 | 大小 | SHA-256 | 下载 |
 |---|---:|---|---|
-| `minimax_h3_turbo_4step_ckpt500.safetensors` | 779,849,872 | `82d0acff583b04ad9a4238a7440b584b56094bfb7c4fdb2981f67c7a4784b62d` | [Hugging Face 固定版本](https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/resolve/7a44622816e16032cb0b6d044d8820da39a1dfdc/minimax_h3_turbo_4step_ckpt500.safetensors) |
+| `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` | 1,956,193,000 | `2339acdf19bfe123f46b971ea35d367a84adb85de43627e1eceafa5a5b2b111e` | [Hugging Face 固定版本](https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/050494d5fe05bd1b1140b8565ea51dc33a5085a5/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors) |
 
 作者资料：
 
-1. [MiniMax H3 Turbo LoRA 模型卡](https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora)
-2. [ComfyUI MiniMax H3 Turbo 节点](https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo)
+1. [LightX2V MiniMax H3 Turbo LoRA 模型卡](https://huggingface.co/lightx2v/Minimax-h3-Turbo)
+2. [ModelTC MiniMax H3 Turbo](https://github.com/ModelTC/Minimax-H3-Turbo)
 
-当前工作流使用 LoRA 强度 1.0 和作者提供的双时间轴采样器。步数允许 4 至 50，默认 10。作者将该版本标记为早期预览版本。
+当前工作流使用 LoRA 强度 1.0、`res_multistep` 采样器和 `MiniMaxH3SigmaShift`，步数固定为 8。Ref2VA 加速方案暂时复用该 FL2VA LoRA，直到 Ref2VA 专用版本发布。
 
 ## 可选 NaughtyTimes LoRA
 
@@ -43,4 +43,4 @@
 
 ## 存储统计
 
-必需模型总大小为 64,196,466,943 bytes，约 64.2 GB。包含可选 NaughtyTimes LoRA 后总大小为 66,675,732,039 bytes。
+必需模型总大小为 65,372,810,071 bytes，约 65.4 GB。包含可选 NaughtyTimes LoRA 后总大小为 67,852,075,167 bytes。

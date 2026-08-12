@@ -94,13 +94,15 @@ function modelLabel(job) {
 }
 
 function executionModeLabel(job) {
+  if (job.request?.execution_mode === "digital-human") return "数字人 · 音频驱动";
   if (job.request?.execution_mode === "h3-nsfw") return "H3 NSFW · NaughtyTimes LoRA";
-  if (job.request?.execution_mode === "turbo-lora") return "Turbo LoRA · 双时间轴采样";
+  if (job.request?.execution_mode === "turbo-lora") return "8-step LoRA · 强度 1.0";
   if (job.request?.execution_mode === "speed-cache") return "Speed Cache（已停用）";
   return "普通流 · 原生 H3";
 }
 
 function executionModeClass(job) {
+  if (job.request?.execution_mode === "digital-human") return "digital-human";
   if (job.request?.execution_mode === "h3-nsfw") return "nsfw";
   if (job.request?.execution_mode === "turbo-lora") return "turbo";
   if (job.request?.execution_mode === "speed-cache") return "speed";
@@ -146,7 +148,12 @@ function isRef2VA(variant = selectedVariant()) {
   return variant === "ref2va-fp8";
 }
 
+function isDigitalHuman(executionMode = selectedExecutionMode()) {
+  return executionMode === "digital-human";
+}
+
 function referenceLimits(variant = selectedVariant()) {
+  if (isDigitalHuman()) return { image: 1, video: 0, audio: 1 };
   return isRef2VA(variant)
     ? { image: 9, video: 3, audio: 3 }
     : { image: 2, video: 0, audio: 0 };
@@ -163,11 +170,16 @@ function kindFor(file) {
   return null;
 }
 
-function referenceLabels(references = state.references, variant = selectedVariant()) {
+function referenceLabels(
+  references = state.references,
+  variant = selectedVariant(),
+  executionMode = selectedExecutionMode(),
+) {
   const counts = { image: 0, video: 0, audio: 0 };
   return references.map((item) => {
     const kind = item.kind || item.type;
     counts[kind] += 1;
+    if (isDigitalHuman(executionMode)) return kind === "image" ? "人物图像" : "驱动音频";
     if (!isRef2VA(variant)) return counts.image === 1 ? "首帧" : "尾帧";
     return `<${{ image: "Picture", video: "Video", audio: "Audio" }[kind]} ${counts[kind]}>`;
   });
@@ -178,6 +190,12 @@ function validateReferenceSet(references = state.references, variant = selectedV
   const limits = referenceLimits(variant);
   const counts = { image: 0, video: 0, audio: 0 };
   references.forEach((item) => { counts[item.kind || item.type] += 1; });
+  if (isDigitalHuman()) {
+    if (references.length !== 2 || counts.image !== 1 || counts.audio !== 1) {
+      return "数字人模式需要添加 1 张人物图片和 1 段驱动音频";
+    }
+    return "";
+  }
   if (!isRef2VA(variant) && (counts.image !== references.length || counts.image > 2)) {
     return "FL2VA 仅支持 1 张首帧，或首帧和尾帧两张图片";
   }
@@ -205,12 +223,18 @@ async function api(url, options = {}) {
 
 function updateModelUi() {
   const nsfw = selectedExecutionMode() === "h3-nsfw";
+  const digitalHuman = isDigitalHuman();
   const fl2vaOption = el("modelVariant").querySelector('option[value="fl2va-fp8"]');
-  fl2vaOption.disabled = nsfw;
-  if (nsfw) el("modelVariant").value = "ref2va-fp8";
+  fl2vaOption.disabled = nsfw || digitalHuman;
+  if (nsfw || digitalHuman) el("modelVariant").value = "ref2va-fp8";
   const ref2va = isRef2VA();
-  referenceInput.accept = ref2va ? "image/*,video/*,audio/*" : "image/*";
-  el("addReference").title = ref2va ? "添加图片、视频或音频参考" : "添加首帧或尾帧";
+  const accelerated = selectedExecutionMode() === "turbo-lora";
+  el("steps").value = accelerated ? "8" : digitalHuman ? "20" : el("steps").value;
+  el("steps").disabled = accelerated || digitalHuman;
+  el("duration").disabled = digitalHuman;
+  el("duration").title = digitalHuman ? "由驱动音频时长确定" : "视频时长";
+  referenceInput.accept = digitalHuman ? "image/*,audio/*" : ref2va ? "image/*,video/*,audio/*" : "image/*";
+  el("addReference").title = digitalHuman ? "添加人物图片和驱动音频" : ref2va ? "添加图片、视频或音频参考" : "添加首帧或尾帧";
   el("addReference").setAttribute("aria-label", el("addReference").title);
   renderReferences();
   const error = validateReferenceSet(state.references);
@@ -232,7 +256,9 @@ function addFiles(files) {
     const limits = referenceLimits();
     const current = state.references.filter((item) => (item.kind || item.type) === kind).length;
     if (!limits[kind]) {
-      error = `FL2VA 仅支持图片：${file.name}`;
+      error = isDigitalHuman()
+        ? `数字人模式仅支持人物图片和驱动音频：${file.name}`
+        : `FL2VA 仅支持图片：${file.name}`;
       return;
     }
     if (current >= limits[kind]) {
@@ -425,7 +451,11 @@ async function loadOlderMessages() {
 
 function referenceSummary(job) {
   const references = job.request?.references || [];
-  const labels = referenceLabels(references, job.request?.model_variant || "fl2va-fp8");
+  const labels = referenceLabels(
+    references,
+    job.request?.model_variant || "fl2va-fp8",
+    job.request?.execution_mode || "native",
+  );
   if (!references.length) return "";
   return `<div class="message-assets">${references.map((item, index) => {
     const itemIcon = item.type === "image" ? "image" : item.type === "video" ? "film" : "audio-lines";
@@ -605,7 +635,7 @@ form.addEventListener("submit", async (event) => {
   showError("");
   const prompt = promptInput.value.trim();
   if (prompt.length < 8) return showError("请填写至少 8 个字符的提示词");
-  const steps = Number(el("steps").value);
+  const steps = selectedExecutionMode() === "turbo-lora" ? 8 : isDigitalHuman() ? 20 : Number(el("steps").value);
   if (!Number.isInteger(steps) || steps < 4 || steps > 50) return showError("采样步数请输入 4–50 的整数");
   const [width, height] = getDimensions();
   const button = el("generateButton");

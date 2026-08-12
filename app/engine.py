@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import shutil
@@ -13,6 +14,9 @@ from typing import Any, Callable
 from PIL import Image
 
 from .settings import Settings
+
+
+logger = logging.getLogger(__name__)
 
 
 class ProgressAdapter:
@@ -237,6 +241,8 @@ class ComfyUIH3Engine:
         "128": (8, "加载 Qwen3-VL 文本编码器"),
         "141": (10, "加载 H3 NSFW LoRA"),
         "136": (12, "编码提示词与首尾帧"),
+        "171": (10, "加载数字人驱动音频"),
+        "172": (14, "编码并锁定数字人驱动音频"),
         "125": (15, "联合音视频采样"),
         "121": (90, "解码音频"),
         "122": (92, "解码视频"),
@@ -263,6 +269,7 @@ class ComfyUIH3Engine:
             ("ref2va-fp8", "native"): self.settings.comfy_ref2va_workflow,
             ("ref2va-fp8", "turbo-lora"): self.settings.comfy_ref2va_turbo_workflow,
             ("ref2va-fp8", "h3-nsfw"): self.settings.comfy_nsfw_workflow,
+            ("ref2va-fp8", "digital-human"): self.settings.comfy_digital_human_workflow,
         }
         try:
             workflow_path = workflow_paths[(variant, execution_mode)]
@@ -275,9 +282,11 @@ class ComfyUIH3Engine:
         if variant == "ref2va-fp8":
             required.discard("137")
         if execution_mode == "turbo-lora":
-            required.add("142")
+            required.update({"142", "143"})
         if execution_mode == "h3-nsfw":
             required.add("141")
+        if execution_mode == "digital-human":
+            required.update({"137", "171", "172"})
         missing = sorted(required.difference(workflow))
         if missing:
             raise ValueError(f"ComfyUI 工作流缺少节点：{', '.join(missing)}")
@@ -313,6 +322,22 @@ class ComfyUIH3Engine:
             height=request["height"],
             length=request["num_frames"],
         )
+        if execution_mode == "digital-human":
+            inputs_by_type = {
+                item["type"]: input_name
+                for item, input_name in zip(request["references"], input_names, strict=True)
+            }
+            workflow["137"]["inputs"]["image"] = inputs_by_type["image"]
+            workflow["171"]["inputs"]["audio"] = inputs_by_type["audio"]
+            conditioning["prompt"] = (
+                "<Picture 1> is the sole character reference. "
+                "The character speaks and lip-syncs exactly to <Audio 1>. "
+                "Preserve the identity, facial structure, clothing, and source audio exactly.\n\n"
+                f"{request['prompt']}"
+            )
+            conditioning["ref_images.ref_image_0"] = ["137", 0]
+            conditioning["ref_audios.ref_audio_0"] = ["171", 0]
+            return workflow
         if variant == "ref2va-fp8":
             conditioning["ref_image_size"] = request.get("ref_image_size", "match")
             for key in list(conditioning):
@@ -392,6 +417,23 @@ class ComfyUIH3Engine:
                 client.post("/interrupt").raise_for_status()
         except Exception:
             pass
+
+    def _release_vram(self) -> None:
+        import httpx
+
+        try:
+            with httpx.Client(
+                base_url=self.settings.comfy_url,
+                timeout=httpx.Timeout(10, connect=5),
+                trust_env=False,
+            ) as client:
+                response = client.post(
+                    "/free",
+                    json={"unload_models": True, "free_memory": True},
+                )
+                response.raise_for_status()
+        except Exception:
+            logger.exception("ComfyUI VRAM 释放失败")
 
     def _history(self, client, prompt_id: str) -> dict[str, Any] | None:
         response = client.get(f"/history/{prompt_id}")
@@ -538,6 +580,7 @@ class ComfyUIH3Engine:
         finally:
             if task_dir:
                 shutil.rmtree(task_dir, ignore_errors=True)
+            self._release_vram()
 
 
 class SGLangH3Engine:

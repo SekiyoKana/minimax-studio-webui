@@ -86,6 +86,7 @@ svg { width: 16px; height: 16px; stroke-width: 1.7; }
 .asset-plan { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asset-plan.speed { color: var(--blue); }
 .asset-plan.turbo { color: var(--blue); }
+.asset-plan.digital-human { color: #426b50; }
 .asset-plan.nsfw { color: var(--accent); }
 .library-empty { grid-column: 1 / -1; display: grid; min-height: 190px; place-content: center; justify-items: center; gap: 9px; color: var(--quiet); font-size: 11px; }
 .library-empty svg { width: 22px; height: 22px; }
@@ -129,6 +130,7 @@ svg { width: 16px; height: 16px; stroke-width: 1.7; }
 .message-plan { display: inline-flex; min-height: 20px; align-items: center; padding: 0 6px; border: 1px solid var(--line-strong); border-radius: 4px; color: var(--muted); }
 .message-plan.speed { border-color: #abc4d7; background: #eaf1f5; color: #315f82; }
 .message-plan.turbo { border-color: #abc4d7; background: #eaf1f5; color: #315f82; }
+.message-plan.digital-human { border-color: #b7cbbd; background: #edf4ef; color: #365b42; }
 .message-plan.nsfw { border-color: #d6a99e; background: var(--accent-soft); color: #843b2f; }
 .message-assets { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 13px; }
 .message-asset { display: grid; min-width: 0; max-width: 290px; min-height: 48px; grid-template-columns: 54px minmax(0, 1fr); align-items: center; gap: 8px; padding: 5px 9px 5px 5px; border-left: 2px solid var(--line-strong); background: rgba(255, 255, 255, .48); color: inherit; text-decoration: none; }

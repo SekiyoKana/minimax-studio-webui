@@ -12,11 +12,11 @@ MiniMax H3 FP8 视频生成服务，包含客户网页、HTTP API、任务队列
 |---|---|---|---|
 | 普通 FL2VA | FP8 Scaled | 原生采样 | 1 张首帧，可选 1 张尾帧 |
 | 普通 Ref2VA | FP8 Scaled | 原生采样 | 最多 9 张图片、3 段视频、3 段音频 |
-| Turbo FL2VA | FP8 Scaled + Turbo LoRA | 双时间轴采样，4 至 50 步 | 1 张首帧，可选 1 张尾帧 |
-| Turbo Ref2VA | FP8 Scaled + Turbo LoRA | 双时间轴采样，4 至 50 步 | 最多 9 张图片、3 段视频、3 段音频 |
+| Turbo FL2VA | FP8 Scaled + 8-step LoRA v1.0 | `res_multistep`，固定 8 步 | 1 张首帧，可选 1 张尾帧 |
+| Turbo Ref2VA | Ref2VA FP8 Scaled + FL2VA 8-step LoRA v1.0 | `res_multistep`，固定 8 步 | 最多 9 张图片、3 段视频、3 段音频 |
 | 可选 H3 NSFW | Ref2VA FP8 Scaled + NaughtyTimes LoRA | 原生采样 | 仅在无痕模式中启用 |
 
-网页默认采样步数为 10。Turbo LoRA 强度为 1.0。NaughtyTimes LoRA 强度为 0.5。
+网页默认采样步数为 10。8-step LoRA 加速方案固定使用 8 步，LoRA 强度为 1.0。Ref2VA 加速方案暂时复用 FL2VA 8-step LoRA，直到 Ref2VA 专用版本发布。NaughtyTimes LoRA 强度为 0.5。
 
 ## 最小可运行配置
 
@@ -48,7 +48,7 @@ INSTALL_ROOT=/data/minimax-h3-stack GPU_ID=0 bash scripts/install.sh
 
 1. 固定安装经过验证的 ComfyUI 和自定义节点版本。
 2. 创建隔离 Python 环境。
-3. 从 ModelScope 下载约 64.2 GB 的核心模型。
+3. 从 ModelScope 或 Hugging Face 下载约 65.4 GB 的必需模型。
 4. 校验每个模型的文件大小和 SHA-256。
 5. 安装 systemd 用户服务并启动 ComfyUI 与 API。
 6. 为无痕模式生成随机授权码并保存到 `.env`。
@@ -77,7 +77,7 @@ INSTALL_ROOT=/data/minimax-h3-stack bash scripts/verify_install.sh
 INSTALL_ROOT=/data/minimax-h3-stack bash scripts/smoke_generation.sh
 ```
 
-`verify_install.sh` 检查源码测试、模型校验、ComfyUI 节点、服务健康状态和队列。`smoke_generation.sh` 提交 608×352、5 秒、10 步的 Turbo 无痕任务。
+`verify_install.sh` 检查源码测试、模型校验、ComfyUI 节点、服务健康状态和队列。`smoke_generation.sh` 提交 608×352、5 秒、8 步的 8-step LoRA 无痕任务。
 
 ## 项目结构
 
@@ -87,7 +87,7 @@ static/              客户网页
 workflows/           五份 API 格式 ComfyUI 工作流
 scripts/             安装、模型下载、环境验证、生成测试
 deploy/              systemd 服务模板
-patches/             Turbo 节点低显存设备兼容补丁
+patches/             历史兼容补丁
 docs/                模型、工作流、API、部署和运维文档
 model-manifest.json  模型链接、大小、SHA-256 和许可信息
 ```

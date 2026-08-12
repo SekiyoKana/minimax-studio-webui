@@ -9,9 +9,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/assets/styles.css?v=18">
+    <link rel="stylesheet" href="/assets/styles.css?v=19">
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
-    <script src="/assets/app.js?v=20" defer></script>
+    <script src="/assets/app.js?v=22" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -107,7 +107,8 @@
                   <i data-lucide="workflow"></i>
                   <select id="executionMode" aria-label="执行方案">
                     <option value="native">普通流 · 原生 H3</option>
-                    <option value="turbo-lora">Turbo LoRA · 4+ 步</option>
+                    <option value="turbo-lora">8-step LoRA · 1.0</option>
+                    <option value="digital-human">数字人 · 音频驱动</option>
                     <option value="h3-nsfw" id="nsfwExecutionOption" hidden disabled>H3 NSFW · NaughtyTimes LoRA</option>
                   </select>
                 </label>

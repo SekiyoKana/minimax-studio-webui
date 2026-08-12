@@ -4,7 +4,7 @@
 
 ## Server Baseline
 
-The minimum configuration targets one 608x352, 5-second, 10-step job:
+The minimum configuration targets one 608x352, 5-second, 8-step accelerated job:
 
 | Item | Minimum | Verified Environment |
 |---|---|---|

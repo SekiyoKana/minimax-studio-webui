@@ -14,8 +14,9 @@ test -x "$COMFY_ROOT/.venv/bin/python"
   --manifest "$API_ROOT/model-manifest.json" \
   --comfy-root "$COMFY_ROOT" \
   --verify-only
-curl -fsS "$COMFY_URL/object_info/MiniMaxH3TurboLoRA" >/dev/null
-curl -fsS "$COMFY_URL/object_info/MiniMaxH3TurboSampler" >/dev/null
+curl -fsS "$COMFY_URL/object_info/LoraLoaderModelOnly" >/dev/null
+curl -fsS "$COMFY_URL/object_info/MiniMaxH3SigmaShift" >/dev/null
+curl -fsS "$COMFY_URL/object_info/KSamplerSelect" >/dev/null
 curl -fsS "$COMFY_URL/object_info/VHS_LoadVideo" >/dev/null
 curl -fsS "$API_URL/health"
 echo

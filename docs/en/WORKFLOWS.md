@@ -10,9 +10,10 @@ See the [official ComfyUI MiniMax H3 tutorial](https://docs.comfy.org/tutorials/
 |---|---|---|---|
 | `minimax_h3_fl2va_fp8_720p_15s_api.json` | FL2VA FP8 Scaled | Native | `b8fa94ef488d2b923e17562d79e23bde4bd997d2ec0d7ba158ece76d0b5a5b64` |
 | `minimax_h3_ref2va_fp8_scaled_api.json` | Ref2VA FP8 Scaled | Native | `dcd2db8828bb631abd6ff3707d545037047815dc54743d1fab2f98ac53749561` |
-| `minimax_h3_fl2va_fp8_turbo_lora_api.json` | FL2VA FP8 Scaled | Turbo LoRA | `b3c40f5db47e4a62e4ec8dd5be90603db380c68cdfb76e9f3302f40cb99f7640` |
-| `minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA FP8 Scaled | Turbo LoRA | `2cee435f126917ae2b693c07437b4f045e52f7ac6a4b816a6f3376460f82aca0` |
+| `minimax_h3_fl2va_fp8_turbo_lora_api.json` | FL2VA FP8 Scaled + 8-step LoRA v1.0 | `res_multistep`, 8 steps | `e5ce3e5640424a8427f467ee9a27d9e30278a6f11b46193d14ec9841af92c3e0` |
+| `minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA FP8 Scaled + FL2VA 8-step LoRA v1.0 | `res_multistep`, 8 steps | `138ea319f489b545b075196cf5ff1bc3ef73fe918d82f0a5d31e80a73a10f586` |
 | `minimax_h3_ref2va_fp8_nsfw_lora_api.json` | Ref2VA FP8 Scaled | NaughtyTimes LoRA | `4fbdcb94d6014fedfd6af50d081feaae891ca97867f888a00673563891e9dad7` |
+| `minimax_h3_ref2va_fp8_digital_human_api.json` | Ref2VA FP8 Scaled | Single-image audio-driven digital human | `829babe98437529714c4608185be9a63cd5db3ea09544d813a060b6e47138c06` |
 
 ## Dynamic Nodes
 
@@ -32,25 +33,40 @@ Turbo workflows add:
 
 | Node | Type | Configuration |
 |---|---|---|
-| `123` | `MiniMaxH3TurboSampler` | Dual-timeline sampler |
-| `142` | `MiniMaxH3TurboLoRA` | `ckpt500`, strength 1.0 |
+| `123` | `KSamplerSelect` | `res_multistep` |
+| `124` | `BasicScheduler` | `simple`, 8 steps |
+| `142` | `LoraLoaderModelOnly` | FL2VA 8-step LoRA v1.0, model strength 1.0 |
+| `143` | `MiniMaxH3SigmaShift` | Video shift 12.0, audio shift 3.0 |
 
 The optional NaughtyTimes workflow adds node `141` with type `LoraLoaderBypass`, model strength 0.5, and CLIP strength 0.0.
+
+The digital human workflow adds:
+
+| Node | Type | Configuration |
+|---|---|---|
+| `137` | `LoadImage` | One character reference image |
+| `171` | `LoadAudio` | Driving audio and Ref2VA audio reference |
+| `172` | `VRGDG_MiniMaxH3AudioDrive` | Encodes source audio into the joint latent and locks its denoise mask |
+| `130` | `CreateVideo` | Muxes the unchanged source audio returned by node `172` |
 
 ## Custom Nodes
 
 The API dynamically creates `VHS_LoadVideo` nodes for Ref2VA video references, so [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) is required.
 
-Turbo workflows require [ComfyUI-MiniMax-H3-Turbo](https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo). The deployment includes [`turbo-lowvram-device.patch`](../../patches/turbo-lowvram-device.patch) to fix the Adaln LoRA CPU and CUDA tensor-device mismatch under `--lowvram` mode.
+The 8-step LoRA workflows use ComfyUI's built-in LoRA loader and sampling nodes, with no Turbo custom node dependency. Ref2VA acceleration temporarily reuses the FL2VA 8-step LoRA.
+
+The digital human workflow requires the attached `comfyui-vrgamedevgirl` package for `VRGDG_MiniMaxH3AudioDrive`. The attached `ComfyUI-SoundFlow` package is installed in the cloud ComfyUI environment. The API workflow uses server-side `ffprobe` duration detection and does not depend on `SoundFlow_GetLength`.
 
 ## Parameter Limits
 
 | Parameter | Range |
 |---|---|
 | Duration | 1 to 15 seconds |
-| Steps | 4 to 50, default 10 |
+| Steps | Native modes 4 to 50; 8-step LoRA acceleration fixed at 8 |
 | Width and height | Multiples of 32; shortest side at least 352 |
 | FL2VA assets | 1 to 2 images |
 | Ref2VA images | Up to 9 |
 | Ref2VA videos | Up to 3, each 1 to 15 seconds |
 | Ref2VA audio clips | Up to 3, each 1 to 15 seconds |
+| Digital human assets | 1 character image and 1 driving audio file between 1 and 15 seconds |
+| Digital human steps | Fixed at 20 |

@@ -52,6 +52,12 @@ class Settings:
             str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_nsfw_lora_api.json"),
         )
     )
+    comfy_digital_human_workflow: Path = Path(
+        os.getenv(
+            "H3_COMFY_DIGITAL_HUMAN_WORKFLOW",
+            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_digital_human_api.json"),
+        )
+    )
     comfy_input_dir: Path = Path(
         os.getenv("H3_COMFY_INPUT_DIR", str(DEFAULT_COMFY_ROOT / "input"))
     )

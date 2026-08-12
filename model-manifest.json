@@ -65,12 +65,12 @@
     {
       "id": "turbo-lora",
       "required": true,
-      "target": "loras/minimax_h3_turbo_4step_ckpt500.safetensors",
-      "size_bytes": 779849872,
-      "sha256": "82d0acff583b04ad9a4238a7440b584b56094bfb7c4fdb2981f67c7a4784b62d",
+      "target": "loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+      "size_bytes": 1956193000,
+      "sha256": "2339acdf19bfe123f46b971ea35d367a84adb85de43627e1eceafa5a5b2b111e",
       "license": "Apache-2.0",
       "sources": {
-        "huggingface": "https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/resolve/7a44622816e16032cb0b6d044d8820da39a1dfdc/minimax_h3_turbo_4step_ckpt500.safetensors"
+        "huggingface": "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/050494d5fe05bd1b1140b8565ea51dc33a5085a5/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors"
       }
     },
     {

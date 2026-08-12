@@ -2,7 +2,7 @@
 
 [English](en/PROJECT_SNAPSHOT.md)
 
-记录日期：2026-08-07，Asia/Shanghai。
+记录日期：2026-08-12，Asia/Shanghai。
 
 ## 固定版本
 
@@ -16,7 +16,6 @@
 | CUDA Runtime | 12.4 |
 | ComfyUI | `563b98eefbe643a4cd510ee7f0b43e79880d5a3f` |
 | ComfyUI Frontend | 1.48.6 |
-| Turbo 节点 | `96cc1ddc001617da132dd73f31cd43666bf1d8d4` |
 | VideoHelperSuite | `993082e4f2473bf4acaf06f51e33877a7eb38960` |
 
 ## 服务配置
@@ -30,21 +29,22 @@ CUDA_VISIBLE_DEVICES=1
 
 GitHub 安装脚本默认将 ComfyUI 限制在 `127.0.0.1`，API 监听 `0.0.0.0:8193`。
 
-## 端到端测试
+## 8-step LoRA 测试
 
 | 项目 | 结果 |
 |---|---|
-| 模型 | MiniMax H3 FL2VA FP8 Scaled |
-| 方案 | Turbo LoRA，双时间轴采样 |
-| 输入 | 单张 608×352 PNG |
-| 输出设置 | 608×352，5 秒，10 步 |
-| 总耗时 | 98.4 秒 |
-| 输出时长 | 5.167 秒 |
-| 视频 | H.264，608×352，24 fps |
-| 音频 | AAC，双声道 |
-| 结果 | 完成 |
+| FL2VA 任务 | `c321687f-0c15-4f1f-b18b-cda1f3648b68` |
+| FL2VA 模型 | MiniMax H3 FL2VA FP8 Scaled |
+| FL2VA 配置 | `res_multistep`，8 步，LoRA 强度 1.0 |
+| FL2VA 总耗时 | 1,252.447 秒 |
+| FL2VA 结果 | 完成 |
+| Ref2VA 任务 | `2e9c5f35-1286-4884-9ea2-1e518d875b70` |
+| Ref2VA 模型 | MiniMax H3 Ref2VA FP8 Scaled |
+| Ref2VA 配置 | FL2VA 8-step LoRA v1.0，强度 1.0 |
+| Ref2VA 总耗时 | 93.793 秒 |
+| Ref2VA 结果 | 完成 |
 
-首次测试发现 Turbo 节点在 ComfyUI `--lowvram` 模式下发生 CPU 与 CUDA 张量设备不一致。`patches/turbo-lowvram-device.patch` 修复后，第二次测试完成。
+两条任务均使用 `simple` 调度器、视频偏移 12.0 和音频偏移 3.0。Ref2VA 加速方案在专用 LoRA 发布前复用 FL2VA 8-step LoRA。
 
 ## 自动测试
 
@@ -64,6 +64,6 @@ five workflow JSON files passed parsing
 | ComfyUI RSS | 49,423,828 KiB |
 | API RSS | 74,864 KiB |
 | GPU 1 已用显存 | 6,152 MiB，处于任务完成后的缓存状态 |
-| 核心模型文件 | 64,196,466,943 bytes |
+| 必需模型文件 | 65,372,810,071 bytes |
 
 显存峰值随分辨率、时长、参考素材和解码阶段变化。任务完成后的缓存值不能作为峰值。

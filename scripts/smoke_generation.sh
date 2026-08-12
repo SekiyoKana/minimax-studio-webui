@@ -32,7 +32,7 @@ response="$(curl -fsS -X POST "$API_URL/api/v1/generations" \
   -F "width=608" \
   -F "height=352" \
   -F "duration=5" \
-  -F "steps=10" \
+  -F "steps=8" \
   -F "incognito=true")"
 job_id="$(printf '%s' "$response" | "$API_ROOT/.venv/bin/python" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 echo "验证任务: $job_id"

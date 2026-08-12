@@ -2,7 +2,6 @@
 set -euo pipefail
 
 COMFY_COMMIT="563b98eefbe643a4cd510ee7f0b43e79880d5a3f"
-TURBO_NODE_COMMIT="96cc1ddc001617da132dd73f31cd43666bf1d8d4"
 VHS_COMMIT="993082e4f2473bf4acaf06f51e33877a7eb38960"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -88,7 +87,6 @@ if [[ "$DRY_RUN" == "1" ]]; then
   echo "模型来源: $MODEL_PROVIDER"
   echo "包含可选 NaughtyTimes LoRA: $INSTALL_NSFW"
   echo "ComfyUI commit: $COMFY_COMMIT"
-  echo "Turbo node commit: $TURBO_NODE_COMMIT"
   echo "VideoHelperSuite commit: $VHS_COMMIT"
   exit 0
 fi
@@ -107,22 +105,9 @@ available_kib="$(df -Pk "$INSTALL_ROOT" | awk 'NR==2 {print $4}')"
 
 clone_at_commit "https://github.com/comfyanonymous/ComfyUI.git" "$COMFY_ROOT" "$COMFY_COMMIT"
 clone_at_commit \
-  "https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo.git" \
-  "$COMFY_ROOT/custom_nodes/ComfyUI-MiniMax-H3-Turbo" \
-  "$TURBO_NODE_COMMIT" \
-  1
-clone_at_commit \
   "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git" \
   "$COMFY_ROOT/custom_nodes/ComfyUI-VideoHelperSuite" \
   "$VHS_COMMIT"
-
-turbo_root="$COMFY_ROOT/custom_nodes/ComfyUI-MiniMax-H3-Turbo"
-turbo_patch="$REPO_ROOT/patches/turbo-lowvram-device.patch"
-if git -C "$turbo_root" apply --check "$turbo_patch" >/dev/null 2>&1; then
-  git -C "$turbo_root" apply "$turbo_patch"
-elif ! git -C "$turbo_root" apply --reverse --check "$turbo_patch" >/dev/null 2>&1; then
-  fail "Turbo 节点低显存补丁与当前源码不兼容"
-fi
 
 if [[ ! -x "$COMFY_ROOT/.venv/bin/python" ]]; then
   "$PYTHON_BIN" -m venv "$COMFY_ROOT/.venv"
@@ -190,6 +175,7 @@ if [[ ! -f "$API_ROOT/.env" ]]; then
     echo "H3_COMFY_TURBO_WORKFLOW=$API_ROOT/workflows/minimax_h3_fl2va_fp8_turbo_lora_api.json"
     echo "H3_COMFY_REF2VA_TURBO_WORKFLOW=$API_ROOT/workflows/minimax_h3_ref2va_fp8_turbo_lora_api.json"
     echo "H3_COMFY_NSFW_WORKFLOW=$API_ROOT/workflows/minimax_h3_ref2va_fp8_nsfw_lora_api.json"
+    echo "H3_COMFY_DIGITAL_HUMAN_WORKFLOW=$API_ROOT/workflows/minimax_h3_ref2va_fp8_digital_human_api.json"
     echo "H3_COMFY_POLL_SECONDS=2"
     printf 'H3_GPU_LABEL="MiniMax H3 FP8 / GPU %s / 24 GB"\n' "$GPU_ID"
     echo "H3_INCOGNITO_CODE=$incognito_code"

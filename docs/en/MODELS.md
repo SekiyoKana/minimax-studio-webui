@@ -2,7 +2,7 @@
 
 [中文](../MODELS.md)
 
-The structured manifest is stored in [`model-manifest.json`](../../model-manifest.json). All pinned URLs and SHA-256 checksums were verified on 2026-08-07.
+The structured manifest is stored in [`model-manifest.json`](../../model-manifest.json). All pinned URLs and SHA-256 checksums were verified on 2026-08-12.
 
 ## Core Models
 
@@ -24,14 +24,14 @@ Core model pages:
 
 | File | Size | SHA-256 | Download |
 |---|---:|---|---|
-| `minimax_h3_turbo_4step_ckpt500.safetensors` | 779,849,872 | `82d0acff583b04ad9a4238a7440b584b56094bfb7c4fdb2981f67c7a4784b62d` | [Pinned Hugging Face revision](https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/resolve/7a44622816e16032cb0b6d044d8820da39a1dfdc/minimax_h3_turbo_4step_ckpt500.safetensors) |
+| `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` | 1,956,193,000 | `2339acdf19bfe123f46b971ea35d367a84adb85de43627e1eceafa5a5b2b111e` | [Pinned Hugging Face revision](https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/050494d5fe05bd1b1140b8565ea51dc33a5085a5/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors) |
 
 Author resources:
 
-1. [MiniMax H3 Turbo LoRA model card](https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora)
-2. [ComfyUI MiniMax H3 Turbo node](https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo)
+1. [LightX2V MiniMax H3 Turbo LoRA model card](https://huggingface.co/lightx2v/Minimax-h3-Turbo)
+2. [ModelTC MiniMax H3 Turbo](https://github.com/ModelTC/Minimax-H3-Turbo)
 
-The current workflow uses LoRA strength 1.0 and the author's dual-timeline sampler. The step range is 4 to 50 with a default of 10. The author labels this release as an early preview.
+The current workflow uses LoRA strength 1.0, the `res_multistep` sampler, and `MiniMaxH3SigmaShift`, with steps fixed at 8. Ref2VA acceleration temporarily reuses this FL2VA LoRA until a dedicated Ref2VA release is available.
 
 ## Optional NaughtyTimes LoRA
 
@@ -43,4 +43,4 @@ The author page returned HTTP 401 on 2026-08-07, so public availability could no
 
 ## Storage
 
-Required models total 64,196,466,943 bytes, approximately 64.2 GB. Including the optional NaughtyTimes LoRA, the total is 66,675,732,039 bytes.
+Required models total 65,372,810,071 bytes, approximately 65.4 GB. Including the optional NaughtyTimes LoRA, the total is 67,852,075,167 bytes.

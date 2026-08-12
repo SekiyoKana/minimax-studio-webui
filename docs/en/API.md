@@ -30,7 +30,7 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
   -F 'width=864' \
   -F 'height=480' \
   -F 'duration=5' \
-  -F 'steps=10'
+  -F 'steps=8'
 ```
 
 For an FL2VA last-frame request, submit two images in order:
@@ -57,6 +57,26 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
   -F 'duration=5' \
   -F 'steps=20'
 ```
+
+## Create a Digital Human Job
+
+Digital human mode requires one character image and one driving audio file between 1 and 15 seconds. The service uses the actual audio duration, runs 20 sampling steps, and writes the unchanged source audio into the final video.
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations \
+  -F 'prompt=The character speaks naturally to the camera in a locked shot while preserving identity and clothing.' \
+  -F 'reference_manifest=[{"type":"image"},{"type":"audio"}]' \
+  -F 'references=@character.png;type=image/png' \
+  -F 'references=@speech.wav;type=audio/wav' \
+  -F 'model_variant=ref2va-fp8' \
+  -F 'execution_mode=digital-human' \
+  -F 'width=864' \
+  -F 'height=480' \
+  -F 'duration=5' \
+  -F 'steps=20'
+```
+
+`duration` remains in the form protocol for compatibility. The stored job uses the actual duration of the driving audio.
 
 ## Query Jobs
 

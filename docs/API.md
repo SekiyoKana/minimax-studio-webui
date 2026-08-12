@@ -30,7 +30,7 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
   -F 'width=864' \
   -F 'height=480' \
   -F 'duration=5' \
-  -F 'steps=10'
+  -F 'steps=8'
 ```
 
 FL2VA 尾帧请求需要按顺序提交两张图片：
@@ -57,6 +57,26 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
   -F 'duration=5' \
   -F 'steps=20'
 ```
+
+## 创建数字人任务
+
+数字人模式需要一张人物图片和一段 1 至 15 秒的驱动音频。服务使用驱动音频的实际时长，固定执行 20 个采样步，并将源音频直接写入最终视频。
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations \
+  -F 'prompt=人物面对镜头自然说话，固定机位，保持人物身份和服装。' \
+  -F 'reference_manifest=[{"type":"image"},{"type":"audio"}]' \
+  -F 'references=@character.png;type=image/png' \
+  -F 'references=@speech.wav;type=audio/wav' \
+  -F 'model_variant=ref2va-fp8' \
+  -F 'execution_mode=digital-human' \
+  -F 'width=864' \
+  -F 'height=480' \
+  -F 'duration=5' \
+  -F 'steps=20'
+```
+
+`duration` 为兼容表单协议保留，任务参数会使用驱动音频的实际时长。
 
 ## 查询任务
 

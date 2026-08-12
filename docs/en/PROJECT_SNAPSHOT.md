@@ -2,7 +2,7 @@
 
 [中文](../PROJECT_SNAPSHOT.md)
 
-Recorded on 2026-08-07, Asia/Shanghai.
+Recorded on 2026-08-12, Asia/Shanghai.
 
 ## Pinned Versions
 
@@ -16,7 +16,6 @@ Recorded on 2026-08-07, Asia/Shanghai.
 | CUDA runtime | 12.4 |
 | ComfyUI | `563b98eefbe643a4cd510ee7f0b43e79880d5a3f` |
 | ComfyUI frontend | 1.48.6 |
-| Turbo node | `96cc1ddc001617da132dd73f31cd43666bf1d8d4` |
 | VideoHelperSuite | `993082e4f2473bf4acaf06f51e33877a7eb38960` |
 
 ## Service Configuration
@@ -30,21 +29,22 @@ CUDA_VISIBLE_DEVICES=1
 
 The GitHub installer restricts ComfyUI to `127.0.0.1` by default. The API listens on `0.0.0.0:8193`.
 
-## End-to-end Test
+## 8-step LoRA Tests
 
 | Item | Result |
 |---|---|
-| Model | MiniMax H3 FL2VA FP8 Scaled |
-| Mode | Turbo LoRA with dual-timeline sampling |
-| Input | One 608x352 PNG image |
-| Output settings | 608x352, 5 seconds, 10 steps |
-| Total elapsed time | 98.4 seconds |
-| Output duration | 5.167 seconds |
-| Video | H.264, 608x352, 24 fps |
-| Audio | AAC, stereo |
-| Result | Completed |
+| FL2VA job | `c321687f-0c15-4f1f-b18b-cda1f3648b68` |
+| FL2VA model | MiniMax H3 FL2VA FP8 Scaled |
+| FL2VA configuration | `res_multistep`, 8 steps, LoRA strength 1.0 |
+| FL2VA elapsed time | 1,252.447 seconds |
+| FL2VA result | Completed |
+| Ref2VA job | `2e9c5f35-1286-4884-9ea2-1e518d875b70` |
+| Ref2VA model | MiniMax H3 Ref2VA FP8 Scaled |
+| Ref2VA configuration | FL2VA 8-step LoRA v1.0, strength 1.0 |
+| Ref2VA elapsed time | 93.793 seconds |
+| Ref2VA result | Completed |
 
-The first test found a CPU and CUDA tensor-device mismatch in the Turbo node under ComfyUI `--lowvram` mode. The second test completed after applying `patches/turbo-lowvram-device.patch`.
+Both jobs use the `simple` scheduler, video shift 12.0, and audio shift 3.0. Ref2VA acceleration reuses the FL2VA 8-step LoRA until a dedicated LoRA is released.
 
 ## Automated Tests
 
@@ -64,6 +64,6 @@ Observed after model loading:
 | ComfyUI RSS | 49,423,828 KiB |
 | API RSS | 74,864 KiB |
 | GPU 1 VRAM used | 6,152 MiB after job completion with cache retained |
-| Core model files | 64,196,466,943 bytes |
+| Required model files | 65,372,810,071 bytes |
 
 Peak VRAM depends on resolution, duration, reference assets, and the decoding phase. Post-completion cache usage does not represent peak usage.

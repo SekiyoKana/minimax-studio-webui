@@ -25,7 +25,7 @@ from .ref2va_prompts import REF2VA_SYSTEM_PROMPT
 from .settings import settings
 
 
-ExecutionMode = Literal["native", "turbo-lora", "h3-nsfw"]
+ExecutionMode = Literal["native", "turbo-lora", "h3-nsfw", "digital-human"]
 
 
 settings.ensure_directories()
@@ -92,12 +92,22 @@ def align_frames(duration: float) -> int:
     return frames
 
 
-def validate_generation(width: int, height: int, duration: float, steps: int) -> None:
+def validate_generation(
+    width: int,
+    height: int,
+    duration: float,
+    steps: int,
+    execution_mode: str = "native",
+) -> None:
     if width % 32 or height % 32 or width < 352 or height < 352:
         raise HTTPException(status_code=422, detail="宽高必须是 32 的倍数，且不低于 352×352")
     if not 1 <= duration <= 15:
         raise HTTPException(status_code=422, detail="时长范围为 1–15 秒")
-    if not 4 <= steps <= 50:
+    if execution_mode == "turbo-lora" and steps != 8:
+        raise HTTPException(status_code=422, detail="8-step LoRA 加速模式固定使用 8 步")
+    if execution_mode == "digital-human" and steps != 20:
+        raise HTTPException(status_code=422, detail="数字人模式固定使用 20 步")
+    if execution_mode not in {"turbo-lora", "digital-human"} and not 4 <= steps <= 50:
         raise HTTPException(status_code=422, detail="采样步数范围为 4–50")
 
 
@@ -119,9 +129,17 @@ def classify_upload(upload: UploadFile) -> str:
     raise HTTPException(status_code=422, detail=f"不支持的素材类型：{upload.filename}")
 
 
-def validate_references(model_variant: str, kinds: list[str]) -> None:
+def validate_references(
+    model_variant: str,
+    kinds: list[str],
+    execution_mode: str = "native",
+) -> None:
     if not kinds:
         raise HTTPException(status_code=422, detail="至少需要一份参考素材")
+    if execution_mode == "digital-human":
+        if model_variant != "ref2va-fp8" or sorted(kinds) != ["audio", "image"]:
+            raise HTTPException(status_code=422, detail="数字人模式需要上传 1 张人物图片和 1 段驱动音频")
+        return
     counts = {kind: kinds.count(kind) for kind in ("image", "video", "audio")}
     if model_variant == "fl2va-fp8":
         if any(kind != "image" for kind in kinds) or not 1 <= counts["image"] <= 2:
@@ -137,6 +155,10 @@ def validate_execution_mode(
     incognito: bool,
 ) -> None:
     if execution_mode in {"native", "turbo-lora"}:
+        return
+    if execution_mode == "digital-human":
+        if model_variant != "ref2va-fp8":
+            raise HTTPException(status_code=422, detail="数字人模式仅支持 Ref2VA FP8")
         return
     if execution_mode != "h3-nsfw":
         raise HTTPException(status_code=422, detail="不支持的执行方案")
@@ -262,7 +284,7 @@ async def create_generation(
     if incognito and not secrets.compare_digest(incognito_code or "", settings.incognito_code):
         raise HTTPException(status_code=403, detail="无痕模式授权已失效")
     validate_execution_mode(execution_mode, model_variant, incognito)
-    validate_generation(width, height, duration, steps)
+    validate_generation(width, height, duration, steps, execution_mode)
 
     try:
         seed_raw = (seed or "").strip()
@@ -284,7 +306,7 @@ async def create_generation(
         raise HTTPException(status_code=422, detail="reference_manifest 的每一项必须是对象")
     if kinds != [item.get("type") for item in manifest]:
         raise HTTPException(status_code=422, detail="素材顺序或类型与 reference_manifest 不一致")
-    validate_references(model_variant, kinds)
+    validate_references(model_variant, kinds, execution_mode)
 
     job_id = secrets.token_hex(8)
     upload_dir = settings.uploads_dir / job_id
@@ -313,6 +335,11 @@ async def create_generation(
     except Exception:
         shutil.rmtree(upload_dir, ignore_errors=True)
         raise
+
+    if execution_mode == "digital-human":
+        audio_reference = next(item for item in public_manifest if item["type"] == "audio")
+        duration = float(audio_reference["duration"])
+        validate_generation(width, height, duration, steps, execution_mode)
 
     created_at = utc_now()
     job = {
@@ -387,12 +414,19 @@ async def update_generation(
     validate_references(
         request_data["model_variant"],
         [item["type"] for item in request_data.get("references", [])],
+        request_data["execution_mode"],
     )
+    if request_data["execution_mode"] == "digital-human":
+        audio_reference = next(
+            item for item in request_data["references"] if item["type"] == "audio"
+        )
+        request_data["duration"] = float(audio_reference["duration"])
     validate_generation(
         request_data["width"],
         request_data["height"],
         request_data["duration"],
         request_data["steps"],
+        request_data["execution_mode"],
     )
     request_data["num_frames"] = align_frames(request_data["duration"])
     changes: dict[str, object] = {"request": request_data, "event_message": "任务参数已修改"}
