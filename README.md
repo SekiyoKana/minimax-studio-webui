@@ -19,6 +19,10 @@ MiniMax H3 API 将 ComfyUI 推理工作流封装为可部署的网页与 HTTP AP
 
 项目包含 FL2VA、Ref2VA、8-step LoRA v1.0、单图音频驱动数字人和可选 H3 NSFW 工作流，适用于单张 24 GB NVIDIA GPU 的云端部署。
 
+![H3 Studio 工作台总览](docs/images/h3-studio-overview.jpg)
+
+工作台集中展示素材库、服务状态、提示词输入、模型与工作流参数，以及任务运行入口。
+
 > [!IMPORTANT]
 > 模型权重不会提交到 Git。安装前请确认已接受 MiniMax H3 Community License Agreement 及相关 LoRA、ComfyUI 和自定义节点的许可条件。
 
@@ -67,6 +71,10 @@ FastAPI 使用单个任务工作线程依次向 ComfyUI 提交任务。上传文
 ### 数字人工作流
 
 数字人模式保留人物身份、面部结构、服装和源音频，并根据驱动音频进行口型同步。页面中的时长控件会被禁用，最终视频长度使用音频的实际时长。
+
+![数字人音频驱动模式](docs/images/h3-studio-digital-human.jpg)
+
+数字人模式固定使用 Ref2VA FP8 和 20 步采样。黄色时长控件提示视频长度由驱动音频决定。
 
 该工作流需要以下 ComfyUI 自定义节点：
 
@@ -141,6 +149,10 @@ bash scripts/install.sh
 数字人模式需要添加一张人物图片和一段 1 至 15 秒驱动音频。提示词主要描述场景、构图、表情、动作、镜头和光线，服务会自动加入人物一致性、口型同步和源音频保持约束。
 
 ## API 示例
+
+![MiniMax H3 OpenAPI 文档](docs/images/h3-api-docs.jpg)
+
+FastAPI 自动生成 OpenAPI 3.1 交互文档，覆盖健康检查、任务创建、查询、修改、取消、删除、下载、日志和提示词优化接口。
 
 创建 8-step FL2VA 任务：
 
