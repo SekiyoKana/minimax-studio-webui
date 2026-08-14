@@ -1,0 +1,81 @@
+{
+  "3": {
+    "class_type": "CLIPLoaderMultiGPU",
+    "inputs": {
+      "clip_name": "minimax_music3_text_encoder_pruned_int8_convrot.safetensors",
+      "type": "minimax",
+      "device": "cuda:0"
+    },
+    "_meta": {"title": "Load MiniMax Music3 Text Encoder"}
+  },
+  "6": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_music3_dit_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {"title": "Load MiniMax Music3 INT8 DiT"}
+  },
+  "7": {
+    "class_type": "VAELoader",
+    "inputs": {"vae_name": "minimax_music3_dav.safetensors"},
+    "_meta": {"title": "Load MiniMax Music3 DAV"}
+  },
+  "9": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["6", 0],
+      "positive": ["13", 0],
+      "negative": ["10", 0],
+      "latent_image": ["15", 0],
+      "seed": 0,
+      "steps": 30,
+      "cfg": 1.7,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+    },
+    "_meta": {"title": "Sample MiniMax Music3"}
+  },
+  "10": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {"conditioning": ["13", 0]},
+    "_meta": {"title": "Zero Negative Conditioning"}
+  },
+  "13": {
+    "class_type": "MiniMaxMusic3TextEncode",
+    "inputs": {
+      "clip": ["3", 0],
+      "caption": "A polished studio song with a clear arrangement.",
+      "lyrics": "[Instrumental]",
+      "seed": 0,
+      "max_duration": 60.0,
+      "cfg_scale": 1.7,
+      "top_k": 50
+    },
+    "_meta": {"title": "Encode Music Description and Lyrics"}
+  },
+  "15": {
+    "class_type": "EmptyMiniMaxMusic3LatentAudio",
+    "inputs": {"seconds": ["13", 1], "batch_size": 1},
+    "_meta": {"title": "Create Music3 Latent Audio"}
+  },
+  "42": {
+    "class_type": "VAEDecodeAudioTiled",
+    "inputs": {
+      "samples": ["9", 0],
+      "vae": ["7", 0],
+      "tile_size": 1536,
+      "overlap": 64
+    },
+    "_meta": {"title": "Decode Music3 Audio Tiled"}
+  },
+  "92": {
+    "class_type": "SaveAudio",
+    "inputs": {
+      "audio": ["42", 0],
+      "filename_prefix": "minimax-h3-api/music3"
+    },
+    "_meta": {"title": "Save Music3 FLAC"}
+  }
+}

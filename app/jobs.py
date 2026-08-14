@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
+import inspect
 import logging
-import queue
 import shutil
 import threading
 import traceback
@@ -35,6 +35,7 @@ class JobStore:
         self.data_dir = jobs_dir.parent.resolve()
         self._jobs: dict[str, dict[str, Any]] = {}
         self._events: deque[dict[str, Any]] = deque(maxlen=1000)
+        self._changes: deque[dict[str, Any]] = deque(maxlen=2000)
         self._lock = threading.RLock()
         self._revision = 0
         self._restore()
@@ -111,6 +112,7 @@ class JobStore:
         stream_event["_restricted"] = restricted
         self._events.append(stream_event)
         self._revision += 1
+        self._record_change(job, "upsert")
         log = logger.error if level == "error" else logger.info
         if restricted:
             log(
@@ -135,6 +137,54 @@ class JobStore:
             self._persist(job)
             return deepcopy(job)
 
+    def _record_change(self, job: dict[str, Any], action: str) -> None:
+        self._changes.append(
+            {
+                "revision": self._revision,
+                "job_id": job["id"],
+                "action": action,
+                "restricted": bool(job.get("request", {}).get("incognito")),
+            }
+        )
+
+    def changes_since(self, revision: int) -> dict[str, Any]:
+        with self._lock:
+            current_revision = self._revision
+            if revision > current_revision:
+                return {
+                    "revision": current_revision,
+                    "jobs": [],
+                    "deleted_job_ids": [],
+                    "reset_required": True,
+                }
+
+            oldest_revision = self._changes[0]["revision"] if self._changes else current_revision
+            reset_required = bool(self._changes and revision < oldest_revision - 1)
+            selected: dict[str, dict[str, Any]] = {}
+            for change in self._changes:
+                if change["revision"] > revision:
+                    selected[change["job_id"]] = change
+
+            jobs = []
+            deleted_job_ids = []
+            for change in selected.values():
+                if change["restricted"]:
+                    continue
+                job_id = change["job_id"]
+                if change["action"] == "delete":
+                    deleted_job_ids.append(job_id)
+                    continue
+                job = self.public(job_id, include_logs=False)
+                if job:
+                    jobs.append(job)
+
+            return {
+                "revision": current_revision,
+                "jobs": jobs,
+                "deleted_job_ids": deleted_job_ids,
+                "reset_required": reset_required,
+            }
+
     def get(self, job_id: str) -> dict[str, Any] | None:
         with self._lock:
             job = self._jobs.get(job_id)
@@ -155,6 +205,9 @@ class JobStore:
             if event_message or changed:
                 message = event_message or str(job.get("stage") or job.get("status") or "任务已更新")
                 self._append_event(job, message, event_level)
+            else:
+                self._revision += 1
+                self._record_change(job, "upsert")
             self._persist(job)
             return deepcopy(job)
 
@@ -265,6 +318,26 @@ class JobStore:
                 items.append(item)
             return items, total
 
+    def list_with_revision(
+        self,
+        page: int,
+        page_size: int,
+        status: str | None = None,
+        query: str | None = None,
+        include_incognito: bool = False,
+        scope: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int, int]:
+        with self._lock:
+            items, total = self.list(
+                page,
+                page_size,
+                status,
+                query,
+                include_incognito,
+                scope,
+            )
+            return items, total, self._revision
+
     def incognito_jobs(self) -> list[dict[str, Any]]:
         with self._lock:
             return [
@@ -323,6 +396,7 @@ class JobStore:
             restricted = bool(job.get("request", {}).get("incognito"))
             self._remove_job_files(job, self.jobs_dir / f"{job_id}.json")
             self._revision += 1
+            self._record_change(job, "delete")
             if not restricted:
                 logger.info("H3 job=%s deleted", job_id)
             return True
@@ -355,23 +429,223 @@ class JobStore:
 
 
 class JobManager:
-    def __init__(self, store: JobStore, engine_factory: Callable[[], Any]):
+    def __init__(
+        self,
+        store: JobStore,
+        engine_factory: Callable[..., Any],
+        nodes: list[Any] | tuple[Any, ...] | None = None,
+        health_probe: Callable[[Any], None] | None = None,
+        health_interval: float = 60,
+    ):
         self.store = store
         self.engine_factory = engine_factory
-        self.pending: queue.Queue[str | None] = queue.Queue()
+        self.health_probe = health_probe
+        self.health_interval = max(5.0, health_interval)
+        configured_nodes = list(nodes or ({"id": "default", "name": "ComfyUI", "url": ""},))
+        self._nodes: dict[str, dict[str, Any]] = {}
+        for item in configured_nodes:
+            node_id = str(getattr(item, "id", None) or item.get("id"))
+            self._nodes[node_id] = {
+                "id": node_id,
+                "name": str(getattr(item, "name", None) or item.get("name") or node_id),
+                "url": str(getattr(item, "url", None) or item.get("url") or ""),
+                "config": item,
+                "healthy": health_probe is None,
+                "last_checked": None,
+                "error": None,
+                "retired": False,
+            }
         self._order: list[str] = []
-        self._order_lock = threading.Lock()
-        self._thread: threading.Thread | None = None
-        self._engine: Any = None
+        self._condition = threading.Condition(threading.RLock())
+        self._threads: dict[str, threading.Thread] = {}
+        self._health_thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
+        self._health_wakeup = threading.Event()
+        self._started = False
+        self._engines: dict[str, Any] = {}
+        self._running_job_ids: dict[str, str] = {}
         self._running_job_id: str | None = None
+        self._revision = 0
+        self._factory_accepts_node = bool(inspect.signature(engine_factory).parameters)
         self._expiry_timers: dict[str, threading.Timer] = {}
         self._expiry_lock = threading.Lock()
 
+    @property
+    def revision(self) -> int:
+        with self._condition:
+            return self._revision
+
+    @property
+    def node_ids(self) -> set[str]:
+        with self._condition:
+            return {
+                node_id
+                for node_id, node in self._nodes.items()
+                if not node.get("retired")
+            }
+
+    def accepts_node(self, node_id: str) -> bool:
+        return node_id == "auto" or node_id in self.node_ids
+
+    def node_in_use(self, node_id: str) -> bool:
+        with self._condition:
+            if node_id in self._running_job_ids:
+                return True
+            for job_id in self._order:
+                job = self.store.get(job_id)
+                if job and job.get("request", {}).get("comfy_node") == node_id:
+                    return True
+            return False
+
+    def nodes_public(self) -> list[dict[str, Any]]:
+        with self._condition:
+            queued_jobs = [self.store.get(job_id) for job_id in self._order]
+            result = []
+            for node_id, node in self._nodes.items():
+                if node.get("retired"):
+                    continue
+                running_job_id = self._running_job_ids.get(node_id)
+                running_job = self.store.get(running_job_id) if running_job_id else None
+                public_running_job_id = (
+                    None
+                    if running_job and running_job.get("request", {}).get("incognito")
+                    else running_job_id
+                )
+                manual_depth = sum(
+                    1
+                    for job in queued_jobs
+                    if job and job.get("request", {}).get("comfy_node") == node_id
+                )
+                result.append(
+                    {
+                        "id": node_id,
+                        "name": node["name"],
+                        "healthy": node["healthy"],
+                        "last_checked": node["last_checked"],
+                        "error": node["error"],
+                        "busy": bool(running_job_id),
+                        "running_job_id": public_running_job_id,
+                        "queue_depth": manual_depth,
+                    }
+                )
+            return result
+
+    def refresh_node_health(self) -> None:
+        with self._condition:
+            active_nodes = [
+                (node_id, node)
+                for node_id, node in self._nodes.items()
+                if not node.get("retired")
+            ]
+        for node_id, node in active_nodes:
+            healthy = True
+            error = None
+            if self.health_probe:
+                try:
+                    self.health_probe(node["config"])
+                except Exception as exc:
+                    healthy = False
+                    error = str(exc)[:240]
+            with self._condition:
+                node["healthy"] = healthy
+                node["error"] = error
+                node["last_checked"] = utc_now()
+                self._revision += 1
+                self._condition.notify_all()
+
+    def _health_worker(self) -> None:
+        while not self._stop_event.is_set():
+            self._health_wakeup.wait(self.health_interval)
+            self._health_wakeup.clear()
+            if self._stop_event.is_set():
+                return
+            self.refresh_node_health()
+
+    def reconfigure(self, nodes: list[Any] | tuple[Any, ...], health_interval: float) -> None:
+        configured = {
+            str(getattr(item, "id")): item
+            for item in nodes
+        }
+        if not configured:
+            raise ValueError("至少需要一个启用的 ComfyUI 节点")
+        threads_to_start = []
+        with self._condition:
+            for node_id, node in self._nodes.items():
+                if node_id not in configured and not node.get("retired") and self.node_in_use(node_id):
+                    raise RuntimeError(f"节点正在执行任务或存在定向排队任务：{node['name']}")
+            for node_id, item in configured.items():
+                current = self._nodes.get(node_id)
+                if (
+                    current
+                    and current["url"] != str(getattr(item, "url"))
+                    and self.node_in_use(node_id)
+                ):
+                    raise RuntimeError(f"节点正在执行任务或存在定向排队任务：{current['name']}")
+            for node_id, node in self._nodes.items():
+                if node_id not in configured:
+                    node["retired"] = True
+                    self._engines.pop(node_id, None)
+            for node_id, item in configured.items():
+                name = str(getattr(item, "name"))
+                url = str(getattr(item, "url"))
+                current = self._nodes.get(node_id)
+                if current:
+                    url_changed = current["url"] != url
+                    current.update(
+                        name=name,
+                        url=url,
+                        config=item,
+                        retired=False,
+                    )
+                    if url_changed:
+                        current.update(healthy=False, error=None, last_checked=None)
+                        self._engines.pop(node_id, None)
+                else:
+                    self._nodes[node_id] = {
+                        "id": node_id,
+                        "name": name,
+                        "url": url,
+                        "config": item,
+                        "healthy": self.health_probe is None,
+                        "last_checked": None,
+                        "error": None,
+                        "retired": False,
+                    }
+                thread = self._threads.get(node_id)
+                if self._started and (not thread or not thread.is_alive()):
+                    threads_to_start.append(node_id)
+            self.health_interval = max(5.0, min(3600.0, float(health_interval)))
+            self._revision += 1
+            self._condition.notify_all()
+        for node_id in threads_to_start:
+            self._start_node_thread(node_id)
+        self._health_wakeup.set()
+
+    def _start_node_thread(self, node_id: str) -> None:
+        thread = threading.Thread(
+            target=self._worker,
+            args=(node_id,),
+            name=f"h3-worker-{node_id}",
+            daemon=True,
+        )
+        self._threads[node_id] = thread
+        thread.start()
+
     def start(self) -> None:
-        if self._thread and self._thread.is_alive():
+        if any(thread.is_alive() for thread in self._threads.values()):
             return
-        self._thread = threading.Thread(target=self._worker, name="h3-worker", daemon=True)
-        self._thread.start()
+        self._stop_event.clear()
+        self._health_wakeup.clear()
+        self._started = True
+        self.refresh_node_health()
+        for node_id in self.node_ids:
+            self._start_node_thread(node_id)
+        self._health_thread = threading.Thread(
+            target=self._health_worker,
+            name="h3-node-health",
+            daemon=True,
+        )
+        self._health_thread.start()
         for job in self.store.incognito_jobs():
             if job.get("expires_at"):
                 self._schedule_incognito_expiry(job["id"], job["expires_at"])
@@ -386,34 +660,43 @@ class JobManager:
             self._expiry_timers.clear()
         for timer in timers:
             timer.cancel()
-        self.pending.put(None)
-        if self._thread:
-            self._thread.join(timeout=10)
+        self._stop_event.set()
+        self._health_wakeup.set()
+        self._started = False
+        with self._condition:
+            self._condition.notify_all()
+        for thread in self._threads.values():
+            thread.join(timeout=10)
+        if self._health_thread:
+            self._health_thread.join(timeout=10)
 
     def submit(self, job_id: str) -> None:
-        with self._order_lock:
+        with self._condition:
             if job_id not in self._order:
                 self._order.append(job_id)
-        self.pending.put(job_id)
+                self._revision += 1
+            self._condition.notify_all()
 
     @property
     def queue_depth(self) -> int:
-        with self._order_lock:
+        with self._condition:
             return len(self._order)
 
     def queue_position(self, job_id: str) -> int | None:
-        with self._order_lock:
+        with self._condition:
             try:
                 return self._order.index(job_id) + 1
             except ValueError:
                 return None
 
     def queue_snapshot(self) -> list[dict[str, Any]]:
-        with self._order_lock:
+        with self._condition:
             ids = list(self._order)
-            running_id = self._running_job_id
+            running_ids = list(self._running_job_ids.values())
+            if self._running_job_id and self._running_job_id not in running_ids:
+                running_ids.append(self._running_job_id)
         snapshot = []
-        if running_id:
+        for running_id in running_ids:
             running = self.store.queue_public(running_id)
             if running:
                 running["queue_position"] = 0
@@ -436,40 +719,70 @@ class JobManager:
         return True
 
     def remove(self, job_id: str) -> None:
-        with self._order_lock:
+        with self._condition:
             if job_id in self._order:
                 self._order.remove(job_id)
+                self._revision += 1
+            self._condition.notify_all()
 
     def _is_cancelled(self, job_id: str) -> bool:
         job = self.store.get(job_id)
         return bool(job and job.get("cancel_requested"))
 
-    def _worker(self) -> None:
-        while True:
-            job_id = self.pending.get()
-            if job_id is None:
+    def _claim_job(self, node_id: str) -> tuple[str, dict[str, Any]] | None:
+        with self._condition:
+            while not self._stop_event.is_set():
+                node = self._nodes.get(node_id)
+                if not node or node.get("retired"):
+                    return None
+                if node["healthy"]:
+                    for job_id in list(self._order):
+                        job = self.store.get(job_id)
+                        if not job or job.get("status") != "queued":
+                            self._order.remove(job_id)
+                            continue
+                        target = job.get("request", {}).get("comfy_node") or "auto"
+                        if target not in self._nodes:
+                            target = "auto"
+                        if target not in {"auto", node_id}:
+                            continue
+                        self._order.remove(job_id)
+                        self._running_job_ids[node_id] = job_id
+                        self._revision += 1
+                        return job_id, job
+                self._condition.wait(timeout=1)
+        return None
+
+    def _worker(self, node_id: str) -> None:
+        while not self._stop_event.is_set():
+            claimed = self._claim_job(node_id)
+            if not claimed:
                 return
-            job = self.store.get(job_id)
-            if not job or job["status"] == "cancelled":
-                continue
-            self.remove(job_id)
-            with self._order_lock:
-                self._running_job_id = job_id
+            node = self._nodes[node_id]
+            job_id, job = claimed
+            assigned_node = {"id": node_id, "name": node["name"]}
             self.store.update(
                 job_id,
                 status="running",
-                stage="准备推理环境",
+                stage=f"准备 {node['name']} 推理环境",
                 progress=1,
                 started_at=utc_now(),
+                assigned_node=assigned_node,
+                event_message=f"任务已分配至 {node['name']}",
             )
             try:
-                if self._engine is None:
-                    self._engine = self.engine_factory()
+                if node_id not in self._engines:
+                    self._engines[node_id] = (
+                        self.engine_factory(node["config"])
+                        if self._factory_accepts_node
+                        else self.engine_factory()
+                    )
+                engine = self._engines[node_id]
 
                 def progress(percent: int, stage: str) -> None:
                     self.store.update(job_id, progress=max(1, min(99, percent)), stage=stage)
 
-                result = self._engine.generate(job, progress, lambda: self._is_cancelled(job_id))
+                result = engine.generate(job, progress, lambda: self._is_cancelled(job_id))
                 if self._is_cancelled(job_id):
                     self.store.update(job_id, status="cancelled", stage="已取消", progress=0)
                     self._set_incognito_expiry(job_id)
@@ -500,8 +813,10 @@ class JobManager:
                 )
                 self._set_incognito_expiry(job_id)
             finally:
-                with self._order_lock:
-                    self._running_job_id = None
+                with self._condition:
+                    self._running_job_ids.pop(node_id, None)
+                    self._revision += 1
+                    self._condition.notify_all()
 
     def _schedule_incognito_expiry(self, job_id: str, expires_at: str) -> None:
         try:

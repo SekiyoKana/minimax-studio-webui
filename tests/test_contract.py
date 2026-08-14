@@ -12,6 +12,8 @@ from fastapi import HTTPException
 from app.engine import ComfyUIH3Engine
 from app.jobs import JobManager, JobStore
 from app.main import align_frames, validate_execution_mode, validate_generation, validate_references
+from app.music_prompts import MUSIC3_ARRANGEMENT_SYSTEM_PROMPT, MUSIC3_LYRICS_SYSTEM_PROMPT
+from app.nodes import NodeRegistry
 from app.prompts import FL2VA_SYSTEM_PROMPT
 from app.ref2va_prompts import REF2VA_SYSTEM_PROMPT
 from app.settings import Settings
@@ -28,7 +30,7 @@ class ContractTests(unittest.TestCase):
             styles,
             r"\.conversation-column \{[^}]*height: 100%;[^}]*overflow: hidden;",
         )
-        self.assertIn('/assets/styles.css?v=20', index)
+        self.assertIn('/assets/styles.css?v=27', index)
 
     def test_settings_popover_is_outside_horizontal_scroll_container(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -39,6 +41,16 @@ class ContractTests(unittest.TestCase):
         settings = index.index('<details class="settings-popover"')
         self.assertGreater(settings, toolbar_actions)
         self.assertGreater(toolbar_actions, toolbar_left)
+
+    def test_comfy_nodes_and_health_interval_are_stored_in_sqlite(self):
+        with TemporaryDirectory() as temp:
+            registry = NodeRegistry(Path(temp) / "config.db")
+            self.assertEqual(registry.configs()[0].url, "http://127.0.0.1:8188")
+            registry.create("gpu-2", "GPU 2", "http://10.0.0.12:8188/")
+            self.assertEqual(len(registry.configs()), 2)
+            self.assertEqual(registry.get("gpu-2")["url"], "http://10.0.0.12:8188")
+            self.assertEqual(registry.set_health_interval(90), 90)
+            self.assertEqual(registry.health_interval(), 90)
 
     def test_prompt_optimizers_require_simplified_chinese(self):
         self.assertIn("必须使用简体中文", FL2VA_SYSTEM_PROMPT)
@@ -79,6 +91,72 @@ class ContractTests(unittest.TestCase):
             items, total = store.list(1, 20, scope="normal")
             self.assertEqual(total, 1)
             self.assertEqual([item["id"] for item in items], ["visible"])
+
+    def test_job_store_exposes_incremental_public_changes(self):
+        with TemporaryDirectory() as temp:
+            jobs_dir = Path(temp) / "data" / "jobs"
+            jobs_dir.mkdir(parents=True)
+            store = JobStore(jobs_dir)
+            cursor = store.revision
+            store.create(
+                {
+                    "id": "visible",
+                    "status": "queued",
+                    "created_at": "2026-08-14T00:00:00+00:00",
+                    "request": {"prompt": "visible", "incognito": False},
+                }
+            )
+            store.create(
+                {
+                    "id": "restricted",
+                    "status": "queued",
+                    "created_at": "2026-08-14T00:01:00+00:00",
+                    "request": {"prompt": "restricted", "incognito": True},
+                }
+            )
+
+            changes = store.changes_since(cursor)
+            self.assertEqual([job["id"] for job in changes["jobs"]], ["visible"])
+            cursor = changes["revision"]
+            store.delete("visible")
+            changes = store.changes_since(cursor)
+            self.assertEqual(changes["deleted_job_ids"], ["visible"])
+
+    def test_node_manager_and_incremental_sse_frontend_contract(self):
+        project_root = Path(__file__).resolve().parents[1]
+        index = (project_root / "static" / "index.html").read_text(encoding="utf-8")
+        app_js = (project_root / "static" / "app.js").read_text(encoding="utf-8")
+        styles = (project_root / "static" / "styles.css").read_text(encoding="utf-8")
+        main = (project_root / "app" / "main.py").read_text(encoding="utf-8")
+
+        self.assertIn('id="openNodeManager"', index)
+        self.assertIn('id="nodeEditor"', index)
+        self.assertNotIn('id="nodeId"', index)
+        self.assertIn('api("/api/v1/comfy/nodes")', app_js)
+        self.assertIn('node_id = f"node-{secrets.token_hex(4)}"', main)
+        self.assertIn('function applyJobUpsert(job)', app_js)
+        self.assertIn('request.headers.get("last-event-id"', main)
+        self.assertIn(".modal-overlay.node-modal", styles)
+
+    def test_asset_detail_infinite_scroll_reuse_and_locale_contract(self):
+        project_root = Path(__file__).resolve().parents[1]
+        index = (project_root / "static" / "index.html").read_text(encoding="utf-8")
+        app_js = (project_root / "static" / "app.js").read_text(encoding="utf-8")
+        styles = (project_root / "static" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn('id="assetDetailModal"', index)
+        self.assertIn('id="languageToggle"', index)
+        self.assertIn('id="apiDocsLink"', index)
+        self.assertNotIn('id="previousAssetPage"', index)
+        self.assertNotIn('id="nextAssetPage"', index)
+        self.assertIn('conversationPageSize: 10', app_js)
+        self.assertIn('state.conversationReady && movingUp && currentTop < 72', app_js)
+        self.assertIn('function openAssetDetail(jobId)', app_js)
+        self.assertIn('async function backfillJob(jobId)', app_js)
+        self.assertIn('data-job-action="reuse"', app_js)
+        self.assertIn('loadAssets({ reset: true })', app_js)
+        self.assertIn('grid.scrollHeight - grid.scrollTop - grid.clientHeight < 180', app_js)
+        self.assertIn('.asset-detail-dialog', styles)
 
     def test_public_references_have_view_urls(self):
         with TemporaryDirectory() as temp:
@@ -153,6 +231,10 @@ class ContractTests(unittest.TestCase):
                 "minimax_h3_ref2va_fp8_digital_human_api.json",
                 configured.comfy_digital_human_workflow,
             ),
+            comfy_music3_workflow=local_or_configured(
+                "minimax_music3_int8_api.json",
+                configured.comfy_music3_workflow,
+            ),
         )
         engine = ComfyUIH3Engine(settings)
 
@@ -205,6 +287,15 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(digital_human["130"]["inputs"]["audio"], ["172", 1])
         self.assertNotIn("121", digital_human)
 
+        music3 = engine._load_workflow("music3-int8", "music3")
+        self.assertEqual(music3["6"]["inputs"]["unet_name"], "minimax_music3_dit_int8_convrot.safetensors")
+        self.assertEqual(music3["3"]["class_type"], "CLIPLoaderMultiGPU")
+        self.assertEqual(music3["3"]["inputs"]["type"], "minimax")
+        self.assertEqual(music3["3"]["inputs"]["device"], "cuda:0")
+        self.assertEqual(music3["9"]["inputs"]["steps"], 30)
+        self.assertEqual(music3["42"]["class_type"], "VAEDecodeAudioTiled")
+        self.assertEqual(music3["92"]["class_type"], "SaveAudio")
+
     def test_nsfw_mode_requires_incognito_ref2va(self):
         validate_execution_mode("h3-nsfw", "ref2va-fp8", True)
         validate_execution_mode("turbo-lora", "fl2va-fp8", False)
@@ -225,6 +316,13 @@ class ContractTests(unittest.TestCase):
             validate_execution_mode("digital-human", "fl2va-fp8", False)
         self.assertEqual(fl2va_context.exception.status_code, 422)
 
+    def test_music3_mode_requires_music3_model(self):
+        validate_execution_mode("music3", "music3-int8", False)
+        with self.assertRaises(HTTPException):
+            validate_execution_mode("music3", "fl2va-fp8", False)
+        with self.assertRaises(HTTPException):
+            validate_execution_mode("native", "music3-int8", False)
+
     def test_speed_cache_is_removed_from_frontend_and_service(self):
         project_root = Path(__file__).resolve().parents[1]
         index = (project_root / "static" / "index.html").read_text(encoding="utf-8")
@@ -239,8 +337,8 @@ class ContractTests(unittest.TestCase):
         self.assertIn('option value="turbo-lora"', index)
         self.assertIn('option value="turbo-lora">8-step LoRA · 1.0', index)
         self.assertIn('const accelerated = selectedExecutionMode() === "turbo-lora";', app_js)
-        self.assertIn('el("steps").value = accelerated ? "8"', app_js)
-        self.assertIn('el("steps").disabled = accelerated || digitalHuman;', app_js)
+        self.assertIn('accelerated ? "8"', app_js)
+        self.assertIn('music3 || accelerated || digitalHuman', app_js)
         self.assertIn('selectedExecutionMode() === "turbo-lora" ? 8', app_js)
         self.assertIn("H3_COMFY_TURBO_WORKFLOW", deployment)
         self.assertIn("H3_COMFY_REF2VA_TURBO_WORKFLOW", deployment)
@@ -252,15 +350,50 @@ class ContractTests(unittest.TestCase):
         environment = (project_root / ".env.example").read_text(encoding="utf-8")
 
         self.assertIn('option value="digital-human">数字人 · 音频驱动', index)
-        self.assertIn('/assets/app.js?v=23', index)
+        self.assertIn('/assets/app.js?v=33', index)
         self.assertIn('return { image: 1, video: 0, audio: 1 };', app_js)
         self.assertIn('el("duration").disabled = digitalHuman;', app_js)
         self.assertIn('durationControl.classList.toggle("digital-human", digitalHuman);', app_js)
         self.assertIn('视频长度由驱动音频长度决定', index)
         self.assertIn('class="control-tooltip"', index)
         self.assertIn('el("durationHint").hidden = !digitalHuman;', app_js)
-        self.assertIn('el("steps").disabled = accelerated || digitalHuman;', app_js)
+        self.assertIn('music3 || accelerated || digitalHuman', app_js)
         self.assertIn("H3_COMFY_DIGITAL_HUMAN_WORKFLOW", environment)
+
+    def test_music3_frontend_contract(self):
+        project_root = Path(__file__).resolve().parents[1]
+        index = (project_root / "static" / "index.html").read_text(encoding="utf-8")
+        app_js = (project_root / "static" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('option value="music3-int8"', index)
+        self.assertIn('option value="music3" id="music3ExecutionOption"', index)
+        self.assertIn('id="lyrics"', index)
+        self.assertIn("MUSIC3_DURATIONS = [30, 60, 120, 180, 240, 300]", app_js)
+        self.assertIn('data.append("lyrics"', app_js)
+        self.assertIn('<option value="music3-int8">Music3 INT8</option>', index)
+        self.assertIn('id="comfyNode"', index)
+        self.assertIn('data.append("comfy_node"', app_js)
+        self.assertIn('new EventSource(`/api/v1/events?since=', app_js)
+        self.assertIn('function applyJobUpsert(job)', app_js)
+        self.assertNotIn('await Promise.all([loadAssets(), refreshConversation(), checkHealth()])', app_js)
+        self.assertIn('id="writeLyrics"', index)
+        self.assertIn('id="optimizePromptLabel"', index)
+        self.assertIn('optimizePromptLabel.textContent = music3 ? "AI 编曲"', app_js)
+        self.assertIn('async function assistMusic(task)', app_js)
+        self.assertIn('fetch("/api/v1/music/assist"', app_js)
+        self.assertIn('assistMusic("arrangement")', app_js)
+        self.assertIn('assistMusic("lyrics")', app_js)
+
+    def test_music3_assistant_prompts_follow_caption_contract(self):
+        arrangement = MUSIC3_ARRANGEMENT_SYSTEM_PROMPT
+        lyrics = MUSIC3_LYRICS_SYSTEM_PROMPT
+        for heading in ("### Global Metadata", "### Vocal Details", "### Arrangement"):
+            self.assertIn(heading, arrangement)
+        self.assertIn("Never quote, paraphrase, summarize, translate, or reproduce lyric lines", arrangement)
+        self.assertIn("For an instrumental request, return only [Instrumental]", lyrics)
+        self.assertIn("[Verse]", lyrics)
+        self.assertIn("[Chorus]", lyrics)
+        self.assertNotIn("### Arrangement", lyrics)
 
     def test_nsfw_frontend_option_is_incognito_only(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -417,8 +550,8 @@ class ContractTests(unittest.TestCase):
         self.assertIn("function isAnonymousQueueJob(job)", app_js)
         self.assertIn('? "有任务正在运行中"', app_js)
         self.assertIn('const progress = item.progress == null ? ""', app_js)
-        self.assertIn('/assets/app.js?v=23', index)
-        self.assertIn('/assets/styles.css?v=20', index)
+        self.assertIn('/assets/app.js?v=33', index)
+        self.assertIn('/assets/styles.css?v=27', index)
         self.assertIn('id="steps" name="steps" type="number"', index)
         self.assertIn('min="4" max="50" step="1" value="10"', index)
         self.assertNotIn('<select id="steps"', index)
@@ -553,6 +686,45 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(workflow["172"]["inputs"]["source_audio"], ["171", 0])
         self.assertEqual(workflow["130"]["inputs"]["audio"], ["172", 1])
 
+    def test_music3_workflow_uses_description_lyrics_and_duration(self):
+        engine = ComfyUIH3Engine(Settings())
+        job = {
+            "id": "music3-test",
+            "request": {
+                "model_variant": "music3-int8",
+                "execution_mode": "music3",
+                "prompt": "Mandarin synth-pop with bright female vocals.",
+                "lyrics": "[Verse]\nCity lights\n\n[Chorus]\nRun into dawn",
+                "duration": 120,
+                "steps": 30,
+                "seed": 1234,
+                "references": [],
+            },
+            "input_paths": [],
+        }
+
+        workflow = engine._build_workflow(job, [], "cuda:1")
+
+        self.assertEqual(workflow["13"]["inputs"]["caption"], job["request"]["prompt"])
+        self.assertEqual(workflow["13"]["inputs"]["lyrics"], job["request"]["lyrics"])
+        self.assertEqual(workflow["13"]["inputs"]["max_duration"], 120)
+        self.assertEqual(workflow["13"]["inputs"]["seed"], 1234)
+        self.assertEqual(workflow["9"]["inputs"]["seed"], 1234)
+        self.assertEqual(workflow["92"]["inputs"]["filename_prefix"], "minimax-h3-api/music3-test")
+        self.assertEqual(workflow["3"]["inputs"]["device"], "cuda:1")
+
+    def test_music3_uses_cuda_device_reported_by_selected_comfy_node(self):
+        stats = {
+            "devices": [
+                {"name": "cuda:1 NVIDIA GeForce RTX 4090", "type": "cuda", "index": 1}
+            ]
+        }
+        self.assertEqual(ComfyUIH3Engine._comfy_cuda_device(stats), "cuda:1")
+        with self.assertRaisesRegex(RuntimeError, "未报告 CUDA 设备"):
+            ComfyUIH3Engine._comfy_cuda_device(
+                {"devices": [{"name": "cpu", "type": "cpu", "index": 0}]}
+            )
+
     def test_generation_and_reference_limits(self):
         for duration in (1, 15):
             for steps in (4, 10, 50):
@@ -571,6 +743,13 @@ class ContractTests(unittest.TestCase):
         for steps in (8, 19, 21):
             with self.assertRaises(HTTPException):
                 validate_generation(608, 352, 5, steps, "digital-human")
+        validate_generation(0, 0, 300, 30, "music3")
+        for duration, steps in ((0.99, 30), (300.01, 30), (60, 29)):
+            with self.assertRaises(HTTPException):
+                validate_generation(0, 0, duration, steps, "music3")
+        validate_references("music3-int8", [], "music3")
+        with self.assertRaises(HTTPException):
+            validate_references("music3-int8", ["audio"], "music3")
         validate_references(
             "ref2va-fp8",
             ["image"] * 9 + ["video"] * 3 + ["audio"] * 3,
@@ -624,6 +803,41 @@ class ContractTests(unittest.TestCase):
 
             self.assertEqual(result.read_bytes(), b"test-video")
             self.assertFalse(source.exists())
+
+    def test_music3_result_becomes_api_managed_flac(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "api"
+            comfy_output = Path(temp) / "comfy-output"
+            source = comfy_output / "minimax-h3-api" / "music3-test_00001_.flac"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"test-flac")
+            settings = Settings(root=root, comfy_output_dir=comfy_output)
+            settings.ensure_directories()
+            engine = ComfyUIH3Engine(settings)
+            history = {
+                "status": {"completed": True, "status_str": "success"},
+                "outputs": {
+                    "92": {
+                        "audio": [
+                            {
+                                "filename": source.name,
+                                "subfolder": "minimax-h3-api",
+                                "type": "output",
+                            }
+                        ]
+                    }
+                },
+            }
+            job = {
+                "id": "music3-test",
+                "request": {"model_variant": "music3-int8", "prompt": "test"},
+            }
+
+            result = engine._copy_result(job, history)
+
+            self.assertEqual(result.suffix, ".flac")
+            self.assertEqual(result.read_bytes(), b"test-flac")
+            self.assertFalse(source.exists())
             self.assertTrue(result.with_suffix(".json").exists())
 
     def test_comfy_engine_releases_vram_after_each_job(self):
@@ -648,7 +862,7 @@ class ContractTests(unittest.TestCase):
         log_exception.assert_called_once_with("ComfyUI VRAM 释放失败")
 
         with (
-            patch.object(engine, "_prepare_inputs", side_effect=RuntimeError("prepare failed")),
+            patch.object(engine, "_upload_inputs", side_effect=RuntimeError("prepare failed")),
             patch.object(engine, "_release_vram") as release_vram,
             self.assertRaisesRegex(RuntimeError, "prepare failed"),
         ):

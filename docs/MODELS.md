@@ -2,7 +2,7 @@
 
 [English](en/MODELS.md)
 
-结构化清单位于 [`model-manifest.json`](../model-manifest.json)。所有固定链接和 SHA-256 已在 2026-08-12 核对。
+结构化清单位于 [`model-manifest.json`](../model-manifest.json)。Music3 文件链接和 SHA-256 已在 2026-08-14 核对。
 
 ## 核心模型
 
@@ -33,6 +33,14 @@
 
 当前工作流使用 LoRA 强度 1.0、`res_multistep` 采样器和 `MiniMaxH3SigmaShift`，步数固定为 8。Ref2VA 加速方案暂时复用该 FL2VA LoRA，直到 Ref2VA 专用版本发布。
 
+## MiniMax Music3
+
+| 文件 | 大小 | SHA-256 | ModelScope | Hugging Face |
+|---|---:|---|---|---|
+| `minimax_music3_dit_int8_convrot.safetensors` | 2,502,161,682 | `d6b959633e69899f99f3a92d6741c0fe79f26958a30811e50e372ef978b24d5f` | [下载](https://modelscope.cn/models/Comfy-Org/MiniMax-Music-3/resolve/fbc3502b5d2ca0049348ee28b632f270b35e193a/diffusion_models/minimax_music3_dit_int8_convrot.safetensors) | [下载](https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/6444666eb6edfb2c7fcab5f8b81da8b84b4b17b6/diffusion_models/minimax_music3_dit_int8_convrot.safetensors) |
+| `minimax_music3_text_encoder_pruned_int8_convrot.safetensors` | 9,196,611,886 | `010b7416d2336a08c711bc22ee65849c9623069ddb7d89bec011a75699e52014` | [下载](https://modelscope.cn/models/Comfy-Org/MiniMax-Music-3/resolve/fbc3502b5d2ca0049348ee28b632f270b35e193a/text_encoders/minimax_music3_text_encoder_pruned_int8_convrot.safetensors) | [下载](https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/6444666eb6edfb2c7fcab5f8b81da8b84b4b17b6/text_encoders/minimax_music3_text_encoder_pruned_int8_convrot.safetensors) |
+| `minimax_music3_dav.safetensors` | 216,696,128 | `2a32155b769be01445fcc2a8663b910fc9e1751e18dc1c3ec528064512d9ef0c` | [下载](https://modelscope.cn/models/Comfy-Org/MiniMax-Music-3/resolve/fbc3502b5d2ca0049348ee28b632f270b35e193a/vae/minimax_music3_dav.safetensors) | [下载](https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/6444666eb6edfb2c7fcab5f8b81da8b84b4b17b6/vae/minimax_music3_dav.safetensors) |
+
 ## 可选 NaughtyTimes LoRA
 
 | 文件 | 大小 | SHA-256 | 作者页面 |
@@ -43,4 +51,4 @@
 
 ## 存储统计
 
-必需模型总大小为 65,372,810,071 bytes，约 65.4 GB。包含可选 NaughtyTimes LoRA 后总大小为 67,852,075,167 bytes。
+必需模型总大小为 77,288,279,767 bytes，约 77.3 GB。包含可选 NaughtyTimes LoRA 后总大小为 79,767,544,863 bytes。

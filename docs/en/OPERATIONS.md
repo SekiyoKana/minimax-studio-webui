@@ -80,11 +80,12 @@ INSTALL_ROOT="$HOME/minimax-h3-stack" bash scripts/verify_install.sh
 
 | Path | Contents |
 |---|---|
+| `minimax-h3-api/data/config.db` | SQLite database for ComfyUI nodes and service settings |
 | `minimax-h3-api/data/jobs` | Job-state JSON files |
 | `minimax-h3-api/data/uploads` | User-uploaded reference assets |
 | `minimax-h3-api/data/outputs` | API-managed MP4 files and parameter sidecars |
-| `ComfyUI/input/minimax-h3-api` | Temporary inputs used during execution |
-| `ComfyUI/output/minimax-h3-api` | Temporary ComfyUI artifacts removed after API transfer |
+| `ComfyUI/input/minimax-h3-api` | Job inputs uploaded through the ComfyUI API |
+| `ComfyUI/output/minimax-h3-api` | Node-side artifacts returned to the API over HTTP |
 
 Uploads, job files, and artifacts for incognito jobs remain for 30 minutes after completion and are then removed by the service. The public asset library and normal conversation stream do not return these jobs.
 

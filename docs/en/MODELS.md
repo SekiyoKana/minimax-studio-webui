@@ -2,7 +2,7 @@
 
 [中文](../MODELS.md)
 
-The structured manifest is stored in [`model-manifest.json`](../../model-manifest.json). All pinned URLs and SHA-256 checksums were verified on 2026-08-12.
+The structured manifest is stored in [`model-manifest.json`](../../model-manifest.json). Music3 URLs and SHA-256 checksums were verified on 2026-08-14.
 
 ## Core Models
 
@@ -33,6 +33,14 @@ Author resources:
 
 The current workflow uses LoRA strength 1.0, the `res_multistep` sampler, and `MiniMaxH3SigmaShift`, with steps fixed at 8. Ref2VA acceleration temporarily reuses this FL2VA LoRA until a dedicated Ref2VA release is available.
 
+## MiniMax Music3
+
+| File | Size | SHA-256 | ModelScope | Hugging Face |
+|---|---:|---|---|---|
+| `minimax_music3_dit_int8_convrot.safetensors` | 2,502,161,682 | `d6b959633e69899f99f3a92d6741c0fe79f26958a30811e50e372ef978b24d5f` | [Download](https://modelscope.cn/models/Comfy-Org/MiniMax-Music-3/resolve/fbc3502b5d2ca0049348ee28b632f270b35e193a/diffusion_models/minimax_music3_dit_int8_convrot.safetensors) | [Download](https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/6444666eb6edfb2c7fcab5f8b81da8b84b4b17b6/diffusion_models/minimax_music3_dit_int8_convrot.safetensors) |
+| `minimax_music3_text_encoder_pruned_int8_convrot.safetensors` | 9,196,611,886 | `010b7416d2336a08c711bc22ee65849c9623069ddb7d89bec011a75699e52014` | [Download](https://modelscope.cn/models/Comfy-Org/MiniMax-Music-3/resolve/fbc3502b5d2ca0049348ee28b632f270b35e193a/text_encoders/minimax_music3_text_encoder_pruned_int8_convrot.safetensors) | [Download](https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/6444666eb6edfb2c7fcab5f8b81da8b84b4b17b6/text_encoders/minimax_music3_text_encoder_pruned_int8_convrot.safetensors) |
+| `minimax_music3_dav.safetensors` | 216,696,128 | `2a32155b769be01445fcc2a8663b910fc9e1751e18dc1c3ec528064512d9ef0c` | [Download](https://modelscope.cn/models/Comfy-Org/MiniMax-Music-3/resolve/fbc3502b5d2ca0049348ee28b632f270b35e193a/vae/minimax_music3_dav.safetensors) | [Download](https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/6444666eb6edfb2c7fcab5f8b81da8b84b4b17b6/vae/minimax_music3_dav.safetensors) |
+
 ## Optional NaughtyTimes LoRA
 
 | File | Size | SHA-256 | Author Page |
@@ -43,4 +51,4 @@ The author page returned HTTP 401 on 2026-08-07, so public availability could no
 
 ## Storage
 
-Required models total 65,372,810,071 bytes, approximately 65.4 GB. Including the optional NaughtyTimes LoRA, the total is 67,852,075,167 bytes.
+Required models total 77,288,279,767 bytes, approximately 77.3 GB. Including the optional NaughtyTimes LoRA, the total is 79,767,544,863 bytes.

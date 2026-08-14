@@ -14,6 +14,7 @@
 | `minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA FP8 Scaled + FL2VA 8-step LoRA v1.0 | `res_multistep`，8 步 | `138ea319f489b545b075196cf5ff1bc3ef73fe918d82f0a5d31e80a73a10f586` |
 | `minimax_h3_ref2va_fp8_nsfw_lora_api.json` | Ref2VA FP8 Scaled | NaughtyTimes LoRA | `4fbdcb94d6014fedfd6af50d081feaae891ca97867f888a00673563891e9dad7` |
 | `minimax_h3_ref2va_fp8_digital_human_api.json` | Ref2VA FP8 Scaled | 单图数字人音频驱动 | `829babe98437529714c4608185be9a63cd5db3ea09544d813a060b6e47138c06` |
+| `minimax_music3_int8_api.json` | Music3 INT8 | 文本与歌词生成音乐 | `f3f3d2af89aadd9b25bd4d49628e28b13ba6e9e05e3afc551f4edd5177980fa5` |
 
 ## 动态节点
 
@@ -57,6 +58,8 @@ Ref2VA 视频参考由 API 动态创建 `VHS_LoadVideo` 节点，因此需要 [C
 
 数字人工作流需要附件中的 `comfyui-vrgamedevgirl`，核心节点为 `VRGDG_MiniMaxH3AudioDrive`。附件中的 `ComfyUI-SoundFlow` 已纳入云端 ComfyUI 插件环境；服务端通过 `ffprobe` 读取驱动音频时长，API 工作流不依赖 `SoundFlow_GetLength`。
 
+Music3 使用 ComfyUI 原生节点 `MiniMaxMusic3TextEncode`、`EmptyMiniMaxMusic3LatentAudio`，以及 ComfyUI-MultiGPU 的 `CLIPLoaderMultiGPU`。文本编码器固定使用当前 ComfyUI 进程的 CUDA 设备。工作流固定 30 步、Euler 采样器、`simple` 调度器和分块音频解码，输出 FLAC。
+
 ## 参数限制
 
 | 参数 | 范围 |
@@ -70,3 +73,5 @@ Ref2VA 视频参考由 API 动态创建 `VHS_LoadVideo` 节点，因此需要 [C
 | Ref2VA 音频 | 最多 3 段，每段 1 至 15 秒 |
 | 数字人素材 | 1 张人物图片和 1 段 1 至 15 秒驱动音频 |
 | 数字人步数 | 固定 20 |
+| Music3 时长 | 1 至 300 秒 |
+| Music3 步数 | 固定 30 |

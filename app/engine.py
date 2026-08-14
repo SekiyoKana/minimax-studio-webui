@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import mimetypes
 import os
 import shutil
 import subprocess
@@ -13,6 +14,7 @@ from typing import Any, Callable
 
 from PIL import Image
 
+from .nodes import ComfyNodeConfig
 from .settings import Settings
 
 
@@ -40,6 +42,16 @@ class FakeEngine:
 
     def generate(self, job, progress, cancelled):
         progress(50, "测试模式")
+        if job["request"].get("model_variant") == "music3-int8":
+            import wave
+
+            output = self.settings.outputs_dir / f"{job['id']}.wav"
+            with wave.open(str(output), "wb") as target:
+                target.setnchannels(2)
+                target.setsampwidth(2)
+                target.setframerate(32000)
+                target.writeframes(b"\0\0\0\0" * 3200)
+            return output
         source = Path(job["input_paths"][0])
         output = self.settings.outputs_dir / f"{job['id']}.jpg"
         shutil.copy2(source, output)
@@ -237,6 +249,12 @@ class MiniMaxH3Engine:
 
 class ComfyUIH3Engine:
     NODE_STAGES = {
+        "3": (7, "加载 Music3 文本编码器"),
+        "6": (5, "加载 Music3 INT8 DiT"),
+        "7": (9, "加载 Music3 音频解码器"),
+        "13": (12, "编码音乐描述与歌词"),
+        "9": (15, "Music3 音频采样"),
+        "42": (92, "分块解码 Music3 音频"),
         "127": (6, "加载 MiniMax H3 FP8 模型"),
         "128": (8, "加载 Qwen3-VL 文本编码器"),
         "141": (10, "加载 H3 NSFW LoRA"),
@@ -250,17 +268,19 @@ class ComfyUIH3Engine:
         "92": (97, "保存 MP4 产物"),
     }
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, node: ComfyNodeConfig | None = None):
         self.settings = settings
+        self.node = node or ComfyNodeConfig("default", settings.gpu_label, settings.comfy_url)
+        self.comfy_url = self.node.url.rstrip("/")
 
     @staticmethod
     def _variant(job: dict[str, Any]) -> str:
         # Jobs created before model selection was added are FL2VA jobs.
-        return job["request"].get("model_variant") or "fl2va-fp8"
+        return job.get("request", {}).get("model_variant") or "fl2va-fp8"
 
     @staticmethod
     def _execution_mode(job: dict[str, Any]) -> str:
-        return job["request"].get("execution_mode") or "native"
+        return job.get("request", {}).get("execution_mode") or "native"
 
     def _load_workflow(self, variant: str, execution_mode: str = "native") -> dict[str, Any]:
         workflow_paths = {
@@ -270,6 +290,7 @@ class ComfyUIH3Engine:
             ("ref2va-fp8", "turbo-lora"): self.settings.comfy_ref2va_turbo_workflow,
             ("ref2va-fp8", "h3-nsfw"): self.settings.comfy_nsfw_workflow,
             ("ref2va-fp8", "digital-human"): self.settings.comfy_digital_human_workflow,
+            ("music3-int8", "music3"): self.settings.comfy_music3_workflow,
         }
         try:
             workflow_path = workflow_paths[(variant, execution_mode)]
@@ -278,6 +299,12 @@ class ComfyUIH3Engine:
         if not workflow_path.exists():
             raise FileNotFoundError(f"ComfyUI 工作流不存在：{workflow_path}")
         workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+        if variant == "music3-int8":
+            required = {"3", "6", "7", "9", "10", "13", "15", "42", "92"}
+            missing = sorted(required.difference(workflow))
+            if missing:
+                raise ValueError(f"ComfyUI Music3 工作流缺少节点：{', '.join(missing)}")
+            return workflow
         required = {"92", "124", "125", "129", "136", "137"}
         if variant == "ref2va-fp8":
             required.discard("137")
@@ -307,12 +334,59 @@ class ComfyUIH3Engine:
             relative_paths.append(target.relative_to(self.settings.comfy_input_dir).as_posix())
         return task_dir, relative_paths
 
-    def _build_workflow(self, job: dict[str, Any], input_names: list[str]) -> dict[str, Any]:
+    def _upload_inputs(self, client, job: dict[str, Any]) -> list[str]:
+        paths = [Path(path) for path in job["input_paths"]]
+        manifest = job["request"]["references"]
+        if not paths or len(paths) != len(manifest):
+            raise ValueError("参考素材清单与文件不一致")
+        subfolder = f"minimax-h3-api/{job['id']}"
+        uploaded = []
+        for index, (source, item) in enumerate(zip(paths, manifest, strict=True), start=1):
+            suffix = source.suffix.lower() or ".bin"
+            filename = f"{index:02d}_{item['type']}{suffix}"
+            content_type = mimetypes.guess_type(source.name)[0] or "application/octet-stream"
+            with source.open("rb") as handle:
+                response = client.post(
+                    "/upload/image",
+                    data={"type": "input", "subfolder": subfolder, "overwrite": "true"},
+                    files={"image": (filename, handle, content_type)},
+                )
+            response.raise_for_status()
+            result = response.json()
+            stored_name = str(result.get("name") or filename)
+            stored_folder = str(result.get("subfolder") or subfolder).strip("/")
+            uploaded.append(f"{stored_folder}/{stored_name}" if stored_folder else stored_name)
+        return uploaded
+
+    @staticmethod
+    def _comfy_cuda_device(system_stats: dict[str, Any]) -> str:
+        for device in system_stats.get("devices", []):
+            if device.get("type") == "cuda" and isinstance(device.get("index"), int):
+                return f"cuda:{device['index']}"
+        raise RuntimeError("当前 ComfyUI 节点未报告 CUDA 设备，Music3 无法执行")
+
+    def _build_workflow(
+        self,
+        job: dict[str, Any],
+        input_names: list[str],
+        music3_device: str | None = None,
+    ) -> dict[str, Any]:
         variant = self._variant(job)
         execution_mode = self._execution_mode(job)
         workflow = self._load_workflow(variant, execution_mode)
         request = job["request"]
         workflow["92"]["inputs"]["filename_prefix"] = f"minimax-h3-api/{job['id']}"
+        if variant == "music3-int8":
+            if music3_device:
+                workflow["3"]["inputs"]["device"] = music3_device
+            workflow["13"]["inputs"].update(
+                caption=request["prompt"],
+                lyrics=request.get("lyrics") or "[Instrumental]",
+                seed=request["seed"],
+                max_duration=request["duration"],
+            )
+            workflow["9"]["inputs"].update(seed=request["seed"], steps=request["steps"])
+            return workflow
         workflow["124"]["inputs"]["steps"] = request["steps"]
         workflow["129"]["inputs"]["noise_seed"] = request["seed"]
         conditioning = workflow["136"]["inputs"]
@@ -423,7 +497,7 @@ class ComfyUIH3Engine:
 
         try:
             with httpx.Client(
-                base_url=self.settings.comfy_url,
+                base_url=self.comfy_url,
                 timeout=httpx.Timeout(10, connect=5),
                 trust_env=False,
             ) as client:
@@ -496,6 +570,11 @@ class ComfyUIH3Engine:
                 total = max(1, int(data.get("max") or 1))
                 percent = 15 + round(min(value, total) / total * 73)
                 progress(percent, f"联合音视频采样 {value}/{total}")
+            elif event_type == "progress" and str(data.get("node")) == "9":
+                value = int(data.get("value") or 0)
+                total = max(1, int(data.get("max") or 1))
+                percent = 15 + round(min(value, total) / total * 73)
+                progress(percent, f"Music3 音频采样 {value}/{total}")
             elif event_type == "execution_success":
                 for _ in range(10):
                     history = self._history(client, prompt_id)
@@ -509,7 +588,7 @@ class ComfyUIH3Engine:
                     raise InterruptedError("generation cancelled")
                 raise RuntimeError("ComfyUI 工作流被中断")
 
-    def _copy_result(self, job, history: dict[str, Any]) -> Path:
+    def _copy_result(self, job, history: dict[str, Any], client=None) -> Path:
         status = history.get("status") or {}
         if status.get("completed") is not True or status.get("status_str") != "success":
             messages = status.get("messages") or []
@@ -519,46 +598,73 @@ class ComfyUIH3Engine:
         for items in output_items.values():
             if isinstance(items, list):
                 candidates.extend(item for item in items if isinstance(item, dict))
-        video = next(
-            (item for item in candidates if str(item.get("filename", "")).lower().endswith(".mp4")),
+        music3 = self._variant(job) == "music3-int8"
+        expected_suffix = ".flac" if music3 else ".mp4"
+        result_item = next(
+            (
+                item
+                for item in candidates
+                if str(item.get("filename", "")).lower().endswith(expected_suffix)
+            ),
             None,
         )
-        if not video:
-            raise RuntimeError("ComfyUI 历史记录中没有找到节点 92 的 MP4 产物")
-        output_root = self.settings.comfy_output_dir.resolve()
-        source = (output_root / str(video.get("subfolder") or "") / video["filename"]).resolve()
-        try:
-            source.relative_to(output_root)
-        except ValueError as exc:
-            raise RuntimeError("ComfyUI 返回了非法产物路径") from exc
-        if not source.is_file():
-            raise FileNotFoundError(f"ComfyUI 产物不存在：{source}")
-        output = self.settings.outputs_dir / f"{job['id']}.mp4"
-        shutil.copy2(source, output)
+        if not result_item:
+            media_name = "FLAC" if music3 else "MP4"
+            raise RuntimeError(f"ComfyUI 历史记录中没有找到节点 92 的 {media_name} 产物")
+        output = self.settings.outputs_dir / f"{job['id']}{expected_suffix}"
+        if client is None:
+            output_root = self.settings.comfy_output_dir.resolve()
+            source = (
+                output_root
+                / str(result_item.get("subfolder") or "")
+                / result_item["filename"]
+            ).resolve()
+            try:
+                source.relative_to(output_root)
+            except ValueError as exc:
+                raise RuntimeError("ComfyUI 返回了非法产物路径") from exc
+            if not source.is_file():
+                raise FileNotFoundError(f"ComfyUI 产物不存在：{source}")
+            shutil.copy2(source, output)
+            source.unlink(missing_ok=True)
+        else:
+            params = {
+                "filename": result_item["filename"],
+                "subfolder": str(result_item.get("subfolder") or ""),
+                "type": str(result_item.get("type") or "output"),
+            }
+            with client.stream("GET", "/view", params=params) as response:
+                response.raise_for_status()
+                with output.open("wb") as target:
+                    for chunk in response.iter_bytes():
+                        target.write(chunk)
         output.with_suffix(".json").write_text(
             json.dumps(job["request"], ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        source.unlink(missing_ok=True)
         return output
 
     def generate(self, job, progress, cancelled):
         import httpx
         from websockets.sync.client import connect
 
-        task_dir = None
         prompt_id = None
         client_id = f"minimax-h3-api-{uuid.uuid4().hex}"
-        websocket_url = self.settings.comfy_url.rstrip("/").replace("http://", "ws://", 1).replace(
+        websocket_url = self.comfy_url.replace("http://", "ws://", 1).replace(
             "https://", "wss://", 1
         )
         try:
-            progress(2, "准备 ComfyUI FP8 工作流")
-            task_dir, input_names = self._prepare_inputs(job)
-            workflow = self._build_workflow(job, input_names)
+            music3 = self._variant(job) == "music3-int8"
+            progress(2, "准备 ComfyUI Music3 工作流" if music3 else "准备 ComfyUI FP8 工作流")
             timeout = httpx.Timeout(30, connect=10)
-            with httpx.Client(base_url=self.settings.comfy_url, timeout=timeout, trust_env=False) as client:
-                client.get("/system_stats").raise_for_status()
+            with httpx.Client(base_url=self.comfy_url, timeout=timeout, trust_env=False) as client:
+                stats_response = client.get("/system_stats")
+                stats_response.raise_for_status()
+                input_names = [] if music3 else self._upload_inputs(client, job)
+                music3_device = (
+                    self._comfy_cuda_device(stats_response.json()) if music3 else None
+                )
+                workflow = self._build_workflow(job, input_names, music3_device)
                 with connect(f"{websocket_url}/ws?clientId={client_id}", open_timeout=10, max_size=None) as socket:
                     response = client.post("/prompt", json={"prompt": workflow, "client_id": client_id})
                     response.raise_for_status()
@@ -573,13 +679,11 @@ class ComfyUIH3Engine:
                 if cancelled():
                     self._cancel_prompt(client, prompt_id)
                     raise InterruptedError("generation cancelled")
-            progress(98, "回传 ComfyUI 生成产物")
-            output = self._copy_result(job, history)
+                progress(98, "回传 ComfyUI 生成产物")
+                output = self._copy_result(job, history, client)
             progress(99, "整理交付文件")
             return output
         finally:
-            if task_dir:
-                shutil.rmtree(task_dir, ignore_errors=True)
             self._release_vram()
 
 
@@ -706,11 +810,23 @@ class SGLangH3Engine:
         return output
 
 
-def create_engine(settings: Settings):
+def probe_comfy_node(node: ComfyNodeConfig) -> None:
+    import httpx
+
+    with httpx.Client(
+        base_url=node.url,
+        timeout=httpx.Timeout(8, connect=4),
+        trust_env=False,
+    ) as client:
+        response = client.get("/system_stats")
+        response.raise_for_status()
+
+
+def create_engine(settings: Settings, node: ComfyNodeConfig | None = None):
     if settings.fake_engine:
         return FakeEngine(settings)
     if settings.engine_backend == "sglang":
         return SGLangH3Engine(settings)
     if settings.engine_backend == "comfyui":
-        return ComfyUIH3Engine(settings)
+        return ComfyUIH3Engine(settings, node)
     return MiniMaxH3Engine(settings)

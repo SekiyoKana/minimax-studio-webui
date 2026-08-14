@@ -18,19 +18,33 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
-from .engine import create_engine
+from .engine import create_engine, probe_comfy_node
 from .jobs import JobManager, JobStore, TERMINAL_STATES, utc_now
+from .music_prompts import MUSIC3_ARRANGEMENT_SYSTEM_PROMPT, MUSIC3_LYRICS_SYSTEM_PROMPT
+from .nodes import NodeRegistry
 from .prompts import FL2VA_SYSTEM_PROMPT
 from .ref2va_prompts import REF2VA_SYSTEM_PROMPT
 from .settings import settings
 
 
-ExecutionMode = Literal["native", "turbo-lora", "h3-nsfw", "digital-human"]
+ExecutionMode = Literal["native", "turbo-lora", "h3-nsfw", "digital-human", "music3"]
+ModelVariant = Literal["fl2va-fp8", "ref2va-fp8", "music3-int8"]
 
 
 settings.ensure_directories()
 store = JobStore(settings.jobs_dir)
-manager = JobManager(store, lambda: create_engine(settings))
+node_registry = NodeRegistry(settings.data_dir / "config.db")
+manager = JobManager(
+    store,
+    lambda node: create_engine(settings, node),
+    nodes=node_registry.configs(),
+    health_probe=(
+        probe_comfy_node
+        if settings.engine_backend == "comfyui" and not settings.fake_engine
+        else None
+    ),
+    health_interval=node_registry.health_interval(),
+)
 
 
 @asynccontextmanager
@@ -41,9 +55,9 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="MiniMax H3 FP8 API",
-    version="5.0.0",
-    description="ComfyUI-backed MiniMax H3 FL2VA and Ref2VA video generation.",
+    title="MiniMax H3 and Music3 API",
+    version="6.0.0",
+    description="ComfyUI-backed MiniMax H3 video and MiniMax Music3 audio generation.",
     lifespan=lifespan,
 )
 
@@ -52,14 +66,16 @@ class GenerationPatch(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     title: str | None = Field(None, max_length=120)
-    prompt: str | None = Field(None, min_length=8, max_length=12000)
+    prompt: str | None = Field(None, min_length=2, max_length=12000)
     width: int | None = None
     height: int | None = None
     duration: float | None = None
     steps: int | None = None
     seed: int | None = Field(None, ge=0, le=2**31 - 1)
-    model_variant: Literal["fl2va-fp8", "ref2va-fp8"] | None = None
+    model_variant: ModelVariant | None = None
     execution_mode: ExecutionMode | None = None
+    lyrics: str | None = Field(None, max_length=12000)
+    comfy_node: str | None = Field(None, min_length=1, max_length=64)
 
 
 class OptimizePromptRequest(BaseModel):
@@ -72,6 +88,31 @@ class OptimizePromptRequest(BaseModel):
     references: list[dict[str, str]] = Field(default_factory=list, max_length=15)
     duration: float = Field(default=5, ge=1, le=15)
     model_variant: Literal["fl2va-fp8", "ref2va-fp8"] = "fl2va-fp8"
+
+
+class MusicAssistRequest(BaseModel):
+    task: Literal["arrangement", "lyrics"]
+    prompt: str = Field(min_length=2, max_length=12000)
+    lyrics: str = Field(default="", max_length=12000)
+    duration: float = Field(default=60, ge=1, le=300)
+    base_url: str = Field(min_length=8, max_length=500)
+    api_key: str = Field(default="", max_length=1000)
+    model: str = Field(min_length=1, max_length=200)
+
+
+class ComfyNodeCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    url: str = Field(min_length=8, max_length=500)
+
+
+class ComfyNodeUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    url: str = Field(min_length=8, max_length=500)
+    enabled: bool = True
+
+
+class ComfySettingsUpdate(BaseModel):
+    health_interval_seconds: float = Field(ge=5, le=3600)
 
 
 class IncognitoAuthRequest(BaseModel):
@@ -99,6 +140,12 @@ def validate_generation(
     steps: int,
     execution_mode: str = "native",
 ) -> None:
+    if execution_mode == "music3":
+        if not 1 <= duration <= 300:
+            raise HTTPException(status_code=422, detail="Music3 时长范围为 1–300 秒")
+        if steps != 30:
+            raise HTTPException(status_code=422, detail="Music3 固定使用 30 步")
+        return
     if width % 32 or height % 32 or width < 352 or height < 352:
         raise HTTPException(status_code=422, detail="宽高必须是 32 的倍数，且不低于 352×352")
     if not 1 <= duration <= 15:
@@ -134,6 +181,10 @@ def validate_references(
     kinds: list[str],
     execution_mode: str = "native",
 ) -> None:
+    if execution_mode == "music3":
+        if kinds:
+            raise HTTPException(status_code=422, detail="Music3 不使用参考素材")
+        return
     if not kinds:
         raise HTTPException(status_code=422, detail="至少需要一份参考素材")
     if execution_mode == "digital-human":
@@ -154,6 +205,12 @@ def validate_execution_mode(
     model_variant: str,
     incognito: bool,
 ) -> None:
+    if execution_mode == "music3":
+        if model_variant != "music3-int8":
+            raise HTTPException(status_code=422, detail="Music3 执行方案仅支持 Music3 INT8")
+        return
+    if model_variant == "music3-int8":
+        raise HTTPException(status_code=422, detail="Music3 INT8 必须使用 Music3 执行方案")
     if execution_mode in {"native", "turbo-lora"}:
         return
     if execution_mode == "digital-human":
@@ -213,13 +270,90 @@ async def save_upload(upload: UploadFile, destination: Path) -> int:
 
 @app.get("/health")
 async def health():
+    nodes = manager.nodes_public()
+    online = sum(1 for node in nodes if node["healthy"])
     return {
         "status": "ok",
         "engine": "fake" if settings.fake_engine else settings.engine_backend,
         "gpu": settings.gpu_label,
         "queue_depth": manager.queue_depth,
+        "nodes": nodes,
+        "online_nodes": online,
+        "parallel_capacity": online,
+        "health_interval_seconds": manager.health_interval,
         "revision": store.revision,
     }
+
+
+def reload_comfy_nodes() -> None:
+    try:
+        manager.reconfigure(node_registry.configs(), node_registry.health_interval())
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/comfy/nodes", dependencies=[Depends(authorize)])
+async def list_comfy_nodes():
+    statuses = {item["id"]: item for item in manager.nodes_public()}
+    nodes = []
+    for row in node_registry.list(enabled_only=False):
+        status_data = statuses.get(row["id"], {})
+        nodes.append({**row, **status_data})
+    return {
+        "data": nodes,
+        "health_interval_seconds": node_registry.health_interval(),
+    }
+
+
+@app.post("/api/v1/comfy/nodes", status_code=201, dependencies=[Depends(authorize)])
+async def create_comfy_node(payload: ComfyNodeCreate):
+    node_id = f"node-{secrets.token_hex(4)}"
+    try:
+        node = node_registry.create(node_id, payload.name, payload.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    reload_comfy_nodes()
+    return node
+
+
+@app.patch("/api/v1/comfy/nodes/{node_id}", dependencies=[Depends(authorize)])
+async def update_comfy_node(node_id: str, payload: ComfyNodeUpdate):
+    existing = node_registry.get(node_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="ComfyUI 节点不存在")
+    if (existing["url"] != payload.url.rstrip("/") or not payload.enabled) and manager.node_in_use(node_id):
+        raise HTTPException(status_code=409, detail="节点正在执行任务或存在定向排队任务")
+    if not payload.enabled:
+        enabled_count = sum(1 for item in node_registry.list() if item["id"] != node_id)
+        if enabled_count == 0:
+            raise HTTPException(status_code=409, detail="至少需要保留一个启用的 ComfyUI 节点")
+    try:
+        node = node_registry.update(node_id, payload.name, payload.url, payload.enabled)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    reload_comfy_nodes()
+    return node
+
+
+@app.delete("/api/v1/comfy/nodes/{node_id}", dependencies=[Depends(authorize)])
+async def delete_comfy_node(node_id: str):
+    existing = node_registry.get(node_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="ComfyUI 节点不存在")
+    if manager.node_in_use(node_id):
+        raise HTTPException(status_code=409, detail="节点正在执行任务或存在定向排队任务")
+    if existing["enabled"] and len(node_registry.list()) <= 1:
+        raise HTTPException(status_code=409, detail="至少需要保留一个启用的 ComfyUI 节点")
+    node_registry.delete(node_id)
+    reload_comfy_nodes()
+    return {"deleted": True}
+
+
+@app.patch("/api/v1/comfy/settings", dependencies=[Depends(authorize)])
+async def update_comfy_settings(payload: ComfySettingsUpdate):
+    seconds = node_registry.set_health_interval(payload.health_interval_seconds)
+    reload_comfy_nodes()
+    return {"health_interval_seconds": seconds}
 
 
 @app.post("/api/v1/incognito/authorize", dependencies=[Depends(authorize)])
@@ -241,7 +375,7 @@ async def list_generations(
     include_incognito: Annotated[bool, Query()] = False,
     scope: Annotated[Literal["normal", "incognito", "all"] | None, Query()] = None,
 ):
-    items, total = store.list(
+    items, total, snapshot_revision = store.list_with_revision(
         page,
         page_size,
         status_filter,
@@ -259,30 +393,43 @@ async def list_generations(
         "page_size": page_size,
         "total": total,
         "pages": max(1, math.ceil(total / page_size)),
+        "store_revision": snapshot_revision,
     }
 
 
 @app.post("/api/v1/generations", status_code=202, dependencies=[Depends(authorize)])
 async def create_generation(
-    prompt: Annotated[str, Form(description="MiniMax H3 audiovisual generation prompt.")],
-    reference_manifest: Annotated[str, Form(description="Ordered image, video, and audio reference manifest.")],
-    references: Annotated[list[UploadFile], File(description="Reference files in manifest order.")],
-    model_variant: Annotated[Literal["fl2va-fp8", "ref2va-fp8"], Form()] = "fl2va-fp8",
+    prompt: Annotated[str, Form(description="H3 audiovisual prompt or Music3 music description.")],
+    reference_manifest: Annotated[
+        str, Form(description="Ordered image, video, and audio reference manifest.")
+    ] = "[]",
+    references: Annotated[
+        list[UploadFile], File(description="Reference files in manifest order.")
+    ] = [],
+    model_variant: Annotated[ModelVariant, Form()] = "fl2va-fp8",
     execution_mode: Annotated[ExecutionMode, Form()] = "native",
     width: Annotated[int, Form()] = 832,
     height: Annotated[int, Form()] = 480,
     duration: Annotated[float, Form()] = 5,
     steps: Annotated[int, Form()] = 10,
     seed: Annotated[str | None, Form()] = None,
+    lyrics: Annotated[str, Form(max_length=12000)] = "",
     title: Annotated[str | None, Form(max_length=120)] = None,
+    comfy_node: Annotated[str, Form(max_length=64)] = "auto",
     incognito: Annotated[bool, Form()] = False,
     incognito_code: Annotated[str | None, Header(alias="X-H3-Incognito-Code")] = None,
 ):
     prompt = prompt.strip()
-    if len(prompt) < 8:
-        raise HTTPException(status_code=422, detail="提示词至少需要 8 个字符")
+    minimum_prompt_length = 2 if execution_mode == "music3" else 8
+    if len(prompt) < minimum_prompt_length:
+        raise HTTPException(
+            status_code=422,
+            detail=f"提示词至少需要 {minimum_prompt_length} 个字符",
+        )
     if incognito and not secrets.compare_digest(incognito_code or "", settings.incognito_code):
         raise HTTPException(status_code=403, detail="无痕模式授权已失效")
+    if not manager.accepts_node(comfy_node):
+        raise HTTPException(status_code=422, detail="指定的 ComfyUI 节点不存在")
     validate_execution_mode(execution_mode, model_variant, incognito)
     validate_generation(width, height, duration, steps, execution_mode)
 
@@ -346,13 +493,14 @@ async def create_generation(
         "id": job_id,
         "title": (title or prompt.splitlines()[0])[:120],
         "status": "queued",
-        "stage": "等待 ComfyUI FP8 执行",
+        "stage": "等待 ComfyUI Music3 执行" if execution_mode == "music3" else "等待 ComfyUI FP8 执行",
         "progress": 0,
         "created_at": created_at,
         "updated_at": created_at,
         "cancel_requested": False,
         "request": {
             "prompt": prompt,
+            "lyrics": lyrics.strip() if execution_mode == "music3" else "",
             "model_variant": model_variant,
             "execution_mode": execution_mode,
             "width": width,
@@ -362,6 +510,8 @@ async def create_generation(
             "steps": steps,
             "seed": seed_value,
             "references": public_manifest,
+            "media_type": "audio" if execution_mode == "music3" else "video",
+            "comfy_node": comfy_node,
             "incognito": incognito,
         },
         "input_paths": input_paths,
@@ -401,6 +551,15 @@ async def update_generation(
     request_data.update(values)
     request_data.setdefault("model_variant", "fl2va-fp8")
     request_data.setdefault("execution_mode", "native")
+    request_data.setdefault("comfy_node", "auto")
+    if not manager.accepts_node(request_data["comfy_node"]):
+        raise HTTPException(status_code=422, detail="指定的 ComfyUI 节点不存在")
+    minimum_prompt_length = 2 if request_data["execution_mode"] == "music3" else 8
+    if len(request_data.get("prompt", "").strip()) < minimum_prompt_length:
+        raise HTTPException(
+            status_code=422,
+            detail=f"提示词至少需要 {minimum_prompt_length} 个字符",
+        )
     validate_execution_mode(
         request_data["execution_mode"],
         request_data["model_variant"],
@@ -467,7 +626,8 @@ async def get_result(job_id: str):
     path = Path(job["result_path"])
     if not path.exists():
         raise HTTPException(status_code=410, detail="结果文件已不存在")
-    media_type = "video/mp4" if path.suffix == ".mp4" else "image/jpeg"
+    media_types = {".mp4": "video/mp4", ".flac": "audio/flac", ".wav": "audio/wav"}
+    media_type = media_types.get(path.suffix.lower(), "application/octet-stream")
     return FileResponse(path, media_type=media_type, filename=path.name)
 
 
@@ -497,24 +657,51 @@ async def get_logs(limit: Annotated[int, Query(ge=1, le=500)] = 100):
     return {
         "data": store.logs(limit),
         "queue": manager.queue_snapshot(),
-        "revision": store.revision,
+        "nodes": manager.nodes_public(),
+        "revision": f"{store.revision}:{manager.revision}",
     }
 
 
 @app.get("/api/v1/events", dependencies=[Depends(authorize)])
-async def stream_events(request: Request):
+async def stream_events(
+    request: Request,
+    since: Annotated[int, Query(ge=0)] = 0,
+):
+    last_event_id = request.headers.get("last-event-id", "")
+    try:
+        store_cursor = int(last_event_id.split(":", 1)[0]) if last_event_id else since
+    except ValueError:
+        store_cursor = since
+
     async def events() -> AsyncIterator[str]:
-        last_revision = -1
+        nonlocal store_cursor
+        last_revision = ""
         idle_ticks = 0
+        yield "retry: 3000\n\n"
         while not await request.is_disconnected():
-            revision = store.revision
+            delta = store.changes_since(store_cursor)
+            revision = f"{delta['revision']}:{manager.revision}"
             if revision != last_revision:
+                for job in delta["jobs"]:
+                    position = manager.queue_position(job["id"])
+                    if position is not None and job["status"] == "queued":
+                        job["queue_position"] = position
                 payload = {
                     "revision": revision,
+                    "store_revision": delta["revision"],
+                    "jobs": delta["jobs"],
+                    "deleted_job_ids": delta["deleted_job_ids"],
+                    "reset_required": delta["reset_required"],
                     "logs": store.logs(100),
                     "queue": manager.queue_snapshot(),
+                    "nodes": manager.nodes_public(),
                 }
-                yield f"event: snapshot\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                yield (
+                    f"id: {revision}\n"
+                    f"event: snapshot\n"
+                    f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                )
+                store_cursor = delta["revision"]
                 last_revision = revision
                 idle_ticks = 0
             else:
@@ -524,7 +711,15 @@ async def stream_events(request: Request):
                     idle_ticks = 0
             await asyncio.sleep(1)
 
-    return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 def openai_chat_url(base_url: str) -> str:
@@ -535,6 +730,60 @@ def openai_chat_url(base_url: str) -> str:
     if base.endswith("/chat/completions"):
         return base
     return f"{base}/chat/completions"
+
+
+def openai_stream_response(
+    url: str,
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    user_message: str,
+    temperature: float,
+) -> StreamingResponse:
+    async def stream() -> AsyncIterator[str]:
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        request_body = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            "temperature": temperature,
+            "stream": True,
+        }
+        try:
+            timeout = httpx.Timeout(180, connect=20)
+            async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+                async with client.stream("POST", url, headers=headers, json=request_body) as response:
+                    if not response.is_success:
+                        detail = (await response.aread()).decode("utf-8", errors="replace")[:800]
+                        message = f"上游 AI 服务返回 {response.status_code}: {detail}"
+                        yield f"event: error\ndata: {json.dumps({'message': message}, ensure_ascii=False)}\n\n"
+                        return
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        raw = line[5:].strip()
+                        if not raw or raw == "[DONE]":
+                            continue
+                        try:
+                            chunk = json.loads(raw)
+                            choice = (chunk.get("choices") or [{}])[0]
+                            text = (choice.get("delta") or {}).get("content")
+                            if text is None:
+                                text = (choice.get("message") or {}).get("content")
+                            if text:
+                                yield f"event: delta\ndata: {json.dumps({'text': text}, ensure_ascii=False)}\n\n"
+                        except (json.JSONDecodeError, TypeError, AttributeError):
+                            continue
+            yield "event: done\ndata: {}\n\n"
+        except httpx.HTTPError as exc:
+            message = f"无法连接 AI 服务：{exc}"
+            yield f"event: error\ndata: {json.dumps({'message': message}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
 
 @app.post("/api/v1/prompts/optimize", dependencies=[Depends(authorize)])
@@ -568,50 +817,44 @@ async def optimize_prompt(payload: OptimizePromptRequest):
         "请严格使用简体中文输出最终 H3 提示词。"
     )
 
-    async def stream() -> AsyncIterator[str]:
-        headers = {"Content-Type": "application/json"}
-        if payload.api_key:
-            headers["Authorization"] = f"Bearer {payload.api_key}"
-        request_body = {
-            "model": payload.model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            "temperature": 0.3,
-            "stream": True,
-        }
-        try:
-            timeout = httpx.Timeout(180, connect=20)
-            async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-                async with client.stream("POST", url, headers=headers, json=request_body) as response:
-                    if not response.is_success:
-                        detail = (await response.aread()).decode("utf-8", errors="replace")[:800]
-                        message = f"上游 AI 服务返回 {response.status_code}: {detail}"
-                        yield f"event: error\ndata: {json.dumps({'message': message}, ensure_ascii=False)}\n\n"
-                        return
-                    async for line in response.aiter_lines():
-                        if not line.startswith("data:"):
-                            continue
-                        raw = line[5:].strip()
-                        if not raw or raw == "[DONE]":
-                            continue
-                        try:
-                            chunk = json.loads(raw)
-                            choice = (chunk.get("choices") or [{}])[0]
-                            text = (choice.get("delta") or {}).get("content")
-                            if text is None:
-                                text = (choice.get("message") or {}).get("content")
-                            if text:
-                                yield f"event: delta\ndata: {json.dumps({'text': text}, ensure_ascii=False)}\n\n"
-                        except (json.JSONDecodeError, TypeError, AttributeError):
-                            continue
-            yield "event: done\ndata: {}\n\n"
-        except httpx.HTTPError as exc:
-            message = f"无法连接提示词优化服务：{exc}"
-            yield f"event: error\ndata: {json.dumps({'message': message}, ensure_ascii=False)}\n\n"
+    return openai_stream_response(
+        url,
+        payload.api_key,
+        payload.model,
+        system_prompt,
+        user_message,
+        0.3,
+    )
 
-    return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+@app.post("/api/v1/music/assist", dependencies=[Depends(authorize)])
+async def assist_music(payload: MusicAssistRequest):
+    url = openai_chat_url(payload.base_url)
+    lyrics = payload.lyrics.strip() or "未提供歌词或歌词草稿。"
+    if payload.task == "arrangement":
+        system_prompt = MUSIC3_ARRANGEMENT_SYSTEM_PROMPT
+        user_message = (
+            f"Target duration: {payload.duration:g} seconds.\n\n"
+            f"Music description:\n{payload.prompt.strip()}\n\n"
+            f"Tagged lyrics for emotional context and section directives only:\n{lyrics}"
+        )
+        temperature = 0.35
+    else:
+        system_prompt = MUSIC3_LYRICS_SYSTEM_PROMPT
+        user_message = (
+            f"目标时长：{payload.duration:g} 秒。\n\n"
+            f"歌曲需求：\n{payload.prompt.strip()}\n\n"
+            f"现有歌词或草稿：\n{lyrics}"
+        )
+        temperature = 0.65
+    return openai_stream_response(
+        url,
+        payload.api_key,
+        payload.model,
+        system_prompt,
+        user_message,
+        temperature,
+    )
 
 
 static_dir = Path(__file__).resolve().parents[1] / "static"

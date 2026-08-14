@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-COMFY_COMMIT="563b98eefbe643a4cd510ee7f0b43e79880d5a3f"
+COMFY_COMMIT="7fe8a6138504f90ff7be82f3babf416da32876b1"
 VHS_COMMIT="993082e4f2473bf4acaf06f51e33877a7eb38960"
+MULTIGPU_COMMIT="62f98eda3a1081a551c8efca367973ac854e9d5e"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALL_ROOT="${INSTALL_ROOT:-$HOME/minimax-h3-stack}"
@@ -88,6 +89,7 @@ if [[ "$DRY_RUN" == "1" ]]; then
   echo "包含可选 NaughtyTimes LoRA: $INSTALL_NSFW"
   echo "ComfyUI commit: $COMFY_COMMIT"
   echo "VideoHelperSuite commit: $VHS_COMMIT"
+  echo "ComfyUI-MultiGPU commit: $MULTIGPU_COMMIT"
   exit 0
 fi
 
@@ -108,6 +110,10 @@ clone_at_commit \
   "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git" \
   "$COMFY_ROOT/custom_nodes/ComfyUI-VideoHelperSuite" \
   "$VHS_COMMIT"
+clone_at_commit \
+  "https://github.com/pollockjj/ComfyUI-MultiGPU.git" \
+  "$COMFY_ROOT/custom_nodes/comfyui-multigpu" \
+  "$MULTIGPU_COMMIT"
 
 if [[ ! -x "$COMFY_ROOT/.venv/bin/python" ]]; then
   "$PYTHON_BIN" -m venv "$COMFY_ROOT/.venv"
@@ -167,7 +173,6 @@ if [[ ! -f "$API_ROOT/.env" ]]; then
     echo "H3_ENGINE=comfyui"
     echo "H3_HOST=$API_HOST"
     echo "H3_PORT=$API_PORT"
-    echo "H3_COMFY_URL=http://127.0.0.1:$COMFY_PORT"
     echo "H3_COMFY_INPUT_DIR=$COMFY_ROOT/input"
     echo "H3_COMFY_OUTPUT_DIR=$COMFY_ROOT/output"
     echo "H3_COMFY_WORKFLOW=$API_ROOT/workflows/minimax_h3_fl2va_fp8_720p_15s_api.json"
@@ -176,6 +181,7 @@ if [[ ! -f "$API_ROOT/.env" ]]; then
     echo "H3_COMFY_REF2VA_TURBO_WORKFLOW=$API_ROOT/workflows/minimax_h3_ref2va_fp8_turbo_lora_api.json"
     echo "H3_COMFY_NSFW_WORKFLOW=$API_ROOT/workflows/minimax_h3_ref2va_fp8_nsfw_lora_api.json"
     echo "H3_COMFY_DIGITAL_HUMAN_WORKFLOW=$API_ROOT/workflows/minimax_h3_ref2va_fp8_digital_human_api.json"
+    echo "H3_COMFY_MUSIC3_WORKFLOW=$API_ROOT/workflows/minimax_music3_int8_api.json"
     echo "H3_COMFY_POLL_SECONDS=2"
     printf 'H3_GPU_LABEL="MiniMax H3 FP8 / GPU %s / 24 GB"\n' "$GPU_ID"
     echo "H3_INCOGNITO_CODE=$incognito_code"

@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="MiniMax H3 FP8 多模态视频生成工作台">
+    <meta name="description" content="MiniMax H3 视频与 MiniMax Music3 音乐生成工作台">
     <meta name="theme-color" content="#f4f5f2">
-    <title>H3 Studio</title>
+    <title>MiniMax Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/assets/styles.css?v=20">
+    <link rel="stylesheet" href="/assets/styles.css?v=27">
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
-    <script src="/assets/app.js?v=23" defer></script>
+    <script src="/assets/app.js?v=33" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -47,15 +47,6 @@
         </div>
 
         <section class="asset-grid" id="assetGrid" aria-label="生成素材"></section>
-        <nav class="pagination" aria-label="素材库分页">
-          <button class="icon-button" id="previousAssetPage" type="button" title="上一页" aria-label="上一页"><i data-lucide="chevron-left"></i></button>
-          <span id="assetPageLabel">1 / 1</span>
-          <button class="icon-button" id="nextAssetPage" type="button" title="下一页" aria-label="下一页"><i data-lucide="chevron-right"></i></button>
-        </nav>
-
-        <footer class="sidebar-footer">
-          <a href="/docs" target="_blank" rel="noreferrer"><i data-lucide="braces"></i><span>API 文档</span></a>
-        </footer>
       </aside>
 
       <main class="conversation-column">
@@ -69,9 +60,14 @@
               </div>
               <div class="engine-state" aria-live="polite">
                 <span class="status-dot" id="healthDot"></span>
-                <span id="healthText">连接 FP8 推理引擎</span>
+                <span id="healthText">连接 ComfyUI 推理引擎</span>
+                <button class="icon-button node-manager-trigger" id="openNodeManager" type="button" title="管理 ComfyUI 节点" aria-label="管理 ComfyUI 节点"><i data-lucide="server-cog"></i></button>
               </div>
             </div>
+          </div>
+          <div class="header-actions">
+            <button class="icon-button" id="languageToggle" type="button" title="Switch to English" aria-label="Switch to English"><i data-lucide="languages"></i></button>
+            <a class="icon-button" id="apiDocsLink" href="/docs" target="_blank" rel="noreferrer" title="API 文档" aria-label="API 文档"><i data-lucide="braces"></i></a>
           </div>
         </header>
 
@@ -90,6 +86,7 @@
 
           <div class="composer-box" id="dropZone">
             <textarea id="prompt" name="prompt" rows="3" maxlength="12000" placeholder="输入自然语言，描述场景、人物、动作、镜头与声音…" required></textarea>
+            <textarea class="lyrics-input" id="lyrics" name="lyrics" rows="5" maxlength="12000" placeholder="输入歌词，使用 [Intro]、[Verse]、[Chorus]、[Bridge]、[Instrumental]、[Outro] 等段落标签" hidden></textarea>
 
             <div class="composer-toolbar">
               <div class="toolbar-left">
@@ -100,6 +97,7 @@
                   <select id="modelVariant" aria-label="生成模型">
                     <option value="fl2va-fp8">H3 FL2VA FP8</option>
                     <option value="ref2va-fp8">H3 Ref2VA FP8</option>
+                    <option value="music3-int8">Music3 INT8</option>
                   </select>
                 </label>
 
@@ -109,11 +107,19 @@
                     <option value="native">普通流 · 原生 H3</option>
                     <option value="turbo-lora">8-step LoRA · 1.0</option>
                     <option value="digital-human">数字人 · 音频驱动</option>
+                    <option value="music3" id="music3ExecutionOption" hidden>Music3 · 30 步</option>
                     <option value="h3-nsfw" id="nsfwExecutionOption" hidden disabled>H3 NSFW · NaughtyTimes LoRA</option>
                   </select>
                 </label>
 
-                <label class="compact-control" title="画面比例">
+                <label class="compact-control node-control" id="nodeControl" title="ComfyUI 节点">
+                  <i data-lucide="server"></i>
+                  <select id="comfyNode" aria-label="ComfyUI 节点">
+                    <option value="auto">自动调度</option>
+                  </select>
+                </label>
+
+                <label class="compact-control" id="aspectControl" title="画面比例">
                   <i data-lucide="panels-top-left"></i>
                   <select id="aspectRatio" aria-label="画面比例">
                     <option value="16:9">16:9</option>
@@ -122,7 +128,7 @@
                   </select>
                 </label>
 
-                <label class="compact-control" title="分辨率">
+                <label class="compact-control" id="resolutionControl" title="分辨率">
                   <i data-lucide="video"></i>
                   <select id="resolution" aria-label="分辨率">
                     <option value="608x352">0.2 MP · 608 × 352</option>
@@ -153,7 +159,7 @@
                   <span class="control-tooltip" id="durationHint" role="tooltip" hidden>视频长度由驱动音频长度决定</span>
                 </label>
 
-                <label class="compact-control" title="采样步数">
+                <label class="compact-control" id="stepsControl" title="采样步数">
                   <i data-lucide="gauge"></i>
                   <input id="steps" name="steps" type="number" inputmode="numeric" min="4" max="50" step="1" value="10" aria-label="采样步数">
                 </label>
@@ -172,7 +178,8 @@
                     <label>API Key<input id="aiApiKey" type="password" autocomplete="off" placeholder="sk-…"></label>
                   </div>
                 </details>
-                <button class="optimize-button" id="optimizePrompt" type="button"><i data-lucide="wand-sparkles"></i><span>优化提示词</span></button>
+                <button class="optimize-button" id="optimizePrompt" type="button" title="优化提示词" aria-label="优化提示词"><i data-lucide="wand-sparkles"></i><span id="optimizePromptLabel">优化提示词</span></button>
+                <button class="optimize-button" id="writeLyrics" type="button" title="AI 写词" aria-label="AI 写词" hidden><i data-lucide="file-pen-line"></i><span>AI 写词</span></button>
                 <button class="send-button" id="generateButton" type="submit" title="开始生成" aria-label="开始生成"><i data-lucide="arrow-up"></i></button>
               </div>
             </div>
@@ -204,6 +211,54 @@
         <div class="log-list" id="logList" role="log" aria-live="polite"><p class="quiet">等待事件</p></div>
       </section>
     </aside>
+
+    <div class="modal-overlay node-modal" id="nodeModal" hidden>
+      <section class="node-dialog" role="dialog" aria-modal="true" aria-labelledby="nodeDialogTitle">
+        <header class="node-dialog-header">
+          <div><span class="node-dialog-mark"><i data-lucide="server-cog"></i></span><div><h2 id="nodeDialogTitle">ComfyUI 节点</h2><p>节点配置与健康检测</p></div></div>
+          <button class="icon-button" id="closeNodeManager" type="button" title="关闭" aria-label="关闭节点管理"><i data-lucide="x"></i></button>
+        </header>
+
+        <div class="node-settings-row">
+          <label for="nodeHealthInterval">健康检查间隔</label>
+          <div><input id="nodeHealthInterval" type="number" min="5" max="3600" step="1" inputmode="numeric"><span>秒</span><button id="saveNodeSettings" type="button">保存</button></div>
+        </div>
+
+        <div class="node-manager-toolbar">
+          <span id="nodeManagerSummary">0 个节点</span>
+          <button id="addNodeButton" type="button"><i data-lucide="plus"></i><span>新增节点</span></button>
+        </div>
+        <p class="node-manager-error" id="nodeManagerError" role="alert"></p>
+
+        <div class="node-manager-body">
+          <div class="node-list" id="nodeList" aria-live="polite"></div>
+
+          <form class="node-editor" id="nodeEditor" hidden>
+            <div class="node-editor-title"><h3 id="nodeEditorTitle">新增节点</h3><button class="icon-button" id="cancelNodeEditIcon" type="button" title="关闭编辑" aria-label="关闭节点编辑"><i data-lucide="x"></i></button></div>
+            <label for="nodeName">节点名称</label>
+            <input id="nodeName" name="name" type="text" maxlength="120" autocomplete="off" required>
+            <label for="nodeUrl">ComfyUI API 地址</label>
+            <input id="nodeUrl" name="url" type="url" maxlength="500" placeholder="http://127.0.0.1:8188" autocomplete="off" required>
+            <label class="switch-row node-enabled-row"><span>启用节点</span><input id="nodeEnabled" type="checkbox" checked><span class="switch"></span></label>
+            <div class="node-editor-actions"><button id="cancelNodeEdit" type="button">取消</button><button class="primary" type="submit">保存节点</button></div>
+          </form>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-overlay asset-detail-modal" id="assetDetailModal" hidden>
+      <section class="asset-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="assetDetailTitle">
+        <header class="asset-detail-header">
+          <div><span class="asset-detail-mark"><i data-lucide="file-video-2"></i></span><div><h2 id="assetDetailTitle">素材详情</h2><p id="assetDetailMeta"></p></div></div>
+          <button class="icon-button" id="closeAssetDetail" type="button" title="关闭" aria-label="关闭素材详情"><i data-lucide="x"></i></button>
+        </header>
+        <div class="asset-detail-body" id="assetDetailBody"><div class="feed-loading"><span></span><span></span><span></span></div></div>
+        <footer class="asset-detail-footer">
+          <p class="asset-detail-error" id="assetDetailError" role="alert"></p>
+          <div><button class="detail-delete" id="deleteAssetDetail" type="button"><i data-lucide="trash-2"></i><span>删除记录</span></button><button class="detail-reuse" id="reuseAssetDetail" type="button"><i data-lucide="corner-down-left"></i><span>回填到发送区</span></button></div>
+        </footer>
+      </section>
+    </div>
 
     <div class="secret-overlay" id="secretOverlay" hidden>
       <form class="secret-dialog" id="secretForm">

@@ -21,7 +21,7 @@ class Settings:
     incognito_code: str = os.getenv("H3_INCOGNITO_CODE", "change-me-before-use")
     gpu_label: str = os.getenv("H3_GPU_LABEL", "MiniMax H3 FP8 / ComfyUI")
     engine_backend: str = os.getenv("H3_ENGINE", "comfyui")
-    comfy_url: str = os.getenv("H3_COMFY_URL", "http://127.0.0.1:8188")
+    comfy_url: str = "http://127.0.0.1:8188"
     comfy_workflow: Path = Path(
         os.getenv(
             "H3_COMFY_WORKFLOW",
@@ -56,6 +56,12 @@ class Settings:
         os.getenv(
             "H3_COMFY_DIGITAL_HUMAN_WORKFLOW",
             str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_digital_human_api.json"),
+        )
+    )
+    comfy_music3_workflow: Path = Path(
+        os.getenv(
+            "H3_COMFY_MUSIC3_WORKFLOW",
+            str(DEFAULT_WORKFLOW_ROOT / "minimax_music3_int8_api.json"),
         )
     )
     comfy_input_dir: Path = Path(

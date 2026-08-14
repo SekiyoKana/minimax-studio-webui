@@ -74,6 +74,42 @@
       }
     },
     {
+      "id": "music3-dit-int8",
+      "required": true,
+      "target": "diffusion_models/minimax_music3_dit_int8_convrot.safetensors",
+      "size_bytes": 2502161682,
+      "sha256": "d6b959633e69899f99f3a92d6741c0fe79f26958a30811e50e372ef978b24d5f",
+      "license": "MiniMax Music 3 Community License Agreement",
+      "sources": {
+        "modelscope": "https://modelscope.cn/models/Comfy-Org/MiniMax-Music-3/resolve/fbc3502b5d2ca0049348ee28b632f270b35e193a/diffusion_models/minimax_music3_dit_int8_convrot.safetensors",
+        "huggingface": "https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/6444666eb6edfb2c7fcab5f8b81da8b84b4b17b6/diffusion_models/minimax_music3_dit_int8_convrot.safetensors"
+      }
+    },
+    {
+      "id": "music3-text-encoder-int8",
+      "required": true,
+      "target": "text_encoders/minimax_music3_text_encoder_pruned_int8_convrot.safetensors",
+      "size_bytes": 9196611886,
+      "sha256": "010b7416d2336a08c711bc22ee65849c9623069ddb7d89bec011a75699e52014",
+      "license": "MiniMax Music 3 Community License Agreement",
+      "sources": {
+        "modelscope": "https://modelscope.cn/models/Comfy-Org/MiniMax-Music-3/resolve/fbc3502b5d2ca0049348ee28b632f270b35e193a/text_encoders/minimax_music3_text_encoder_pruned_int8_convrot.safetensors",
+        "huggingface": "https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/6444666eb6edfb2c7fcab5f8b81da8b84b4b17b6/text_encoders/minimax_music3_text_encoder_pruned_int8_convrot.safetensors"
+      }
+    },
+    {
+      "id": "music3-dav",
+      "required": true,
+      "target": "vae/minimax_music3_dav.safetensors",
+      "size_bytes": 216696128,
+      "sha256": "2a32155b769be01445fcc2a8663b910fc9e1751e18dc1c3ec528064512d9ef0c",
+      "license": "MiniMax Music 3 Community License Agreement",
+      "sources": {
+        "modelscope": "https://modelscope.cn/models/Comfy-Org/MiniMax-Music-3/resolve/fbc3502b5d2ca0049348ee28b632f270b35e193a/vae/minimax_music3_dav.safetensors",
+        "huggingface": "https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/6444666eb6edfb2c7fcab5f8b81da8b84b4b17b6/vae/minimax_music3_dav.safetensors"
+      }
+    },
+    {
       "id": "naughtytimes-lora",
       "required": false,
       "target": "loras/NaughtyTimes-lora-MINIMAXH3.safetensors",

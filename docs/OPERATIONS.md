@@ -80,11 +80,12 @@ INSTALL_ROOT="$HOME/minimax-h3-stack" bash scripts/verify_install.sh
 
 | 路径 | 内容 |
 |---|---|
+| `minimax-h3-api/data/config.db` | ComfyUI 节点与服务设置 SQLite 数据库 |
 | `minimax-h3-api/data/jobs` | 任务状态 JSON |
 | `minimax-h3-api/data/uploads` | 用户上传的参考素材 |
 | `minimax-h3-api/data/outputs` | API 管理的 MP4 和参数 sidecar |
-| `ComfyUI/input/minimax-h3-api` | 执行期间的临时输入 |
-| `ComfyUI/output/minimax-h3-api` | ComfyUI 临时产物，API 回传后移除 |
+| `ComfyUI/input/minimax-h3-api` | 通过 ComfyUI API 上传的任务输入 |
+| `ComfyUI/output/minimax-h3-api` | ComfyUI 生成的节点侧产物，API 通过 HTTP 回传 |
 
 无痕任务的上传素材、任务文件和产物在结束后保留 30 分钟，随后由服务清理。公共素材库和普通对话流不会返回这些任务。
 

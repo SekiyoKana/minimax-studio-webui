@@ -14,6 +14,7 @@ See the [official ComfyUI MiniMax H3 tutorial](https://docs.comfy.org/tutorials/
 | `minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA FP8 Scaled + FL2VA 8-step LoRA v1.0 | `res_multistep`, 8 steps | `138ea319f489b545b075196cf5ff1bc3ef73fe918d82f0a5d31e80a73a10f586` |
 | `minimax_h3_ref2va_fp8_nsfw_lora_api.json` | Ref2VA FP8 Scaled | NaughtyTimes LoRA | `4fbdcb94d6014fedfd6af50d081feaae891ca97867f888a00673563891e9dad7` |
 | `minimax_h3_ref2va_fp8_digital_human_api.json` | Ref2VA FP8 Scaled | Single-image audio-driven digital human | `829babe98437529714c4608185be9a63cd5db3ea09544d813a060b6e47138c06` |
+| `minimax_music3_int8_api.json` | Music3 INT8 | Text and lyrics to music | `f3f3d2af89aadd9b25bd4d49628e28b13ba6e9e05e3afc551f4edd5177980fa5` |
 
 ## Dynamic Nodes
 
@@ -57,6 +58,8 @@ The 8-step LoRA workflows use ComfyUI's built-in LoRA loader and sampling nodes,
 
 The digital human workflow requires the attached `comfyui-vrgamedevgirl` package for `VRGDG_MiniMaxH3AudioDrive`. The attached `ComfyUI-SoundFlow` package is installed in the cloud ComfyUI environment. The API workflow uses server-side `ffprobe` duration detection and does not depend on `SoundFlow_GetLength`.
 
+Music3 uses ComfyUI's native `MiniMaxMusic3TextEncode` and `EmptyMiniMaxMusic3LatentAudio` nodes with ComfyUI-MultiGPU's `CLIPLoaderMultiGPU`. The text encoder is pinned to the current ComfyUI process CUDA device. The workflow uses 30 Euler steps, the `simple` scheduler, tiled audio decoding, and FLAC output.
+
 ## Parameter Limits
 
 | Parameter | Range |
@@ -70,3 +73,5 @@ The digital human workflow requires the attached `comfyui-vrgamedevgirl` package
 | Ref2VA audio clips | Up to 3, each 1 to 15 seconds |
 | Digital human assets | 1 character image and 1 driving audio file between 1 and 15 seconds |
 | Digital human steps | Fixed at 20 |
+| Music3 duration | 1 to 300 seconds |
+| Music3 steps | Fixed at 30 |

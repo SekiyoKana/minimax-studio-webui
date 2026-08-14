@@ -1,105 +1,153 @@
 <div align="center">
 
-# MiniMax H3 API
+# MiniMax Full Model API / WebUI
 
-面向 MiniMax H3 FL2VA、Ref2VA 和数字人的 ComfyUI 视频生成服务
+面向 MiniMax H3 视频与 MiniMax Music3 音乐生成的 ComfyUI Web 服务
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![ComfyUI](https://img.shields.io/badge/ComfyUI-Backend-222222?style=flat-square)](https://github.com/comfyanonymous/ComfyUI)
 [![MiniMax H3](https://img.shields.io/badge/MiniMax-H3-DF4A32?style=flat-square)](https://huggingface.co/MiniMaxAI/MiniMax-H3)
+[![MiniMax Music3](https://img.shields.io/badge/MiniMax-Music3-347457?style=flat-square)](https://huggingface.co/MiniMaxAI/MiniMax-Music3)
 
 中文 | [English](README.en.md)
 
-[功能](#功能) · [执行方案](#执行方案) · [快速部署](#快速部署) · [API 示例](#api-示例) · [文档](#文档)
+[功能更新](#功能更新) · [生成方案](#生成方案) · [快速部署](#快速部署) · [多节点调度](#多节点调度) · [API](#api) · [文档](#文档)
 
 </div>
 
-MiniMax H3 API 将 ComfyUI 推理工作流封装为可部署的网页与 HTTP API。服务负责素材上传、参数校验、任务排队、实时进度、产物管理和隐私隔离，ComfyUI 负责 MiniMax H3 音视频推理。
+项目将 ComfyUI 工作流封装为响应式网页与 HTTP API，统一处理素材上传、参数校验、任务排队、实时进度、节点调度、产物管理和隐私隔离。当前包含 H3 FL2VA、Ref2VA、8-step LoRA v1.0、数字人音频驱动、Music3 INT8 及可选 H3 NSFW 工作流。
 
-项目包含 FL2VA、Ref2VA、8-step LoRA v1.0、单图音频驱动数字人和可选 H3 NSFW 工作流，适用于单张 24 GB NVIDIA GPU 的云端部署。
-
-![H3 Studio 工作台总览](docs/images/h3-studio-overview.jpg)
-
-工作台集中展示素材库、服务状态、提示词输入、模型与工作流参数，以及任务运行入口。
+![MiniMax Studio 工作台](docs/images/h3-studio-overview.jpg)
 
 > [!IMPORTANT]
-> 模型权重不会提交到 Git。安装前请确认已接受 MiniMax H3 Community License Agreement 及相关 LoRA、ComfyUI 和自定义节点的许可条件。
+> 模型权重不会提交到 Git。部署前请确认已接受 MiniMax H3、MiniMax Music3、相关 LoRA、ComfyUI 和自定义节点的许可条件。
 
-## 功能
+## 功能更新
 
-- 提供响应式生成页面、素材库、任务修改、取消、删除和 MP4 下载。
-- 支持 FL2VA 首帧与首尾帧生成，以及 Ref2VA 图片、视频、音频多参考生成。
-- 集成 LightX2V MiniMax H3 8-step LoRA v1.0，固定 8 步采样。
-- 支持单张人物图片和驱动音频生成数字人视频，视频长度跟随 1 至 15 秒音频。
-- 提供持久化任务队列、Server-Sent Events 进度、公共日志和健康检查。
-- 支持 OpenAI Chat Completions 兼容接口的 H3 提示词优化。
-- 支持无痕任务，公共素材库和日志隐藏任务详情，任务结束 30 分钟后清理文件。
-- 每次 ComfyUI 任务结束后调用 `/free` 卸载模型并释放显存。
-- 提供固定版本模型清单、文件大小与 SHA-256 校验、systemd 用户服务和部署验证脚本。
+### 2026-08-14
 
-## 架构
+**Music3 INT8**
 
-```mermaid
-flowchart LR
-    U["网页或 API 客户端"] --> A["FastAPI 服务 :8193"]
-    A --> Q["持久化任务队列"]
-    Q --> E["工作流参数注入"]
-    E --> C["ComfyUI :8188"]
-    C --> G["NVIDIA GPU"]
-    C --> O["MP4 产物"]
-    O --> A
-    A --> U
-```
+- 新增 MiniMax Music3 INT8 工作流，支持音乐描述与分段歌词输入，最长 300 秒。
+- 输出 32 kHz、16-bit、立体声 FLAC，固定使用 30 步 Euler 采样。
+- 新增 AI 编曲和 AI 写词。AI 编曲遵循 MiniMax Music3 官方 `music-caption-rewriter` Structured Caption 规范，AI 写词输出可直接用于 Music3 的分段标签歌词。
+- Music3 CUDA 设备从当前执行任务的 ComfyUI 节点 `/system_stats` 读取。节点运行在指定 GPU 时，Music3 使用该节点对应的 CUDA 设备。
 
-FastAPI 使用单个任务工作线程依次向 ComfyUI 提交任务。上传文件、任务状态和生成产物保存在项目的 `data/` 目录中。
+**多节点并发**
 
-## 执行方案
+- 新增 ComfyUI 节点管理界面，支持新增、查看、修改、启用、停用和删除节点。
+- 节点 ID 由服务自动生成。节点地址和健康检查间隔保存在 `data/config.db`。
+- 默认每 60 秒检测一次节点，页面可将间隔调整为 5 至 3600 秒。
+- 支持自动负载均衡和手动指定节点。每个在线节点执行一个任务，在线节点数量等于当前并行容量。
+- 任务记录、运行窗口和素材详情显示实际执行主机。
 
-| 方案 | 模型与采样 | 参考素材 | 参数 |
+**页面交互**
+
+- 使用 Server-Sent Events 实时同步任务、队列、日志和节点状态，连接断开后自动重连。
+- 对话首屏加载最近 10 条记录，上滑继续加载历史记录。
+- 素材库滚动触底继续加载，筛选和搜索使用分页接口。
+- 素材库中的 Music3 音频使用单个音频图标展示，点击后在素材详情中播放。
+- 素材点击后打开详情弹框，可查看产物、输入文件和提示词，并支持回填发送区和删除记录。
+- 对话流新增回填发送区功能。
+- 新增中英文切换和 API 文档入口，完成手机与窄屏布局适配。
+
+**资源管理**
+
+- 每个 ComfyUI 任务结束后调用 `/free`，卸载模型并释放显存。成功、失败和取消状态均执行释放流程。
+
+### 2026-08-13
+
+- 重写中英文项目文档，并加入工作台、数字人和 OpenAPI 页面截图。
+
+### 2026-08-12
+
+- 新增单图音频驱动数字人工作流。视频长度由驱动音频长度决定，页面时长控件禁用并显示说明。
+- 将 4 步加速工作流升级为 LightX2V MiniMax H3 8-step LoRA v1.0。
+- Ref2VA 专用 8-step LoRA 尚未发布，当前 Ref2VA 加速工作流临时使用 FL2VA 8-step LoRA v1.0。
+
+### 2026-08-07
+
+- 完成 FL2VA、Ref2VA、任务队列、素材库、无痕模式、安装脚本和 systemd 用户服务的部署基线。
+
+## 生成方案
+
+| 方案 | 模型与采样 | 输入 | 参数与产物 |
 |---|---|---|---|
-| 普通 FL2VA | FL2VA FP8 Scaled，原生采样 | 1 张首帧，可选 1 张尾帧 | 1 至 15 秒，4 至 50 步 |
-| 普通 Ref2VA | Ref2VA FP8 Scaled，原生采样 | 最多 9 张图片、3 段视频、3 段音频 | 1 至 15 秒，4 至 50 步 |
-| 8-step FL2VA | FL2VA FP8 Scaled + 8-step LoRA v1.0 | 1 张首帧，可选 1 张尾帧 | 固定 8 步，LoRA 强度 1.0 |
-| 8-step Ref2VA | Ref2VA FP8 Scaled + FL2VA 8-step LoRA v1.0 | 最多 9 张图片、3 段视频、3 段音频 | 固定 8 步，LoRA 强度 1.0 |
-| 数字人 | Ref2VA FP8 Scaled，音频驱动 | 1 张人物图片、1 段驱动音频 | 音频决定时长，固定 20 步 |
-| H3 NSFW | Ref2VA FP8 Scaled + NaughtyTimes LoRA | Ref2VA 参考素材 | 仅在无痕模式中启用 |
+| 普通 FL2VA | FL2VA FP8 Scaled | 1 张首帧，可选 1 张尾帧 | 1 至 15 秒，4 至 50 步，MP4 |
+| 普通 Ref2VA | Ref2VA FP8 Scaled | 最多 9 张图片、3 段视频、3 段音频 | 1 至 15 秒，4 至 50 步，MP4 |
+| 8-step FL2VA | FL2VA FP8 Scaled 与 8-step LoRA v1.0 | 1 张首帧，可选 1 张尾帧 | 固定 8 步，LoRA 强度 1.0，MP4 |
+| 8-step Ref2VA | Ref2VA FP8 Scaled 与 FL2VA 8-step LoRA v1.0 | 最多 9 张图片、3 段视频、3 段音频 | 固定 8 步，LoRA 强度 1.0，MP4 |
+| 数字人 | Ref2VA FP8 Scaled，音频驱动 | 1 张人物图片、1 段驱动音频 | 音频决定长度，固定 20 步，MP4 |
+| Music3 | Music3 DiT INT8 与文本编码器 INT8 | 音乐描述、可选分段歌词 | 1 至 300 秒，固定 30 步，FLAC |
+| H3 NSFW | Ref2VA FP8 Scaled 与 NaughtyTimes LoRA | Ref2VA 参考素材 | 仅限无痕模式，MP4 |
 
-> [!NOTE]
-> Ref2VA 专用 8-step LoRA 尚未发布。当前 Ref2VA 加速工作流使用 FL2VA 8-step LoRA v1.0，后续可在工作流和模型清单中替换。
+### 数字人
 
-### 数字人工作流
-
-数字人模式保留人物身份、面部结构、服装和源音频，并根据驱动音频进行口型同步。页面中的时长控件会被禁用，最终视频长度使用音频的实际时长。
+数字人模式保留人物身份、面部结构、服装和源音频，并根据音频驱动口型。服务通过 `ffprobe` 读取音频实际时长，任务请求中的视频时长会被音频时长覆盖。
 
 ![数字人音频驱动模式](docs/images/h3-studio-digital-human.jpg)
 
-数字人模式固定使用 Ref2VA FP8 和 20 步采样。黄色时长控件提示视频长度由驱动音频决定。
-
-该工作流需要以下 ComfyUI 自定义节点：
-
-- `VRGDG_MiniMaxH3AudioDrive`，来自 `comfyui-vrgamedevgirl`
-
-`ComfyUI-SoundFlow` 可作为可选插件安装。当前 API 通过 `ffprobe` 获取音频时长，数字人工作流不调用 `SoundFlow_GetLength`。
+该工作流需要 `comfyui-vrgamedevgirl` 提供的 `VRGDG_MiniMaxH3AudioDrive` 节点。`ComfyUI-SoundFlow` 为可选插件，当前 API 工作流不调用 `SoundFlow_GetLength`。
 
 > [!WARNING]
-> `scripts/install.sh` 当前不会安装数字人插件。使用数字人模式前，需要将 `comfyui-vrgamedevgirl` 放入 `ComfyUI/custom_nodes/`，安装其依赖并重启 ComfyUI。基础 FL2VA、Ref2VA 和 8-step LoRA 工作流不依赖该插件。
+> `scripts/install.sh` 当前未安装数字人插件。启用数字人前，需要将 `comfyui-vrgamedevgirl` 安装到 `ComfyUI/custom_nodes/` 并重启对应 ComfyUI 节点。
+
+### Music3
+
+Music3 使用 ComfyUI 原生 `MiniMaxMusic3TextEncode`、`EmptyMiniMaxMusic3LatentAudio` 节点和 ComfyUI-MultiGPU 的 `CLIPLoaderMultiGPU`。服务向工作流写入执行节点报告的 CUDA 设备，避免文本编码器回退到 CPU。
+
+> [!NOTE]
+> `comfy-kitchen` 需要与服务器驱动支持的 CUDA Runtime 兼容。已验证服务器使用 NVIDIA 驱动 `575.51.03` 和 CUDA 12.9 本地构建。若日志出现 `CUDA driver version is insufficient for CUDA runtime version`，请检查 wheel 的 CUDA 版本和服务器驱动支持范围。
+
+## 页面功能
+
+| 区域 | 功能 |
+|---|---|
+| 生成区 | 模型、执行方案、节点、比例、分辨率、时长、步数、随机种子和无痕模式 |
+| 提示词 | H3 提示词优化、Music3 AI 编曲、AI 写词和流式输出 |
+| 对话流 | 最近 10 条、上滑加载、进度、主机标记、下载、修改、取消、删除和回填 |
+| 素材库 | 触底加载、搜索、状态筛选、详情弹框、素材预览、回填和删除 |
+| 节点管理 | 节点增删改查、自动 ID、健康状态、检测间隔和启停控制 |
+| 页面设置 | 中英文切换、OpenAPI 文档入口和响应式移动端布局 |
+
+![OpenAPI 交互文档](docs/images/h3-api-docs.jpg)
+
+## 系统架构
+
+```mermaid
+flowchart LR
+    U["网页或 API 客户端"] --> A["FastAPI :8193"]
+    A --> D["SQLite 与任务文件"]
+    A --> S["SSE 实时事件"]
+    A --> Q["持久化任务队列"]
+    Q --> L["自动调度或指定节点"]
+    L --> C1["ComfyUI 节点 A :8188"]
+    L --> C2["ComfyUI 节点 B :8189"]
+    C1 --> G1["GPU 0"]
+    C2 --> G2["GPU 1"]
+    C1 --> O["MP4 或 FLAC"]
+    C2 --> O
+    O --> A
+```
+
+FastAPI 为每个启用的 ComfyUI 节点创建一个任务工作线程。参考素材通过 ComfyUI HTTP API 上传，生成结果通过 HTTP 回传，因此 API 服务和 ComfyUI 节点无需共享文件系统。
 
 ## 系统要求
 
-以下配置用于单任务运行：
+以下基线适用于单任务运行：
 
 | 项目 | 要求 |
 |---|---|
 | 操作系统 | Ubuntu 22.04 x86_64 |
 | GPU | 1 张 24 GB NVIDIA GPU，已验证 RTX 4090 |
-| 驱动 | NVIDIA 550.54.14 或更高版本，支持 CUDA 12.4 Runtime |
+| 驱动 | NVIDIA 550.54.14 或更高版本，具体版本需满足已安装 CUDA Runtime |
 | 内存 | 64 GB RAM，并配置至少 32 GB swap |
 | 存储 | 至少 100 GB 可用 SSD 空间 |
 | Python | 3.11 或更高版本 |
 | 工具 | Git、FFmpeg、aria2、rsync、curl、OpenSSL、systemd |
 
-64 GB 内存为 608 x 352、5 秒单任务的最低基线。更高分辨率、15 秒视频和其他并行 GPU 服务需要更多内存与存储空间。
+64 GB 内存为 608 × 352、5 秒单任务的部署基线。高分辨率、长视频和多节点并行运行需要增加内存与存储空间。
 
 ## 快速部署
 
@@ -115,46 +163,51 @@ MODEL_PROVIDER=modelscope \
 bash scripts/install.sh
 ```
 
-安装脚本会执行以下操作：
+安装脚本会完成以下操作：
 
-1. 安装固定版本的 ComfyUI 和 ComfyUI-VideoHelperSuite。
+1. 安装固定版本的 ComfyUI、ComfyUI-VideoHelperSuite 和 ComfyUI-MultiGPU。
 2. 创建 ComfyUI 与 API 的独立 Python 虚拟环境。
-3. 下载约 65.4 GB 必需模型，并校验文件大小和 SHA-256。
-4. 生成 `.env`，配置指定 GPU 和随机无痕授权码。
+3. 优先从 ModelScope 下载约 77.3 GB 模型，并校验文件大小和 SHA-256。
+4. 生成 `.env` 和随机无痕授权码。
 5. 安装并启动 `comfyui.service` 与 `minimax-h3-api.service`。
 
 安装完成后访问：
 
 | 地址 | 用途 |
 |---|---|
-| `http://SERVER_IP:8193/` | 视频生成页面 |
+| `http://SERVER_IP:8193/` | 生成页面 |
 | `http://SERVER_IP:8193/docs` | OpenAPI 交互文档 |
-| `http://SERVER_IP:8193/health` | 服务健康检查 |
+| `http://SERVER_IP:8193/health` | 服务、队列和节点健康状态 |
 
-仅需对用户开放 8193 端口。ComfyUI 默认监听 `127.0.0.1:8188`。
+仅需向用户开放 8193 端口。默认 ComfyUI 监听 `127.0.0.1:8188`。
+
+完整安装参数、已有模型目录和公网部署要求见[云 GPU 部署文档](docs/DEPLOYMENT.md)。
+
+## 多节点调度
+
+页面标题区域的服务器图标用于管理 ComfyUI 节点。新增节点时填写名称和 API 地址，节点 ID 自动生成。创建任务时选择“自动调度”，或选择一个在线节点定向执行。
+
+同一服务器部署多个节点时，每个 ComfyUI 实例需要使用独立端口、GPU、用户目录和数据库。例如：
+
+| 节点 | API 地址 | GPU | 建议配置 |
+|---|---|---|---|
+| GPU 0 | `http://127.0.0.1:8188` | `CUDA_VISIBLE_DEVICES=0` | 独立 `user-directory` 和 `database-url` |
+| GPU 1 | `http://127.0.0.1:8189` | `CUDA_VISIBLE_DEVICES=1` | 独立 `user-directory` 和 `database-url` |
+
+节点和设置保存在：
+
+```text
+data/config.db
+├── comfy_nodes       节点 ID、名称、API 地址、启用状态和时间
+└── service_settings  comfy_health_seconds，默认 60 秒
+```
 
 > [!TIP]
-> 使用其他物理 GPU 时设置 `GPU_ID`。安装脚本会将该值写入 `CUDA_VISIBLE_DEVICES`，单个工作流任务只使用一张 GPU。
+> 远程 ComfyUI 节点的 URL 必须能从 API 服务访问。跨主机部署时应在网络层限制 ComfyUI 端口的访问范围。
 
-完整参数、已有模型目录和公网部署要求见[部署文档](docs/DEPLOYMENT.md)。
+## API
 
-## 页面使用
-
-1. 添加首帧、尾帧或 Ref2VA 参考素材。
-2. 选择生成模型和执行方案。
-3. 设置画面比例、分辨率、时长和采样步数。
-4. 输入场景、人物、动作、镜头和声音提示词。
-5. 提交任务，在运行窗口查看队列和进度。
-
-数字人模式需要添加一张人物图片和一段 1 至 15 秒驱动音频。提示词主要描述场景、构图、表情、动作、镜头和光线，服务会自动加入人物一致性、口型同步和源音频保持约束。
-
-## API 示例
-
-![MiniMax H3 OpenAPI 文档](docs/images/h3-api-docs.jpg)
-
-FastAPI 自动生成 OpenAPI 3.1 交互文档，覆盖健康检查、任务创建、查询、修改、取消、删除、下载、日志和提示词优化接口。
-
-创建 8-step FL2VA 任务：
+### 创建 8-step FL2VA 任务
 
 ```bash
 curl -X POST http://127.0.0.1:8193/api/v1/generations \
@@ -163,85 +216,93 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
   -F 'references=@first-frame.png;type=image/png' \
   -F 'model_variant=fl2va-fp8' \
   -F 'execution_mode=turbo-lora' \
+  -F 'comfy_node=auto' \
   -F 'width=864' \
   -F 'height=480' \
   -F 'duration=5' \
   -F 'steps=8'
 ```
 
-创建数字人任务：
+### 创建 Music3 任务
 
 ```bash
 curl -X POST http://127.0.0.1:8193/api/v1/generations \
-  -F 'prompt=人物在工作室内正视镜头自然讲话，固定机位，柔和正面光。' \
-  -F 'reference_manifest=[{"type":"image"},{"type":"audio"}]' \
-  -F 'references=@character.png;type=image/png' \
-  -F 'references=@speech.wav;type=audio/wav' \
-  -F 'model_variant=ref2va-fp8' \
-  -F 'execution_mode=digital-human' \
-  -F 'width=864' \
-  -F 'height=480' \
-  -F 'duration=5' \
-  -F 'steps=20'
+  -F 'prompt=Upbeat synth-pop, 118 BPM, bright female vocal, layered analog synths.' \
+  -F 'lyrics=[Verse]\nCity lights are moving slow\n\n[Chorus]\nWe are awake tonight' \
+  -F 'model_variant=music3-int8' \
+  -F 'execution_mode=music3' \
+  -F 'comfy_node=auto' \
+  -F 'duration=120' \
+  -F 'steps=30'
 ```
 
-数字人请求中的 `duration` 用于兼容表单协议，任务会使用驱动音频的实际时长。查询、修改、取消、删除、下载、SSE 和提示词优化接口见 [API 文档](docs/API.md)。
+### 管理节点
 
-设置 `H3_API_KEY` 后，所有 `/api/v1/*` 请求需要携带：
+```bash
+# 节点 ID 由服务自动生成
+curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"GPU 1","url":"http://127.0.0.1:8189"}'
 
-```http
-Authorization: Bearer YOUR_API_KEY
+curl -X PATCH http://127.0.0.1:8193/api/v1/comfy/settings \
+  -H 'Content-Type: application/json' \
+  -d '{"health_interval_seconds":60}'
 ```
+
+主要接口：
+
+| 方法 | 路径 | 功能 |
+|---|---|---|
+| `GET` | `/health` | 服务、队列、节点和并行容量 |
+| `GET`、`POST` | `/api/v1/comfy/nodes` | 查询与新增节点 |
+| `PATCH`、`DELETE` | `/api/v1/comfy/nodes/{node_id}` | 修改与删除节点 |
+| `PATCH` | `/api/v1/comfy/settings` | 修改健康检查间隔 |
+| `GET`、`POST` | `/api/v1/generations` | 分页查询与创建任务 |
+| `GET` | `/api/v1/events` | SSE 任务、队列、日志和节点事件 |
+| `POST` | `/api/v1/prompts/optimize` | H3 提示词优化 |
+| `POST` | `/api/v1/music/assist` | Music3 AI 编曲与 AI 写词 |
+
+设置 `H3_API_KEY` 后，所有 `/api/v1/*` 请求需要携带 Bearer Token。请求字段、数字人示例、分页、任务修改、取消、删除和下载见 [API 文档](docs/API.md)。
 
 ## 配置
 
-安装后的主要配置保存在 `<INSTALL_ROOT>/minimax-h3-api/.env`：
+主要环境变量保存在 `<INSTALL_ROOT>/minimax-h3-api/.env`：
 
 | 环境变量 | 默认值 | 说明 |
 |---|---|---|
 | `H3_HOST` | `0.0.0.0` | API 监听地址 |
 | `H3_PORT` | `8193` | 页面与 API 端口 |
-| `H3_COMFY_URL` | `http://127.0.0.1:8188` | ComfyUI 地址 |
 | `H3_API_KEY` | 空 | 可选 Bearer Token |
 | `H3_INCOGNITO_CODE` | 随机值 | 无痕模式授权码 |
 | `H3_MAX_UPLOAD_MB` | `512` | 单个上传文件大小上限 |
-| `CUDA_VISIBLE_DEVICES` | `GPU_ID` | ComfyUI 使用的物理 GPU |
+| `CUDA_VISIBLE_DEVICES` | `GPU_ID` | 安装脚本创建的默认 ComfyUI 节点使用的物理 GPU |
 
-修改配置后执行：
-
-```bash
-systemctl --user restart minimax-h3-api.service
-```
-
-涉及 ComfyUI、模型或自定义节点的修改需要重启两个服务：
-
-```bash
-systemctl --user restart comfyui.service minimax-h3-api.service
-```
+节点地址和健康检查间隔通过页面或 API 修改，配置立即生效，无需重启 API 服务。
 
 ## 验证
 
-检查 Python 测试、模型校验、必要节点、服务健康状态和队列：
+以下命令检查代码测试、模型文件、必要节点、服务状态和队列，不会提交生成任务：
 
 ```bash
 INSTALL_ROOT=/data/minimax-h3-stack bash scripts/verify_install.sh
 ```
 
-可选生成测试会提交一个 608 x 352、5 秒、固定 8 步的无痕任务：
+检查单个节点状态：
 
 ```bash
-INSTALL_ROOT=/data/minimax-h3-stack bash scripts/smoke_generation.sh
+curl -fsS http://127.0.0.1:8188/system_stats
+curl -fsS http://127.0.0.1:8193/health
 ```
 
 ## 项目结构
 
 ```text
-app/                 FastAPI、任务队列、ComfyUI 客户端和提示词规则
-static/              网页界面
-workflows/           ComfyUI API 格式工作流
+app/                 FastAPI、任务队列、节点调度、ComfyUI 客户端和提示词规则
+static/              中英文响应式网页
+workflows/           H3 与 Music3 ComfyUI API 工作流
 scripts/             安装、模型下载、校验和生成测试
 deploy/              systemd 用户服务模板
-docs/                API、部署、模型、工作流和运维文档
+docs/                API、部署、模型、工作流和运行维护文档
 tests/               服务契约测试
 model-manifest.json  模型来源、大小、SHA-256 和许可元数据
 ```
@@ -256,4 +317,4 @@ model-manifest.json  模型来源、大小、SHA-256 和许可元数据
 - [验证快照](docs/PROJECT_SNAPSHOT.md)
 - [安全说明](SECURITY.md)
 - [第三方项目与许可](THIRD_PARTY_NOTICES.md)
-- [英文文档](README.en.md)
+- [英文 README](README.en.md)
