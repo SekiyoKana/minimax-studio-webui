@@ -16,6 +16,7 @@ from app.engine import (
     RunningHubH3Engine,
     create_engine,
     probe_node,
+    probe_runninghub_node,
     runninghub_account_profile,
     runninghub_billing_delta,
     runninghub_workflow_profile,
@@ -275,11 +276,30 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(public["account_balance_coins"], 1200)
             self.assertEqual(public["account_balance_money"], 12.5)
             self.assertEqual(public["account_currency"], "CNY")
+            manager.health_probe = MagicMock(
+                return_value={
+                    "account_balance_coins": 1100,
+                    "account_current_tasks": 0,
+                    "workflow_error": "RunningHub 读取工作流失败：WORKFLOW_NOT_EXISTS",
+                }
+            )
+            manager.refresh_node_health()
+            public = manager.nodes_public()[0]
+            self.assertEqual(public["account_balance_coins"], 1100)
+            self.assertIsNone(public["error"])
+            self.assertIn("WORKFLOW_NOT_EXISTS", public["workflow_error"])
+            self.assertEqual(
+                manager.workflow_profile("rh"),
+                {
+                    "model_variant": "ref2va-fp8",
+                    "execution_mode": "turbo-lora",
+                },
+            )
             manager.health_probe = MagicMock(side_effect=RuntimeError("balance unavailable"))
             manager.refresh_node_health()
             public = manager.nodes_public()[0]
             self.assertTrue(public["healthy"])
-            self.assertEqual(public["account_balance_coins"], 1200)
+            self.assertEqual(public["account_balance_coins"], 1100)
             self.assertIn("balance unavailable", public["error"])
 
     def test_runninghub_account_balance_and_call_cost_are_parsed(self):
@@ -322,6 +342,37 @@ class ContractTests(unittest.TestCase):
         expected = {"account_balance_coins": 500}
         with patch("app.engine.probe_runninghub_node", return_value=expected):
             self.assertEqual(probe_node(node), expected)
+
+    def test_runninghub_probe_keeps_account_profile_when_workflow_is_unavailable(self):
+        node = ComfyNodeConfig(
+            "rh",
+            "RunningHub",
+            "https://www.runninghub.ai",
+            "runninghub",
+            "secret",
+            "workflow",
+            1,
+        )
+        account_response = MagicMock()
+        account_response.json.return_value = {
+            "code": 0,
+            "data": {"remainCoins": 4644, "currentTaskCounts": 0},
+        }
+        workflow_response = MagicMock()
+        workflow_response.json.return_value = {
+            "code": 1,
+            "msg": "WORKFLOW_NOT_EXISTS",
+        }
+        client = MagicMock()
+        client.__enter__.return_value = client
+        client.post.side_effect = [account_response, workflow_response]
+
+        with patch("httpx.Client", return_value=client):
+            profile = probe_runninghub_node(node)
+
+        self.assertEqual(profile["account_balance_coins"], 4644)
+        self.assertEqual(profile["account_current_tasks"], 0)
+        self.assertIn("WORKFLOW_NOT_EXISTS", profile["workflow_error"])
 
     def test_prompt_optimizers_require_simplified_chinese(self):
         self.assertIn("必须使用简体中文", FL2VA_SYSTEM_PROMPT)
@@ -730,7 +781,7 @@ class ContractTests(unittest.TestCase):
         environment = (project_root / ".env.example").read_text(encoding="utf-8")
 
         self.assertIn('option value="digital-human">数字人 · 音频驱动', index)
-        self.assertIn('/assets/app.js?v=41', index)
+        self.assertIn('/assets/app.js?v=42', index)
         self.assertIn('return { image: 1, video: 0, audio: 1 };', app_js)
         self.assertIn('el("duration").disabled = digitalHuman;', app_js)
         self.assertIn('durationControl.classList.toggle("digital-human", digitalHuman);', app_js)
@@ -936,7 +987,7 @@ class ContractTests(unittest.TestCase):
         self.assertIn("function isAnonymousQueueJob(job)", app_js)
         self.assertIn('"有任务正在运行中"', app_js)
         self.assertIn('const progress = item.progress == null ? ""', app_js)
-        self.assertIn('/assets/app.js?v=41', index)
+        self.assertIn('/assets/app.js?v=42', index)
         self.assertIn('/assets/styles.css?v=37', index)
         self.assertIn('id="steps" name="steps" type="number"', index)
         self.assertIn('min="4" max="50" step="1" value="10"', index)

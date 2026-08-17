@@ -1292,21 +1292,31 @@ def probe_runninghub_node(node: ComfyNodeConfig) -> dict[str, Any]:
             message = payload.get("msg") if isinstance(payload, dict) else None
             raise RuntimeError(f"RunningHub 账户余额读取失败：{message or '响应无效'}")
         account_profile = runninghub_account_profile(payload)
-        response = client.post(
-            "/api/openapi/getJsonApiFormat",
-            json={"apiKey": node.api_key, "workflowId": node.workflow_id},
-        )
-        response.raise_for_status()
-        payload = RunningHubH3Engine._json_response(response, "读取工作流")
-        prompt = (payload.get("data") or {}).get("prompt")
-        if isinstance(prompt, str):
-            try:
-                prompt = json.loads(prompt)
-            except json.JSONDecodeError as exc:
-                raise RuntimeError("RunningHub 工作流 JSON 无法解析") from exc
-        if not isinstance(prompt, dict):
-            raise RuntimeError("RunningHub 工作流响应缺少 prompt")
-        return {**runninghub_workflow_profile(prompt), **account_profile}
+        try:
+            response = client.post(
+                "/api/openapi/getJsonApiFormat",
+                json={"apiKey": node.api_key, "workflowId": node.workflow_id},
+            )
+            response.raise_for_status()
+            payload = RunningHubH3Engine._json_response(response, "读取工作流")
+            prompt = (payload.get("data") or {}).get("prompt")
+            if isinstance(prompt, str):
+                try:
+                    prompt = json.loads(prompt)
+                except json.JSONDecodeError as exc:
+                    raise RuntimeError("RunningHub 工作流 JSON 无法解析") from exc
+            if not isinstance(prompt, dict):
+                raise RuntimeError("RunningHub 工作流响应缺少 prompt")
+            return {
+                **runninghub_workflow_profile(prompt),
+                **account_profile,
+                "workflow_error": None,
+            }
+        except Exception as exc:
+            return {
+                **account_profile,
+                "workflow_error": str(exc)[:240],
+            }
 
 
 def probe_node(node: ComfyNodeConfig) -> dict[str, Any] | None:

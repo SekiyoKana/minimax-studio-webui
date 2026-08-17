@@ -477,6 +477,7 @@ class JobManager:
                 "workflow_id": workflow_id,
                 "workflow_variant": None,
                 "workflow_execution_mode": None,
+                "workflow_error": None,
                 "account_balance_coins": None,
                 "account_balance_money": None,
                 "account_currency": "",
@@ -608,6 +609,7 @@ class JobManager:
                         "workflow_execution_mode": node.get(
                             "workflow_execution_mode"
                         ),
+                        "workflow_error": node.get("workflow_error"),
                         "account_balance_coins": node.get("account_balance_coins"),
                         "account_balance_money": node.get("account_balance_money"),
                         "account_currency": node.get("account_currency") or "",
@@ -667,6 +669,8 @@ class JobManager:
                 node["healthy"] = healthy
                 node["error"] = error
                 node["last_checked"] = utc_now()
+                if "workflow_error" in profile:
+                    node["workflow_error"] = profile["workflow_error"]
                 for field in (
                     "workflow_variant",
                     "workflow_execution_mode",
@@ -738,6 +742,7 @@ class JobManager:
                             last_checked=None,
                             workflow_variant=None,
                             workflow_execution_mode=None,
+                            workflow_error=None,
                             account_balance_coins=None,
                             account_balance_money=None,
                             account_currency="",
@@ -758,6 +763,7 @@ class JobManager:
                         "workflow_id": workflow_id,
                         "workflow_variant": None,
                         "workflow_execution_mode": None,
+                        "workflow_error": None,
                         "account_balance_coins": None,
                         "account_balance_money": None,
                         "account_currency": "",

@@ -49,7 +49,7 @@ const COPY = {
     assetLibrary: "素材库", assetSearch: "搜索素材", allStatuses: "全部状态", queued: "排队中", running: "生成中", completed: "已完成", failed: "失败", cancelled: "已取消",
     conversation: "H3 对话", switchLanguage: "Switch to English", apiDocs: "API 文档", newGeneration: "新建生成", close: "关闭", assets: "素材库",
     connectEngine: "连接推理节点", offline: "服务离线", autoSchedule: "自动调度", nodePending: "节点待分配", online: "在线", available: "可用", nodeOffline: "离线", disabled: "已停用", busy: "执行中",
-    balance: "余额", credits: "点数", recentCost: "最近调用消耗", accountUnavailable: "账户信息不可用", balancePending: "余额读取中", accountTasks: "账户任务", balanceUpdated: "余额更新", balanceFailed: "余额读取失败",
+    balance: "余额", credits: "点数", recentCost: "最近调用消耗", accountUnavailable: "账户信息不可用", workflowUnavailable: "工作流信息不可用", balancePending: "余额读取中", accountTasks: "账户任务", balanceUpdated: "余额更新", balanceFailed: "余额读取失败",
     noAssets: "暂无素材", loading: "加载中", allLoaded: "已加载全部", loadFailed: "加载失败", startCreating: "开始创作", you: "你",
     native: "普通流 · 原生 H3", turbo: "8-step LoRA · 强度 1.0", digitalHuman: "数字人 · 音频驱动", music3: "Music3 · 30 步", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache（已停用）",
     reuse: "回填到发送区", regenerate: "重新生成", edit: "修改", cancel: "取消", delete: "删除", deleteRecord: "删除记录", downloadVideo: "下载 MP4", downloadAudio: "下载 FLAC", videoReady: "视频已生成", musicReady: "音乐已生成",
@@ -61,7 +61,7 @@ const COPY = {
     assetLibrary: "Assets", assetSearch: "Search assets", allStatuses: "All statuses", queued: "Queued", running: "Running", completed: "Completed", failed: "Failed", cancelled: "Cancelled",
     conversation: "H3 Chat", switchLanguage: "切换为中文", apiDocs: "API documentation", newGeneration: "New generation", close: "Close", assets: "Assets",
     connectEngine: "Connecting to inference nodes", offline: "Service offline", autoSchedule: "Auto", nodePending: "Awaiting node", online: "Online", available: "available", nodeOffline: "Offline", disabled: "Disabled", busy: "Running",
-    balance: "Balance", credits: "credits", recentCost: "Recent call cost", accountUnavailable: "Account unavailable", balancePending: "Loading balance", accountTasks: "Account tasks", balanceUpdated: "balance updated", balanceFailed: "balance read failed",
+    balance: "Balance", credits: "credits", recentCost: "Recent call cost", accountUnavailable: "Account unavailable", workflowUnavailable: "Workflow information unavailable", balancePending: "Loading balance", accountTasks: "Account tasks", balanceUpdated: "balance updated", balanceFailed: "balance read failed",
     noAssets: "No assets", loading: "Loading", allLoaded: "All assets loaded", loadFailed: "Load failed", startCreating: "Start creating", you: "You",
     native: "Native H3", turbo: "8-step LoRA · 1.0", digitalHuman: "Digital human · audio driven", music3: "Music3 · 30 steps", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache (disabled)",
     reuse: "Fill composer", regenerate: "Regenerate", edit: "Edit", cancel: "Cancel", delete: "Delete", deleteRecord: "Delete record", downloadVideo: "Download MP4", downloadAudio: "Download FLAC", videoReady: "Video generated", musicReady: "Music generated",
@@ -453,16 +453,20 @@ function renderManagedNodes() {
     const accountingTitle = [
       localized("按调用前后余额差值计算；同一 API Key 并发使用时可能包含同期扣费", "Calculated from the balance difference before and after a call; concurrent use of the same API key can include other charges"),
       node.error || "",
+      node.workflow_error || "",
     ].filter(Boolean).join(" · ");
     const accounting = node.provider === "runninghub"
       ? `<small class="node-accounting" title="${escapeHtml(accountingTitle)}">${escapeHtml(runningHubBalanceLabel(node))}${accountTasks}${recentCost ? ` · ${escapeHtml(recentCost)}` : ""}</small>`
+      : "";
+    const workflowIssue = node.provider === "runninghub" && node.workflow_error
+      ? `<small class="node-accounting" title="${escapeHtml(node.workflow_error)}">${escapeHtml(t("workflowUnavailable"))}</small>`
       : "";
     const checkedLabel = node.provider === "runninghub"
       ? node.error ? t("balanceFailed") : t("balanceUpdated")
       : localized("检测", "checked");
     return `<div class="node-row" data-node-id="${escapeHtml(node.id)}">
       <span class="node-state ${status.className}" aria-hidden="true"></span>
-      <div class="node-row-copy"><div><strong>${escapeHtml(node.name)}</strong><span>${escapeHtml(status.label)}${activity}</span></div><code title="${escapeHtml(node.url)}">${escapeHtml(node.url)}</code>${accounting}<small>${provider}${workflow}${keyState} · ID ${escapeHtml(node.id)}${node.last_checked ? ` · ${formatTime(node.last_checked, true)} ${checkedLabel}` : ""}</small></div>
+      <div class="node-row-copy"><div><strong>${escapeHtml(node.name)}</strong><span>${escapeHtml(status.label)}${activity}</span></div><code title="${escapeHtml(node.url)}">${escapeHtml(node.url)}</code>${accounting}${workflowIssue}<small>${provider}${workflow}${keyState} · ID ${escapeHtml(node.id)}${node.last_checked ? ` · ${formatTime(node.last_checked, true)} ${checkedLabel}` : ""}</small></div>
       <div class="node-row-actions"><button type="button" data-node-action="edit" title="编辑节点" aria-label="编辑 ${escapeHtml(node.name)}">${icon("pencil")}</button><button type="button" data-node-action="delete" title="删除节点" aria-label="删除 ${escapeHtml(node.name)}">${icon("trash-2")}</button></div>
     </div>`;
   }).join("") : `<p class="quiet">${state.locale === "en" ? "No nodes" : "暂无节点"}</p>`;

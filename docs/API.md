@@ -61,7 +61,7 @@ curl -X PATCH http://127.0.0.1:8193/api/v1/comfy/settings \
 
 API Key 仅写入 SQLite。查询节点时响应包含 `has_api_key`，不包含密钥内容。编辑同类型节点时将 `api_key` 留空会保留当前密钥。切换节点类型时需要重新填写适用于新类型的密钥。
 
-RunningHub 节点状态刷新会调用官方 `accountStatus` 接口，并返回 `account_balance_coins`、`account_balance_money`、`account_currency` 与 `account_current_tasks`。账户查询失败会保留最近一次数据并记录 `error`，不会将 RunningHub 节点标记为离线。任务调用前后各读取一次余额，任务记录包含 `runninghub_billing`，节点状态包含最近一次调用的余额差值。相同 API Key 存在并发调用时，该差值可能包含同期扣费。
+RunningHub 节点状态刷新会调用官方 `accountStatus` 接口，并返回 `account_balance_coins`、`account_balance_money`、`account_currency` 与 `account_current_tasks`。账户查询失败会保留最近一次数据并记录 `error`，不会将 RunningHub 节点标记为离线。工作流信息查询失败会记录 `workflow_error`，账户余额仍正常更新，最近一次成功识别的工作流类型会保留。任务调用前后各读取一次余额，任务记录包含 `runninghub_billing`，节点状态包含最近一次调用的余额差值。相同 API Key 存在并发调用时，该差值可能包含同期扣费。
 
 状态刷新同时读取目标工作流 JSON，并返回 `workflow_variant` 与 `workflow_execution_mode`。手动指定 RunningHub 节点时，服务使用这两个字段覆盖任务请求中的模型与执行方案，页面只显示工作流名称和 ID。自动调度存在多个不同 RunningHub 工作流时，任务只会进入生成方案匹配的节点。
 
