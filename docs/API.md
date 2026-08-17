@@ -20,7 +20,7 @@ curl http://127.0.0.1:8193/health
 
 响应中的 `nodes` 包含各推理节点的类型、在线状态、容量、当前任务和手动队列深度。`parallel_capacity` 为所有在线节点的容量总和。服务默认每 60 秒检查并保活一次节点。
 
-创建任务时使用 `comfy_node=auto` 自动调度，或填写 `nodes[].id` 手动指定节点。未填写时默认为 `auto`。
+创建 ComfyUI 任务时使用 `comfy_node=auto` 自动调度，或填写 `nodes[].id` 手动指定节点。RunningHub 工作流可以填写 `rh:<runninghub_resource_id>`，在绑定同一资源 ID 的可用节点之间自动调度。未填写时默认为 `auto`。
 
 ## 推理节点管理
 
@@ -35,7 +35,7 @@ curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
 
 curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
   -H 'Content-Type: application/json' \
-  -d '{"name":"RunningHub H3","provider":"runninghub","url":"https://www.runninghub.ai","api_key":"YOUR_RUNNINGHUB_API_KEY","workflow_id":"1904136902449209346","max_concurrency":2}'
+  -d '{"name":"RunningHub 工作流","provider":"runninghub","api_key":"YOUR_RUNNINGHUB_API_KEY","workflow_url":"https://www.runninghub.ai/zh-cn/ai-detail/2086401261143273474","max_concurrency":2}'
 
 curl -X PATCH http://127.0.0.1:8193/api/v1/comfy/nodes/gpu-2 \
   -H 'Content-Type: application/json' \
@@ -52,18 +52,33 @@ curl -X PATCH http://127.0.0.1:8193/api/v1/comfy/settings \
 
 | 字段 | ComfyUI | RunningHub |
 |---|---|---|
-| `name` | 节点名称 | 页面显示的工作流名称 |
+| `name` | 节点名称 | 节点名称，工作流名称由服务自动识别 |
 | `provider` | `comfyui` | `runninghub` |
-| `url` | ComfyUI HTTP API 地址 | RunningHub API 地址 |
+| `url` | ComfyUI HTTP API 地址 | 可省略，服务根据 `workflow_url` 自动确定 |
 | `api_key` | 可留空 | 必填 |
-| `workflow_id` | 忽略 | 必填，目标工作流 ID |
+| `workflow_url` | 忽略 | 必填，RunningHub 工作流或 AI 应用完整地址 |
 | `max_concurrency` | 固定为 1 | 1 至 64，默认 1 |
 
 API Key 仅写入 SQLite。查询节点时响应包含 `has_api_key`，不包含密钥内容。编辑同类型节点时将 `api_key` 留空会保留当前密钥。切换节点类型时需要重新填写适用于新类型的密钥。
 
-RunningHub 节点状态刷新会调用官方 `accountStatus` 接口，并返回 `account_balance_coins`、`account_balance_money`、`account_currency` 与 `account_current_tasks`。账户查询失败会保留最近一次数据并记录 `error`，不会将 RunningHub 节点标记为离线。工作流信息查询失败会记录 `workflow_error`，账户余额仍正常更新，最近一次成功识别的工作流类型会保留。任务调用前后各读取一次余额，任务记录包含 `runninghub_billing`，节点状态包含最近一次调用的余额差值。相同 API Key 存在并发调用时，该差值可能包含同期扣费。
+RunningHub 节点状态刷新会调用官方 `accountStatus` 接口，并返回 `account_balance_coins`、`account_balance_money`、`account_currency` 与 `account_current_tasks`。账户查询失败会保留最近一次数据并记录 `account_error`，工作流仍可正常使用。工作流信息查询失败会记录 `workflow_error`，最近一次成功识别的参数定义会保留。任务调用前后各读取一次余额，任务记录包含 `runninghub_billing`，节点状态包含最近一次调用的实际消耗。相同 API Key 存在并发调用时，余额差值可能包含同期扣费。
 
-状态刷新同时读取目标工作流 JSON，并返回 `workflow_variant` 与 `workflow_execution_mode`。手动指定 RunningHub 节点时，服务使用这两个字段覆盖任务请求中的模型与执行方案，页面只显示工作流名称和 ID。自动调度存在多个不同 RunningHub 工作流时，任务只会进入生成方案匹配的节点。
+服务依据 [RunningHub 官方 API 文档](https://www.runninghub.ai/runninghub-api-doc-en/) 从 `workflow_url` 解析资源 ID 和类型。AI 应用通过 `apiCallDemo` 与 `webapp/detail` 读取参数，普通工作流通过 `getJsonApiFormat` 读取 API-format JSON。节点响应中的 `workflow_name` 和 `runninghub_schema` 分别包含工作流名称与动态参数定义。
+
+### 创建 RunningHub 任务
+
+页面会按 `runninghub_schema.fields` 动态显示文本、数值、枚举、开关、图片、视频、音频和普通文件字段。`prompt` 自动写入 `runninghub_schema.primary_text_key`；没有主文本字段时可以留空。其他参数使用字段 `key` 组成 `runninghub_parameters` JSON。上传文件可在 `reference_manifest` 中指定 `field_key`，未指定时按同类型字段顺序绑定。
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations \
+  -F 'comfy_node=rh:2086401261143273474' \
+  -F 'prompt=主文本输入' \
+  -F 'runninghub_parameters={"12.steps":8,"15.cfg":1.5}' \
+  -F 'reference_manifest=[{"type":"image","field_key":"36.image"}]' \
+  -F 'references=@reference.png;type=image/png'
+```
+
+字段键取自 `GET /api/v1/comfy/nodes` 返回的 `runninghub_schema`。RunningHub 任务不使用本服务的 H3 模型、执行方案、分辨率、时长和步数固定控件。使用 `rh:<runninghub_resource_id>` 时，绑定同一资源 ID 的可用 RunningHub 节点共享并发槽位；使用具体节点 ID 时定向执行。
 
 删除节点使用 `DELETE /api/v1/comfy/nodes/{node_id}`。正在执行任务、存在定向排队任务或属于最后一个启用节点时，服务拒绝停用或删除。
 

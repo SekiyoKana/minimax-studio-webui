@@ -19,15 +19,18 @@ from app.engine import (
     probe_runninghub_node,
     runninghub_account_profile,
     runninghub_billing_delta,
-    runninghub_workflow_profile,
 )
-from app.jobs import JobManager, JobStore
+from app.jobs import JobManager, JobStore, runninghub_target
 from app.main import align_frames, validate_execution_mode, validate_generation, validate_references
 from app.music_prompts import MUSIC3_ARRANGEMENT_SYSTEM_PROMPT, MUSIC3_LYRICS_SYSTEM_PROMPT
-from app.nodes import ComfyNodeConfig, NodeRegistry
+from app.nodes import ComfyNodeConfig, NodeRegistry, parse_runninghub_resource_url
 from app.prompts import FL2VA_SYSTEM_PROMPT
 from app.ref2va_prompts import REF2VA_SYSTEM_PROMPT
+from app.runninghub import assign_media_fields, build_ai_app_schema, build_workflow_schema, normalize_parameters
 from app.settings import Settings
+
+
+RUNNINGHUB_AI_APP_ID = "2086401261143273474"
 
 
 class ContractTests(unittest.TestCase):
@@ -73,7 +76,7 @@ class ContractTests(unittest.TestCase):
                 "https://www.runninghub.ai/",
                 "runninghub",
                 "secret-one",
-                "1904136902449209346",
+                "https://www.runninghub.ai/zh-cn/ai-detail/2086401261143273474",
                 3,
             )
             registry.create(
@@ -82,7 +85,7 @@ class ContractTests(unittest.TestCase):
                 "https://www.runninghub.ai",
                 "runninghub",
                 "secret-two",
-                "1904136902449209347",
+                "https://www.runninghub.ai/zh-cn/workflow/1904136902449209347",
                 2,
             )
 
@@ -91,6 +94,8 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(first["max_concurrency"], 3)
             configs = {node.id: node for node in registry.configs()}
             self.assertEqual(configs["rh-1"].api_key, "secret-one")
+            self.assertEqual(configs["rh-1"].workflow_id, RUNNINGHUB_AI_APP_ID)
+            self.assertEqual(configs["rh-1"].runninghub_resource_type, "ai-app")
             self.assertEqual(configs["rh-2"].workflow_id, "1904136902449209347")
             updated = registry.update(
                 "rh-1",
@@ -99,13 +104,28 @@ class ContractTests(unittest.TestCase):
                 True,
                 "runninghub",
                 "",
-                "1904136902449209346",
+                "https://www.runninghub.ai/zh-cn/ai-detail/2086401261143273474",
                 4,
             )
             self.assertTrue(updated["has_api_key"])
             self.assertEqual(
                 {node.id: node for node in registry.configs()}["rh-1"].api_key,
                 "secret-one",
+            )
+
+    def test_runninghub_resource_url_is_normalized_and_classified(self):
+        url, resource_id, resource_type = parse_runninghub_resource_url(
+            "https://www.runninghub.ai/zh-cn/ai-detail/2086401261143273474/?from=share"
+        )
+        self.assertEqual(
+            url,
+            "https://www.runninghub.ai/zh-cn/ai-detail/2086401261143273474",
+        )
+        self.assertEqual(resource_id, RUNNINGHUB_AI_APP_ID)
+        self.assertEqual(resource_type, "ai-app")
+        with self.assertRaisesRegex(ValueError, "RunningHub 官方 HTTPS 地址"):
+            parse_runninghub_resource_url(
+                "https://example.com/zh-cn/ai-detail/2086401261143273474"
             )
 
     def test_node_provider_change_requires_or_clears_api_key(self):
@@ -126,7 +146,7 @@ class ContractTests(unittest.TestCase):
                     True,
                     "runninghub",
                     "",
-                    "workflow-1",
+                    "https://www.runninghub.ai/zh-cn/ai-detail/2086401261143273474",
                     1,
                 )
             registry.update(
@@ -136,7 +156,7 @@ class ContractTests(unittest.TestCase):
                 True,
                 "runninghub",
                 "runninghub-secret",
-                "workflow-1",
+                "https://www.runninghub.ai/zh-cn/ai-detail/2086401261143273474",
                 2,
             )
             registry.update(
@@ -209,36 +229,29 @@ class ContractTests(unittest.TestCase):
             finally:
                 manager.stop()
 
-    def test_runninghub_health_profile_drives_workflow_selection(self):
-        project_root = Path(__file__).resolve().parents[1]
-        cases = (
-            (
-                "minimax_h3_fl2va_fp8_turbo_lora_api.json",
-                "fl2va-fp8",
-                "turbo-lora",
-            ),
-            (
-                "minimax_h3_ref2va_fp8_digital_human_api.json",
-                "ref2va-fp8",
-                "digital-human",
-            ),
-            ("minimax_music3_int8_api.json", "music3-int8", "music3"),
-        )
-        for filename, variant, mode in cases:
-            workflow = json.loads(
-                (project_root / "workflows" / filename).read_text(encoding="utf-8")
-            )
-            self.assertEqual(
-                runninghub_workflow_profile(workflow),
-                {
-                    "workflow_variant": variant,
-                    "workflow_execution_mode": mode,
-                },
-            )
-
+    def test_runninghub_schema_drives_workflow_selection(self):
         with TemporaryDirectory() as temp:
             jobs_dir = Path(temp) / "jobs"
             jobs_dir.mkdir()
+            schema = {
+                "version": 1,
+                "resource_type": "workflow",
+                "resource_id": "workflow-1",
+                "name": "Generic Workflow",
+                "fields": [
+                    {
+                        "key": "10.text",
+                        "node_id": "10",
+                        "field_name": "text",
+                        "field_type": "STRING",
+                        "default": "",
+                        "editable": True,
+                        "media_kind": None,
+                    }
+                ],
+                "primary_text_key": "10.text",
+                "output_types": ["video"],
+            }
             node = ComfyNodeConfig(
                 "rh",
                 "H3 Ref2VA 8 Step",
@@ -247,14 +260,18 @@ class ContractTests(unittest.TestCase):
                 "secret",
                 "workflow-1",
                 2,
+                "https://www.runninghub.ai/workflow/workflow-1",
+                "workflow",
+                "Generic Workflow",
+                schema,
             )
             manager = JobManager(
                 JobStore(jobs_dir),
                 lambda config: None,
                 nodes=(node,),
                 health_probe=lambda config: {
-                    "workflow_variant": "ref2va-fp8",
-                    "workflow_execution_mode": "turbo-lora",
+                    "workflow_name": "Generic Workflow",
+                    "runninghub_schema": schema,
                     "account_balance_coins": 1200,
                     "account_balance_money": 12.5,
                     "account_currency": "CNY",
@@ -265,13 +282,24 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(
                 manager.workflow_profile("rh"),
                 {
-                    "model_variant": "ref2va-fp8",
-                    "execution_mode": "turbo-lora",
+                    "provider": "runninghub",
+                    "runninghub_resource_type": "workflow",
+                    "workflow_id": "workflow-1",
+                    "workflow_url": "https://www.runninghub.ai/workflow/workflow-1",
+                    "workflow_name": "Generic Workflow",
+                    "runninghub_schema": schema,
                 },
             )
             self.assertEqual(manager.workflow_profile("auto"), manager.workflow_profile("rh"))
+            workflow_target = runninghub_target("workflow-1")
+            self.assertTrue(manager.accepts_node(workflow_target))
+            self.assertEqual(manager.node_provider(workflow_target), "runninghub")
+            self.assertEqual(
+                manager.workflow_profile(workflow_target),
+                manager.workflow_profile("rh"),
+            )
             public = manager.nodes_public()[0]
-            self.assertEqual(public["workflow_name"], "H3 Ref2VA 8 Step")
+            self.assertEqual(public["workflow_name"], "Generic Workflow")
             self.assertEqual(public["workflow_id"], "workflow-1")
             self.assertEqual(public["account_balance_coins"], 1200)
             self.assertEqual(public["account_balance_money"], 12.5)
@@ -291,8 +319,12 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(
                 manager.workflow_profile("rh"),
                 {
-                    "model_variant": "ref2va-fp8",
-                    "execution_mode": "turbo-lora",
+                    "provider": "runninghub",
+                    "runninghub_resource_type": "workflow",
+                    "workflow_id": "workflow-1",
+                    "workflow_url": "https://www.runninghub.ai/workflow/workflow-1",
+                    "workflow_name": "Generic Workflow",
+                    "runninghub_schema": schema,
                 },
             )
             manager.health_probe = MagicMock(side_effect=RuntimeError("balance unavailable"))
@@ -300,7 +332,7 @@ class ContractTests(unittest.TestCase):
             public = manager.nodes_public()[0]
             self.assertTrue(public["healthy"])
             self.assertEqual(public["account_balance_coins"], 1100)
-            self.assertIn("balance unavailable", public["error"])
+            self.assertIn("balance unavailable", public["account_error"])
 
     def test_runninghub_account_balance_and_call_cost_are_parsed(self):
         before = runninghub_account_profile(
@@ -457,7 +489,8 @@ class ContractTests(unittest.TestCase):
         self.assertIn('id="nodeProvider"', index)
         self.assertIn('value="runninghub"', index)
         self.assertIn('id="nodeApiKey"', index)
-        self.assertIn('id="nodeWorkflowId"', index)
+        self.assertIn('id="nodeWorkflowUrl"', index)
+        self.assertIn('name="workflow_url"', index)
         self.assertIn('id="nodeMaxConcurrency"', index)
         self.assertIn('id="runningHubWorkflowControl"', index)
         self.assertIn('api("/api/v1/comfy/nodes")', app_js)
@@ -465,13 +498,17 @@ class ContractTests(unittest.TestCase):
         self.assertIn('function syncNodeProviderFields()', app_js)
         self.assertIn('running_count', app_js)
         self.assertIn('function selectedRunningHubNode()', app_js)
+        self.assertIn('const RUNNINGHUB_TARGET_PREFIX = "rh:";', app_js)
+        self.assertIn("runningHubGroups", app_js)
         self.assertIn('el("modelControl").hidden = Boolean(runningHubNode);', app_js)
-        self.assertIn('if (!runningHubNode) {', app_js)
+        self.assertIn('function renderRunningHubParameters()', app_js)
+        self.assertIn('runninghub_parameters', app_js)
         self.assertIn('function runningHubBalanceLabel(node)', app_js)
         self.assertIn('function runningHubCostLabel(node)', app_js)
         self.assertIn('node-accounting', app_js)
         self.assertIn('account_balance_money', main + app_js)
-        self.assertIn('request_data.update(workflow_profile)', main)
+        self.assertIn("prepare_runninghub_request", main)
+        self.assertIn("runninghub_resource_id", main)
         self.assertIn('function applyJobUpsert(job)', app_js)
         self.assertIn('request.headers.get("last-event-id"', main)
         self.assertIn(".modal-overlay.node-modal", styles)
@@ -645,9 +682,29 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(music3["92"]["class_type"], "SaveAudio")
 
     def test_runninghub_engine_maps_job_parameters_to_node_info_list(self):
-        project_root = Path(__file__).resolve().parents[1]
-        workflow_path = project_root / "workflows" / "minimax_h3_fl2va_fp8_720p_15s_api.json"
-        settings = Settings(comfy_workflow=workflow_path)
+        workflow = {
+            "10": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": "default prompt", "clip": ["1", 0]},
+                "_meta": {"title": "Prompt"},
+            },
+            "11": {
+                "class_type": "LoadImage",
+                "inputs": {"image": "default.png"},
+                "_meta": {"title": "Reference"},
+            },
+            "12": {
+                "class_type": "KSampler",
+                "inputs": {"steps": 20, "seed": 1, "model": ["1", 0]},
+                "_meta": {"title": "Sampler"},
+            },
+        }
+        schema = build_workflow_schema(
+            "1904136902449209346",
+            "https://www.runninghub.ai/workflow/1904136902449209346",
+            workflow,
+            "Generic image workflow",
+        )
         node = ComfyNodeConfig(
             "rh",
             "RunningHub",
@@ -656,35 +713,148 @@ class ContractTests(unittest.TestCase):
             "secret",
             "1904136902449209346",
             2,
+            "https://www.runninghub.ai/workflow/1904136902449209346",
+            "workflow",
+            "Generic image workflow",
+            schema,
         )
-        engine = RunningHubH3Engine(settings, node)
+        engine = RunningHubH3Engine(Settings(), node)
+        manifest = assign_media_fields(schema, [{"type": "image"}])
+        parameters = normalize_parameters(
+            schema,
+            {"10.text": "test prompt", "12.steps": 30, "12.seed": 123},
+        )
         job = {
             "id": "runninghub-job",
             "request": {
-                "model_variant": "fl2va-fp8",
-                "execution_mode": "native",
-                "prompt": "test prompt",
-                "width": 864,
-                "height": 480,
-                "num_frames": 124,
-                "steps": 30,
-                "seed": 123,
-                "references": [{"type": "image"}],
+                "runninghub_schema": schema,
+                "runninghub_parameters": parameters,
+                "references": manifest,
             },
         }
         uploaded = ["api/input.png"]
-        remote_workflow = engine.workflow_builder._build_workflow(job, uploaded)
-        node_info = engine._node_info_list(job, uploaded, remote_workflow)
+        node_info = engine._node_info_list(job, uploaded)
         mapped = {
             (item["nodeId"], item["fieldName"]): item["fieldValue"]
             for item in node_info
         }
 
-        self.assertEqual(mapped[("136", "prompt")], "test prompt")
-        self.assertEqual(mapped[("137", "image")], "api/input.png")
-        self.assertEqual(mapped[("124", "steps")], 30)
-        self.assertEqual(mapped[("129", "noise_seed")], 123)
-        self.assertIsInstance(create_engine(settings, node), RunningHubH3Engine)
+        self.assertEqual(mapped[("10", "text")], "test prompt")
+        self.assertEqual(mapped[("11", "image")], "api/input.png")
+        self.assertEqual(mapped[("12", "steps")], 30)
+        self.assertEqual(mapped[("12", "seed")], 123)
+        self.assertIsInstance(create_engine(Settings(), node), RunningHubH3Engine)
+
+    def test_runninghub_ai_app_schema_maps_dynamic_inputs(self):
+        schema = build_ai_app_schema(
+            RUNNINGHUB_AI_APP_ID,
+            f"https://www.runninghub.ai/zh-cn/ai-detail/{RUNNINGHUB_AI_APP_ID}",
+            {
+                "webappName": "Generic AI App",
+                "nodeInfoList": [
+                    {
+                        "nodeId": "39",
+                        "fieldName": "value",
+                        "fieldType": "STRING",
+                        "fieldValue": "",
+                        "description": "Prompt",
+                    },
+                    {
+                        "nodeId": "36",
+                        "fieldName": "image",
+                        "fieldType": "IMAGE",
+                        "description": "Reference image",
+                    },
+                    {
+                        "nodeId": "37",
+                        "fieldName": "steps",
+                        "fieldType": "INTEGER",
+                        "fieldValue": 20,
+                        "description": "Steps",
+                    },
+                ],
+            },
+            {},
+        )
+        node = ComfyNodeConfig(
+            "rh-app",
+            "Ref2VA-bf16-Full",
+            "https://www.runninghub.ai",
+            "runninghub",
+            "secret",
+            RUNNINGHUB_AI_APP_ID,
+            1,
+            "https://www.runninghub.ai/zh-cn/ai-detail/2086401261143273474",
+            "ai-app",
+            "Generic AI App",
+            schema,
+        )
+        engine = RunningHubH3Engine(Settings(), node)
+        manifest = assign_media_fields(schema, [{"type": "image"}])
+        job = {
+            "id": "runninghub-ai-app-job",
+            "request": {
+                "runninghub_schema": schema,
+                "runninghub_parameters": normalize_parameters(
+                    schema, {"39.value": "test prompt", "37.steps": 8}
+                ),
+                "references": manifest,
+            },
+        }
+        node_info = engine._node_info_list(job, ["uploaded-image.png"])
+        mapped = {
+            (item["nodeId"], item["fieldName"]): item["fieldValue"]
+            for item in node_info
+        }
+
+        self.assertTrue(engine.is_ai_app)
+        self.assertEqual(mapped[("39", "value")], "test prompt")
+        self.assertEqual(mapped[("36", "image")], "uploaded-image.png")
+        self.assertEqual(mapped[("37", "steps")], 8)
+        self.assertEqual(schema["name"], "Generic AI App")
+
+    def test_runninghub_schema_locks_model_fields_and_validates_required_inputs(self):
+        schema = build_ai_app_schema(
+            RUNNINGHUB_AI_APP_ID,
+            f"https://www.runninghub.ai/zh-cn/ai-detail/{RUNNINGHUB_AI_APP_ID}",
+            {
+                "webappName": "Required input app",
+                "nodeInfoList": [
+                    {
+                        "nodeId": "1",
+                        "nodeName": "Checkpoint Loader",
+                        "fieldName": "ckpt_name",
+                        "fieldType": "STRING",
+                        "fieldValue": "locked.safetensors",
+                    },
+                    {
+                        "nodeId": "2",
+                        "fieldName": "prompt",
+                        "fieldType": "STRING",
+                        "description": "Prompt",
+                        "required": True,
+                    },
+                    {
+                        "nodeId": "3",
+                        "fieldName": "image",
+                        "fieldType": "IMAGE",
+                        "description": "Image",
+                        "required": True,
+                    },
+                ],
+            },
+            {},
+        )
+        fields = {field["key"]: field for field in schema["fields"]}
+        self.assertFalse(fields["1.ckpt_name"]["editable"])
+        with self.assertRaisesRegex(ValueError, "2.prompt"):
+            normalize_parameters(schema, {})
+        parameters = normalize_parameters(schema, {"2.prompt": "test"})
+        with self.assertRaisesRegex(ValueError, "3.image"):
+            assign_media_fields(schema, [])
+        manifest = assign_media_fields(schema, [{"type": "image"}])
+        self.assertEqual(parameters["2.prompt"], "test")
+        self.assertEqual(manifest[0]["field_key"], "3.image")
 
     def test_runninghub_client_errors_are_not_retried(self):
         node = ComfyNodeConfig(
@@ -781,7 +951,7 @@ class ContractTests(unittest.TestCase):
         environment = (project_root / ".env.example").read_text(encoding="utf-8")
 
         self.assertIn('option value="digital-human">数字人 · 音频驱动', index)
-        self.assertIn('/assets/app.js?v=42', index)
+        self.assertIn('/assets/app.js?v=43', index)
         self.assertIn('return { image: 1, video: 0, audio: 1 };', app_js)
         self.assertIn('el("duration").disabled = digitalHuman;', app_js)
         self.assertIn('durationControl.classList.toggle("digital-human", digitalHuman);', app_js)
@@ -987,7 +1157,7 @@ class ContractTests(unittest.TestCase):
         self.assertIn("function isAnonymousQueueJob(job)", app_js)
         self.assertIn('"有任务正在运行中"', app_js)
         self.assertIn('const progress = item.progress == null ? ""', app_js)
-        self.assertIn('/assets/app.js?v=42', index)
+        self.assertIn('/assets/app.js?v=43', index)
         self.assertIn('/assets/styles.css?v=37', index)
         self.assertIn('id="steps" name="steps" type="number"', index)
         self.assertIn('min="4" max="50" step="1" value="10"', index)

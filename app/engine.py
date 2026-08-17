@@ -5,6 +5,7 @@ import logging
 import math
 import mimetypes
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -17,6 +18,12 @@ from urllib.parse import urlsplit
 from PIL import Image
 
 from .nodes import ComfyNodeConfig
+from .runninghub import (
+    build_ai_app_schema,
+    build_workflow_schema,
+    node_info_list as build_runninghub_node_info_list,
+    output_media_type,
+)
 from .settings import Settings
 
 
@@ -45,6 +52,7 @@ def runninghub_account_profile(payload: dict[str, Any]) -> dict[str, Any]:
         "account_balance_money": _runninghub_number(data.get("remainMoney")),
         "account_currency": str(data.get("currency") or "").upper(),
         "account_current_tasks": int(current_tasks) if current_tasks is not None else None,
+        "account_api_type": str(data.get("apiType") or "").upper(),
     }
 
 
@@ -63,44 +71,6 @@ def runninghub_billing_delta(
         "consumed_coins": consumed("account_balance_coins"),
         "consumed_money": consumed("account_balance_money"),
         "measured_at": datetime.now(UTC).isoformat(),
-    }
-
-
-def runninghub_workflow_profile(workflow: dict[str, Any]) -> dict[str, str]:
-    class_types = {
-        str(node.get("class_type") or "")
-        for node in workflow.values()
-        if isinstance(node, dict)
-    }
-    workflow_text = json.dumps(workflow, ensure_ascii=False).lower()
-    if {
-        "MiniMaxMusic3TextEncode",
-        "EmptyMiniMaxMusic3LatentAudio",
-    }.intersection(class_types):
-        return {
-            "workflow_variant": "music3-int8",
-            "workflow_execution_mode": "music3",
-        }
-    if "VRGDG_MiniMaxH3AudioDrive" in class_types:
-        return {
-            "workflow_variant": "ref2va-fp8",
-            "workflow_execution_mode": "digital-human",
-        }
-    if "ref2va" in workflow_text:
-        variant = "ref2va-fp8"
-    elif "fl2va" in workflow_text or "fl2v" in workflow_text:
-        variant = "fl2va-fp8"
-    else:
-        raise RuntimeError("无法识别 RunningHub 目标工作流的生成类型")
-    if "naughtytimes" in workflow_text:
-        execution_mode = "h3-nsfw"
-    elif "8step" in workflow_text or "8-step" in workflow_text:
-        execution_mode = "turbo-lora"
-    else:
-        execution_mode = "native"
-    return {
-        "workflow_variant": variant,
-        "workflow_execution_mode": execution_mode,
     }
 
 
@@ -796,9 +766,12 @@ class RunningHubH3Engine:
         self.node = node
         self.base_url = node.url.rstrip("/")
         self.headers = {"Authorization": f"Bearer {node.api_key}"}
-        self.workflow_builder = ComfyUIH3Engine(settings)
-        self._remote_workflow: dict[str, Any] | None = None
         self.last_billing: dict[str, Any] | None = None
+        self.last_output_media_type = "file"
+
+    @property
+    def is_ai_app(self) -> bool:
+        return self.node.runninghub_resource_type == "ai-app"
 
     @staticmethod
     def _json_response(response, action: str) -> dict[str, Any]:
@@ -813,7 +786,7 @@ class RunningHubH3Engine:
                 f"RunningHub {action}返回格式无效"
             )
         code = payload.get("code")
-        if code not in {None, 0, "0"}:
+        if code not in {None, 0, "0", 200, "200"}:
             message = str(payload.get("msg") or payload.get("message") or code)
             raise RuntimeError(f"RunningHub {action}失败：{message[:500]}")
         return payload
@@ -873,8 +846,7 @@ class RunningHubH3Engine:
                 try:
                     with source.open("rb") as handle:
                         response = client.post(
-                            "/task/openapi/upload",
-                            data={"apiKey": self.node.api_key, "fileType": "input"},
+                            "/openapi/v2/media/upload/binary",
                             files={"file": (source.name, handle, content_type)},
                         )
                     if response.status_code == 429 or response.status_code >= 500:
@@ -885,7 +857,9 @@ class RunningHubH3Engine:
                         except ValueError:
                             detail = None
                         message = (
-                            detail.get("msg") or detail.get("message")
+                            detail.get("msg")
+                            or detail.get("message")
+                            or detail.get("errorMessage")
                             if isinstance(detail, dict)
                             else None
                         )
@@ -895,7 +869,15 @@ class RunningHubH3Engine:
                         )
                     response.raise_for_status()
                     payload = self._json_response(response, "文件上传")
-                    file_name = str((payload.get("data") or {}).get("fileName") or "")
+                    data = payload.get("data")
+                    if not isinstance(data, dict):
+                        data = payload
+                    file_name = str(
+                        data.get("filename")
+                        or data.get("fileName")
+                        or data.get("download_url")
+                        or ""
+                    )
                     if not file_name:
                         raise RuntimeError("RunningHub 文件上传响应缺少 fileName")
                     uploaded.append(file_name)
@@ -919,75 +901,28 @@ class RunningHubH3Engine:
         )
         return runninghub_account_profile(payload)
 
-    def _get_remote_workflow(self, client) -> dict[str, Any]:
-        if self._remote_workflow is not None:
-            return self._remote_workflow
-        payload = self._request_json(
-            client,
-            "POST",
-            "/api/openapi/getJsonApiFormat",
-            json_data={
-                "apiKey": self.node.api_key,
-                "workflowId": self.node.workflow_id,
-            },
-            action="读取工作流",
-        )
-        prompt = (payload.get("data") or {}).get("prompt")
-        if isinstance(prompt, str):
-            try:
-                prompt = json.loads(prompt)
-            except json.JSONDecodeError as exc:
-                raise RuntimeError("RunningHub 工作流 JSON 无法解析") from exc
-        if not isinstance(prompt, dict):
-            raise RuntimeError("RunningHub 工作流响应缺少 prompt")
-        self._remote_workflow = prompt
-        return prompt
-
     def _node_info_list(
         self,
         job: dict[str, Any],
         input_names: list[str],
-        remote_workflow: dict[str, Any],
     ) -> list[dict[str, Any]]:
-        variant = self.workflow_builder._variant(job)
-        execution_mode = self.workflow_builder._execution_mode(job)
-        base_workflow = self.workflow_builder._load_workflow(variant, execution_mode)
-        built_workflow = self.workflow_builder._build_workflow(job, input_names)
-        result = []
-        changed_node_ids = set()
-        for node_id, node in built_workflow.items():
-            inputs = node.get("inputs") or {}
-            base_inputs = (base_workflow.get(node_id) or {}).get("inputs") or {}
-            for field_name, field_value in inputs.items():
-                if node_id not in base_workflow or base_inputs.get(field_name) != field_value:
-                    changed_node_ids.add(node_id)
-                    result.append(
-                        {
-                            "nodeId": str(node_id),
-                            "fieldName": str(field_name),
-                            "fieldValue": field_value,
-                        }
-                    )
-
-        missing = sorted(changed_node_ids.difference(remote_workflow))
-        mismatched = sorted(
-            node_id
-            for node_id in changed_node_ids.intersection(remote_workflow)
-            if (remote_workflow[node_id] or {}).get("class_type")
-            != (built_workflow[node_id] or {}).get("class_type")
+        request = job.get("request", {})
+        schema = request.get("runninghub_schema") or self.node.runninghub_schema
+        if not isinstance(schema, dict):
+            raise RuntimeError("RunningHub 工作流参数定义不可用")
+        return build_runninghub_node_info_list(
+            schema,
+            request.get("runninghub_parameters") or {},
+            request.get("references") or [],
+            input_names,
         )
-        if missing or mismatched:
-            details = []
-            if missing:
-                details.append("缺少节点 " + ", ".join(missing))
-            if mismatched:
-                details.append("节点类型不匹配 " + ", ".join(mismatched))
-            raise RuntimeError(
-                "RunningHub 目标工作流与当前生成方案不兼容：" + "；".join(details)
-            )
-        return result
 
     def _cancel_task(self, client, task_id: str) -> None:
+        if self.is_ai_app:
+            logger.warning(
+                "RunningHub AI App API 未配置取消端点，task_id=%s", task_id
+            )
+            return
         try:
             self._request_json(
                 client,
@@ -999,7 +934,7 @@ class RunningHubH3Engine:
         except Exception:
             logger.exception("RunningHub 任务取消失败，task_id=%s", task_id)
 
-    def _poll(self, client, task_id: str, progress, cancelled) -> list[dict[str, Any]]:
+    def _poll(self, client, task_id: str, progress, cancelled) -> dict[str, Any]:
         deadline = time.monotonic() + self.MAX_POLL_SECONDS
         last_status = ""
         while time.monotonic() < deadline:
@@ -1013,20 +948,31 @@ class RunningHubH3Engine:
                 json_data={"taskId": task_id},
                 action="查询任务",
             )
-            status = str(payload.get("status") or "").upper()
+            data = payload.get("data")
+            if not isinstance(data, dict):
+                data = payload
+            status = str(data.get("status") or "").upper()
             if status != last_status:
-                if status in {"CREATE", "QUEUED"}:
+                if status in {"CREATE", "CREATED", "PENDING", "QUEUED"}:
                     progress(5, "等待 RunningHub 调度")
                 elif status == "RUNNING":
                     progress(15, "RunningHub 工作流执行中")
                 last_status = status
-            if status == "SUCCESS":
-                results = payload.get("results") or []
+            if status in {"SUCCESS", "COMPLETED"}:
+                results = data.get("results") or []
                 if not isinstance(results, list) or not results:
                     raise RuntimeError("RunningHub 任务成功但未返回生成结果")
-                return [item for item in results if isinstance(item, dict)]
-            if status in {"FAILED", "CANCEL"}:
-                message = payload.get("errorMessage") or payload.get("promptTips") or status
+                data["results"] = [item for item in results if isinstance(item, dict)]
+                return data
+            if status in {
+                "ERROR",
+                "FAILURE",
+                "FAILED",
+                "CANCEL",
+                "CANCELED",
+                "CANCELLED",
+            }:
+                message = data.get("errorMessage") or data.get("promptTips") or status
                 raise RuntimeError(f"RunningHub 任务{status}：{str(message)[:500]}")
             time.sleep(max(2.0, self.settings.comfy_poll_seconds))
         raise TimeoutError(f"RunningHub 任务轮询超时，taskId={task_id}")
@@ -1034,8 +980,12 @@ class RunningHubH3Engine:
     def _download_result(self, job: dict[str, Any], results: list[dict[str, Any]]) -> Path:
         import httpx
 
-        music3 = self.workflow_builder._variant(job) == "music3-int8"
-        expected_suffix = ".flac" if music3 else ".mp4"
+        media_type = str(job.get("request", {}).get("media_type") or "file")
+        expected_extensions = {
+            "video": {"mp4", "webm", "mov", "mkv"},
+            "audio": {"flac", "wav", "mp3", "m4a", "ogg", "aac"},
+            "image": {"png", "jpg", "jpeg", "webp", "gif"},
+        }.get(media_type, set())
         candidates = []
         for item in results:
             url = str(
@@ -1050,14 +1000,29 @@ class RunningHubH3Engine:
             (
                 url
                 for url, output_type in candidates
-                if urlsplit(url).path.lower().endswith(expected_suffix)
-                or output_type.lower().lstrip(".") == expected_suffix.lstrip(".")
+                if urlsplit(url).path.lower().rsplit(".", 1)[-1]
+                in expected_extensions
+                or output_type.lower().lstrip(".") in expected_extensions
             ),
             candidates[0][0] if candidates else "",
         )
         if not selected:
             raise RuntimeError("RunningHub 生成结果中没有可下载文件")
-        output = self.settings.outputs_dir / f"{job['id']}{expected_suffix}"
+        selected_item = next((item for item in candidates if item[0] == selected), None)
+        suffix = Path(urlsplit(selected).path).suffix.lower()
+        if not re.fullmatch(r"\.[a-z0-9]{1,8}", suffix):
+            output_type = (selected_item or ("", ""))[1].lower().lstrip(".")
+            suffix = f".{output_type}" if re.fullmatch(r"[a-z0-9]{1,8}", output_type) else ".bin"
+        extension = suffix.lower().lstrip(".")
+        if extension in {"mp4", "webm", "mov", "mkv"}:
+            self.last_output_media_type = "video"
+        elif extension in {"flac", "wav", "mp3", "m4a", "ogg", "aac", "opus"}:
+            self.last_output_media_type = "audio"
+        elif extension in {"png", "jpg", "jpeg", "webp", "gif", "bmp"}:
+            self.last_output_media_type = "image"
+        else:
+            self.last_output_media_type = "file"
+        output = self.settings.outputs_dir / f"{job['id']}{suffix}"
         with httpx.stream("GET", selected, timeout=600, follow_redirects=True, trust_env=False) as response:
             response.raise_for_status()
             with output.open("wb") as target:
@@ -1075,8 +1040,11 @@ class RunningHubH3Engine:
     def generate(self, job, progress, cancelled):
         import httpx
 
-        progress(2, "准备 RunningHub 工作流")
+        progress(2, "准备 RunningHub AI 应用" if self.is_ai_app else "准备 RunningHub 工作流")
         self.last_billing = None
+        self.last_output_media_type = output_media_type(
+            job.get("request", {}).get("runninghub_schema") or {}
+        )
         timeout = httpx.Timeout(60, connect=10)
         with httpx.Client(
             base_url=self.base_url,
@@ -1087,26 +1055,58 @@ class RunningHubH3Engine:
         ) as client:
             balance_before: dict[str, Any] | None = None
             task_id = ""
+            usage: dict[str, Any] = {}
             try:
                 try:
                     balance_before = self._account_status(client)
                 except Exception:
                     logger.exception("RunningHub 调用前账户余额读取失败")
                 input_names = self._upload_inputs(client, job)
-                remote_workflow = self._get_remote_workflow(client)
-                node_info_list = self._node_info_list(job, input_names, remote_workflow)
-                payload = self._request_json(
-                    client,
-                    "POST",
-                    "/task/openapi/create",
-                    json_data={
-                        "apiKey": self.node.api_key,
-                        "workflowId": self.node.workflow_id,
-                        "nodeInfoList": node_info_list,
-                    },
-                    action="提交任务",
+                node_info_list = self._node_info_list(job, input_names)
+                schema = (
+                    job.get("request", {}).get("runninghub_schema")
+                    or self.node.runninghub_schema
+                    or {}
                 )
-                data = payload.get("data") or {}
+                if self.is_ai_app:
+                    submit_path = str(
+                        schema.get("submit_path") or "/task/openapi/ai-app/run"
+                    )
+                    if submit_path.startswith("/openapi/v2/run/ai-app/"):
+                        submit_body = {
+                            "nodeInfoList": node_info_list,
+                            "instanceType": "default",
+                            "usePersonalQueue": False,
+                        }
+                    else:
+                        submit_body = {
+                            "apiKey": self.node.api_key,
+                            "webappId": self.node.workflow_id,
+                            "nodeInfoList": node_info_list,
+                            "instanceType": "default",
+                        }
+                    payload = self._request_json(
+                        client,
+                        "POST",
+                        submit_path,
+                        json_data=submit_body,
+                        action="提交 AI 应用任务",
+                    )
+                else:
+                    payload = self._request_json(
+                        client,
+                        "POST",
+                        "/task/openapi/create",
+                        json_data={
+                            "apiKey": self.node.api_key,
+                            "workflowId": self.node.workflow_id,
+                            "nodeInfoList": node_info_list,
+                        },
+                        action="提交任务",
+                    )
+                data = payload.get("data")
+                if not isinstance(data, dict):
+                    data = payload
                 task_id = str(data.get("taskId") or payload.get("taskId") or "")
                 if not task_id:
                     raise RuntimeError("RunningHub 提交响应缺少 taskId")
@@ -1116,18 +1116,40 @@ class RunningHubH3Engine:
                         + str(data.get("promptTips") or payload.get("msg") or "未知错误")[:500]
                     )
                 progress(4, f"已提交 RunningHub 任务 {task_id[:8]}")
-                results = self._poll(client, task_id, progress, cancelled)
+                final_result = self._poll(client, task_id, progress, cancelled)
+                results = final_result["results"]
+                usage = (
+                    final_result.get("usage")
+                    if isinstance(final_result.get("usage"), dict)
+                    else {}
+                )
             finally:
-                if task_id and balance_before:
-                    try:
-                        balance_after = self._account_status(client)
-                        self.last_billing = runninghub_billing_delta(
-                            balance_before, balance_after
-                        )
-                    except Exception:
-                        logger.exception(
-                            "RunningHub 调用后账户余额读取失败，task_id=%s", task_id
-                        )
+                if task_id:
+                    if balance_before:
+                        try:
+                            balance_after = self._account_status(client)
+                            self.last_billing = runninghub_billing_delta(
+                                balance_before, balance_after
+                            )
+                        except Exception:
+                            logger.exception(
+                                "RunningHub 调用后账户余额读取失败，task_id=%s",
+                                task_id,
+                            )
+                    consumed_coins = _runninghub_number(usage.get("consumeCoins"))
+                    consumed_money = _runninghub_number(usage.get("consumeMoney"))
+                    if consumed_coins is not None or consumed_money is not None:
+                        self.last_billing = self.last_billing or {
+                            **(balance_before or {}),
+                            "measured_at": datetime.now(UTC).isoformat(),
+                        }
+                    if self.last_billing is not None:
+                        if consumed_coins is not None:
+                            self.last_billing["consumed_coins"] = consumed_coins
+                        if consumed_money is not None:
+                            self.last_billing["consumed_money"] = consumed_money
+                        if usage:
+                            self.last_billing["usage"] = usage
         progress(98, "下载 RunningHub 生成产物")
         output = self._download_result(job, results)
         progress(99, "整理交付文件")
@@ -1275,6 +1297,7 @@ def probe_comfy_node(node: ComfyNodeConfig) -> None:
 def probe_runninghub_node(node: ComfyNodeConfig) -> dict[str, Any]:
     import httpx
 
+    profile: dict[str, Any] = {}
     with httpx.Client(
         base_url=node.url,
         headers={"Authorization": f"Bearer {node.api_key}"},
@@ -1282,41 +1305,98 @@ def probe_runninghub_node(node: ComfyNodeConfig) -> dict[str, Any]:
         follow_redirects=True,
         trust_env=False,
     ) as client:
-        response = client.post(
-            "/uc/openapi/accountStatus",
-            json={"apikey": node.api_key},
-        )
-        response.raise_for_status()
-        payload = response.json()
-        if not isinstance(payload, dict) or payload.get("code") not in {0, "0"}:
-            message = payload.get("msg") if isinstance(payload, dict) else None
-            raise RuntimeError(f"RunningHub 账户余额读取失败：{message or '响应无效'}")
-        account_profile = runninghub_account_profile(payload)
         try:
             response = client.post(
-                "/api/openapi/getJsonApiFormat",
-                json={"apiKey": node.api_key, "workflowId": node.workflow_id},
+                "/uc/openapi/accountStatus",
+                json={"apikey": node.api_key},
             )
             response.raise_for_status()
-            payload = RunningHubH3Engine._json_response(response, "读取工作流")
-            prompt = (payload.get("data") or {}).get("prompt")
-            if isinstance(prompt, str):
-                try:
-                    prompt = json.loads(prompt)
-                except json.JSONDecodeError as exc:
-                    raise RuntimeError("RunningHub 工作流 JSON 无法解析") from exc
-            if not isinstance(prompt, dict):
-                raise RuntimeError("RunningHub 工作流响应缺少 prompt")
-            return {
-                **runninghub_workflow_profile(prompt),
-                **account_profile,
-                "workflow_error": None,
-            }
+            payload = RunningHubH3Engine._json_response(response, "读取账户余额")
+            profile.update(runninghub_account_profile(payload))
+            profile["account_error"] = ""
         except Exception as exc:
-            return {
-                **account_profile,
-                "workflow_error": str(exc)[:240],
-            }
+            profile["account_error"] = str(exc)[:240]
+
+        try:
+            if node.runninghub_resource_type == "ai-app":
+                detail_data: dict[str, Any] = {}
+                demo_data: dict[str, Any] = {}
+                detail_response = client.post(
+                    "/api/webapp/detail", json={"webappId": node.workflow_id}
+                )
+                if detail_response.is_success:
+                    detail_payload = RunningHubH3Engine._json_response(
+                        detail_response, "读取 AI 应用详情"
+                    )
+                    if isinstance(detail_payload.get("data"), dict):
+                        detail_data = detail_payload["data"]
+                try:
+                    demo_response = client.get(
+                        "/api/webapp/apiCallDemo",
+                        params={
+                            "apiKey": node.api_key,
+                            "webappId": node.workflow_id,
+                        },
+                    )
+                    demo_response.raise_for_status()
+                    demo_payload = RunningHubH3Engine._json_response(
+                        demo_response, "读取 AI 应用 API 参数"
+                    )
+                    if isinstance(demo_payload.get("data"), dict):
+                        demo_data = demo_payload["data"]
+                except Exception:
+                    if not detail_data:
+                        raise
+                schema = build_ai_app_schema(
+                    node.workflow_id,
+                    node.workflow_url,
+                    demo_data,
+                    detail_data,
+                )
+            else:
+                response = client.post(
+                    "/api/openapi/getJsonApiFormat",
+                    json={"apiKey": node.api_key, "workflowId": node.workflow_id},
+                )
+                response.raise_for_status()
+                workflow_payload = RunningHubH3Engine._json_response(
+                    response, "读取工作流"
+                )
+                workflow_data = workflow_payload.get("data") or {}
+                if not isinstance(workflow_data, dict):
+                    raise RuntimeError("RunningHub 工作流响应缺少 data")
+                prompt = workflow_data.get("prompt")
+                if isinstance(prompt, str):
+                    try:
+                        prompt = json.loads(prompt)
+                    except json.JSONDecodeError as exc:
+                        raise RuntimeError("RunningHub 工作流 JSON 无法解析") from exc
+                if not isinstance(prompt, dict):
+                    raise RuntimeError("RunningHub 工作流响应缺少 prompt")
+                workflow_name = str(
+                    workflow_data.get("workflowName")
+                    or workflow_data.get("name")
+                    or workflow_data.get("title")
+                    or node.workflow_name
+                    or node.name
+                )
+                schema = build_workflow_schema(
+                    node.workflow_id,
+                    node.workflow_url,
+                    prompt,
+                    workflow_name,
+                )
+            profile.update(
+                {
+                    "workflow_name": schema["name"],
+                    "runninghub_schema": schema,
+                    "runninghub_schema_updated_at": schema["updated_at"],
+                    "workflow_error": None,
+                }
+            )
+        except Exception as exc:
+            profile["workflow_error"] = str(exc)[:240]
+    return profile
 
 
 def probe_node(node: ComfyNodeConfig) -> dict[str, Any] | None:

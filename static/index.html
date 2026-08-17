@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/styles.css?v=37">
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
-    <script src="/assets/app.js?v=42" defer></script>
+    <script src="/assets/app.js?v=43" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -85,8 +85,9 @@
           <input id="referenceInput" type="file" accept="image/*" multiple hidden>
 
           <div class="composer-box" id="dropZone">
-            <textarea id="prompt" name="prompt" rows="3" maxlength="12000" placeholder="输入自然语言，描述场景、人物、动作、镜头与声音…" aria-haspopup="menu" aria-controls="mentionMenu" aria-expanded="false" required></textarea>
+            <textarea id="prompt" name="prompt" rows="3" maxlength="12000" placeholder="输入自然语言，描述场景、人物、动作、镜头与声音…" aria-haspopup="menu" aria-controls="mentionMenu" aria-expanded="false"></textarea>
             <textarea class="lyrics-input" id="lyrics" name="lyrics" rows="5" maxlength="12000" placeholder="输入歌词，使用 [Intro]、[Verse]、[Chorus]、[Bridge]、[Instrumental]、[Outro] 等段落标签" hidden></textarea>
+            <div class="runninghub-parameters" id="runningHubParameters" hidden></div>
 
             <div class="composer-toolbar">
               <div class="toolbar-left">
@@ -182,7 +183,7 @@
                 <details class="settings-popover" id="advancedSettings">
                   <summary class="icon-button" title="更多设置" aria-label="更多设置"><i data-lucide="sliders-horizontal"></i></summary>
                   <div class="popover-panel">
-                    <label>随机种子<input id="seed" name="seed" type="number" min="0" max="2147483647" placeholder="自动"></label>
+                    <label id="globalSeedControl">随机种子<input id="seed" name="seed" type="number" min="0" max="2147483647" placeholder="自动"></label>
                     <div class="popover-divider"></div>
                     <label class="switch-row"><span>启用 AI 提示词优化</span><input id="aiEnabled" type="checkbox"><span class="switch"></span></label>
                     <label>OpenAI Base URL<input id="aiBaseUrl" type="url" placeholder="https://api.openai.com/v1"></label>
@@ -267,14 +268,14 @@
             </select>
             <label for="nodeName" id="nodeNameLabel">节点名称</label>
             <input id="nodeName" name="name" type="text" maxlength="120" autocomplete="off" required>
-            <label for="nodeUrl">API 地址</label>
+            <label for="nodeUrl" id="nodeUrlLabel">API 地址</label>
             <input id="nodeUrl" name="url" type="url" maxlength="500" placeholder="http://127.0.0.1:8188" autocomplete="off" required>
             <label for="nodeApiKey">API Key</label>
             <input id="nodeApiKey" name="api_key" type="password" maxlength="2000" autocomplete="new-password" placeholder="ComfyUI 可留空">
             <small class="node-field-hint" id="nodeApiKeyHint">ComfyUI 未启用鉴权时可留空</small>
             <div class="node-provider-field" data-node-provider="runninghub" hidden>
-              <label for="nodeWorkflowId">目标工作流 ID</label>
-              <input id="nodeWorkflowId" name="workflow_id" type="text" maxlength="120" inputmode="numeric" autocomplete="off">
+              <label for="nodeWorkflowUrl">RunningHub 工作流或 AI 应用地址</label>
+              <input id="nodeWorkflowUrl" name="workflow_url" type="url" maxlength="500" placeholder="https://www.runninghub.ai/zh-cn/ai-detail/..." autocomplete="off">
             </div>
             <div class="node-provider-field" data-node-provider="runninghub" hidden>
               <label for="nodeMaxConcurrency">API 最大并发数</label>

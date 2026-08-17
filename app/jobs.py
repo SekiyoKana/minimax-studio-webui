@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 
 TERMINAL_STATES = {"completed", "failed", "cancelled"}
+RUNNINGHUB_TARGET_PREFIX = "rh:"
 logger = logging.getLogger("uvicorn.error")
 
 
@@ -27,6 +28,16 @@ def generic_active_stage(status: str | None) -> str:
 
 def utc_now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def runninghub_target(resource_id: str) -> str:
+    return f"{RUNNINGHUB_TARGET_PREFIX}{resource_id}"
+
+
+def runninghub_target_resource_id(target: str) -> str:
+    if not target.startswith(RUNNINGHUB_TARGET_PREFIX):
+        return ""
+    return target.removeprefix(RUNNINGHUB_TARGET_PREFIX).strip()
 
 
 class JobStore:
@@ -436,11 +447,13 @@ class JobManager:
         nodes: list[Any] | tuple[Any, ...] | None = None,
         health_probe: Callable[[Any], Any] | None = None,
         health_interval: float = 60,
+        node_runtime_update: Callable[[str, dict[str, Any]], None] | None = None,
     ):
         self.store = store
         self.engine_factory = engine_factory
         self.health_probe = health_probe
         self.health_interval = max(5.0, health_interval)
+        self.node_runtime_update = node_runtime_update
         configured_nodes = list(
             nodes
             or (
@@ -469,23 +482,52 @@ class JobManager:
                 if isinstance(item, dict)
                 else getattr(item, "workflow_id", "")
             )
+            workflow_url = str(
+                item.get("workflow_url", "")
+                if isinstance(item, dict)
+                else getattr(item, "workflow_url", "")
+            )
+            runninghub_resource_type = str(
+                item.get("runninghub_resource_type", "workflow")
+                if isinstance(item, dict)
+                else getattr(item, "runninghub_resource_type", "workflow")
+            )
+            workflow_name = str(
+                item.get("workflow_name", "")
+                if isinstance(item, dict)
+                else getattr(item, "workflow_name", "")
+            )
+            runninghub_schema = (
+                item.get("runninghub_schema")
+                if isinstance(item, dict)
+                else getattr(item, "runninghub_schema", None)
+            )
+            persisted = lambda key, default=None: (
+                item.get(key, default)
+                if isinstance(item, dict)
+                else getattr(item, key, default)
+            )
             self._nodes[node_id] = {
                 "id": node_id,
                 "name": str(getattr(item, "name", None) or item.get("name") or node_id),
                 "url": str(getattr(item, "url", None) or item.get("url") or ""),
                 "provider": provider,
                 "workflow_id": workflow_id,
-                "workflow_variant": None,
-                "workflow_execution_mode": None,
+                "workflow_url": workflow_url,
+                "runninghub_resource_type": runninghub_resource_type,
+                "workflow_name": workflow_name,
+                "runninghub_schema": runninghub_schema,
                 "workflow_error": None,
-                "account_balance_coins": None,
-                "account_balance_money": None,
-                "account_currency": "",
-                "account_current_tasks": None,
-                "last_call_consumed_coins": None,
-                "last_call_consumed_money": None,
-                "last_call_cost_at": None,
-                "last_call_job_id": None,
+                "account_balance_coins": persisted("account_balance_coins"),
+                "account_balance_money": persisted("account_balance_money"),
+                "account_currency": persisted("account_currency", ""),
+                "account_current_tasks": persisted("account_current_tasks"),
+                "account_api_type": persisted("account_api_type", ""),
+                "account_error": persisted("account_error", ""),
+                "last_call_consumed_coins": persisted("last_call_consumed_coins"),
+                "last_call_consumed_money": persisted("last_call_consumed_money"),
+                "last_call_cost_at": persisted("last_call_cost_at", ""),
+                "last_call_job_id": persisted("last_call_job_id", ""),
                 "capacity": 1 if provider == "comfyui" else max(1, capacity),
                 "config": item,
                 "healthy": health_probe is None,
@@ -523,11 +565,50 @@ class JobManager:
             }
 
     def accepts_node(self, node_id: str) -> bool:
-        return node_id == "auto" or node_id in self.node_ids
-
-    def workflow_profile(self, node_id: str) -> dict[str, str] | None:
+        if node_id == "auto" or node_id in self.node_ids:
+            return True
+        resource_id = runninghub_target_resource_id(node_id)
+        if not resource_id:
+            return False
         with self._condition:
-            if node_id == "auto":
+            return any(
+                not node.get("retired")
+                and node["provider"] == "runninghub"
+                and node.get("workflow_id") == resource_id
+                for node in self._nodes.values()
+            )
+
+    def node_provider(self, node_id: str) -> str | None:
+        if node_id == "auto":
+            return None
+        resource_id = runninghub_target_resource_id(node_id)
+        if resource_id:
+            return "runninghub" if self.accepts_node(node_id) else None
+        with self._condition:
+            node = self._nodes.get(node_id)
+            if not node or node.get("retired"):
+                return None
+            return str(node.get("provider") or "comfyui")
+
+    def workflow_profile(self, node_id: str) -> dict[str, Any] | None:
+        with self._condition:
+            resource_id = runninghub_target_resource_id(node_id)
+            if resource_id:
+                candidates = [
+                    node
+                    for node in self._nodes.values()
+                    if not node.get("retired")
+                    and node["provider"] == "runninghub"
+                    and node.get("workflow_id") == resource_id
+                    and isinstance(node.get("runninghub_schema"), dict)
+                ]
+                if not candidates:
+                    return None
+                node = next(
+                    (candidate for candidate in candidates if candidate["healthy"]),
+                    candidates[0],
+                )
+            elif node_id == "auto":
                 candidates = [
                     node
                     for node in self._nodes.values()
@@ -539,9 +620,8 @@ class JobManager:
                     return None
                 profiles = {
                     (
-                        node.get("workflow_variant"),
-                        node.get("workflow_execution_mode"),
                         node.get("workflow_id"),
+                        node.get("runninghub_resource_type"),
                     )
                     for node in candidates
                 }
@@ -552,22 +632,34 @@ class JobManager:
                 node = self._nodes.get(node_id)
                 if not node or node.get("retired") or node["provider"] != "runninghub":
                     return None
-            variant = node.get("workflow_variant")
-            execution_mode = node.get("workflow_execution_mode")
-            if not variant or not execution_mode:
+            schema = node.get("runninghub_schema")
+            if not isinstance(schema, dict):
                 return None
             return {
-                "model_variant": variant,
-                "execution_mode": execution_mode,
+                "provider": "runninghub",
+                "runninghub_resource_type": node.get(
+                    "runninghub_resource_type", "workflow"
+                ),
+                "workflow_id": node.get("workflow_id", ""),
+                "workflow_url": node.get("workflow_url", ""),
+                "workflow_name": node.get("workflow_name") or node.get("name", ""),
+                "runninghub_schema": deepcopy(schema),
             }
 
     def node_in_use(self, node_id: str) -> bool:
         with self._condition:
             if any(slot_node_id == node_id for slot_node_id, _ in self._running_job_ids):
                 return True
+            node = self._nodes.get(node_id)
+            workflow_id = str(node.get("workflow_id") or "") if node else ""
             for job_id in self._order:
                 job = self.store.get(job_id)
-                if job and job.get("request", {}).get("comfy_node") == node_id:
+                if not job:
+                    continue
+                target = str(job.get("request", {}).get("comfy_node") or "auto")
+                if target == node_id:
+                    return True
+                if workflow_id and runninghub_target_resource_id(target) == workflow_id:
                     return True
             return False
 
@@ -602,18 +694,23 @@ class JobManager:
                         "name": node["name"],
                         "provider": node["provider"],
                         "workflow_id": node["workflow_id"],
-                        "workflow_name": node["name"]
+                        "workflow_url": node["workflow_url"],
+                        "runninghub_resource_type": node[
+                            "runninghub_resource_type"
+                        ],
+                        "workflow_name": node.get("workflow_name") or node["name"]
                         if node["provider"] == "runninghub"
                         else None,
-                        "workflow_variant": node.get("workflow_variant"),
-                        "workflow_execution_mode": node.get(
-                            "workflow_execution_mode"
-                        ),
+                        "runninghub_schema": deepcopy(node.get("runninghub_schema"))
+                        if node["provider"] == "runninghub"
+                        else None,
                         "workflow_error": node.get("workflow_error"),
                         "account_balance_coins": node.get("account_balance_coins"),
                         "account_balance_money": node.get("account_balance_money"),
                         "account_currency": node.get("account_currency") or "",
                         "account_current_tasks": node.get("account_current_tasks"),
+                        "account_api_type": node.get("account_api_type") or "",
+                        "account_error": node.get("account_error") or "",
                         "last_call_consumed_coins": node.get(
                             "last_call_consumed_coins"
                         ),
@@ -663,8 +760,18 @@ class JobManager:
                     if isinstance(probe_result, dict):
                         profile = probe_result
                 except Exception as exc:
-                    healthy = node["provider"] == "runninghub"
-                    error = str(exc)[:240]
+                    if node["provider"] == "runninghub":
+                        healthy = isinstance(node.get("runninghub_schema"), dict)
+                        profile["account_error"] = str(exc)[:240]
+                    else:
+                        healthy = False
+                        error = str(exc)[:240]
+            if node["provider"] == "runninghub":
+                healthy = isinstance(
+                    profile.get("runninghub_schema") or node.get("runninghub_schema"),
+                    dict,
+                )
+            runtime_values: dict[str, Any] = {}
             with self._condition:
                 node["healthy"] = healthy
                 node["error"] = error
@@ -672,17 +779,29 @@ class JobManager:
                 if "workflow_error" in profile:
                     node["workflow_error"] = profile["workflow_error"]
                 for field in (
-                    "workflow_variant",
-                    "workflow_execution_mode",
+                    "workflow_name",
+                    "runninghub_schema",
                     "account_balance_coins",
                     "account_balance_money",
                     "account_currency",
                     "account_current_tasks",
+                    "account_api_type",
+                    "account_error",
                 ):
                     if field in profile:
                         node[field] = profile[field]
+                        runtime_values[field] = profile[field]
+                if "runninghub_schema_updated_at" in profile:
+                    runtime_values["runninghub_schema_updated_at"] = profile[
+                        "runninghub_schema_updated_at"
+                    ]
                 self._revision += 1
                 self._condition.notify_all()
+            if self.node_runtime_update and runtime_values:
+                try:
+                    self.node_runtime_update(node_id, runtime_values)
+                except Exception:
+                    logger.exception("推理节点运行状态写入失败，node_id=%s", node_id)
 
     def _health_worker(self) -> None:
         while not self._stop_event.is_set():
@@ -718,6 +837,12 @@ class JobManager:
                 url = str(getattr(item, "url"))
                 provider = str(getattr(item, "provider", "comfyui"))
                 workflow_id = str(getattr(item, "workflow_id", ""))
+                workflow_url = str(getattr(item, "workflow_url", ""))
+                runninghub_resource_type = str(
+                    getattr(item, "runninghub_resource_type", "workflow")
+                )
+                workflow_name = str(getattr(item, "workflow_name", ""))
+                runninghub_schema = getattr(item, "runninghub_schema", None)
                 capacity = (
                     1
                     if provider == "comfyui"
@@ -731,26 +856,43 @@ class JobManager:
                         url=url,
                         provider=provider,
                         workflow_id=workflow_id,
+                        workflow_url=workflow_url,
+                        runninghub_resource_type=runninghub_resource_type,
+                        workflow_name=workflow_name,
+                        runninghub_schema=runninghub_schema,
                         capacity=capacity,
                         config=item,
                         retired=False,
                     )
                     if config_changed:
                         current.update(
-                            healthy=False,
+                            healthy=(
+                                provider == "runninghub"
+                                and isinstance(runninghub_schema, dict)
+                            ),
                             error=None,
                             last_checked=None,
-                            workflow_variant=None,
-                            workflow_execution_mode=None,
                             workflow_error=None,
-                            account_balance_coins=None,
-                            account_balance_money=None,
-                            account_currency="",
-                            account_current_tasks=None,
-                            last_call_consumed_coins=None,
-                            last_call_consumed_money=None,
-                            last_call_cost_at=None,
-                            last_call_job_id=None,
+                            account_balance_coins=getattr(
+                                item, "account_balance_coins", None
+                            ),
+                            account_balance_money=getattr(
+                                item, "account_balance_money", None
+                            ),
+                            account_currency=getattr(item, "account_currency", ""),
+                            account_current_tasks=getattr(
+                                item, "account_current_tasks", None
+                            ),
+                            account_api_type=getattr(item, "account_api_type", ""),
+                            account_error=getattr(item, "account_error", ""),
+                            last_call_consumed_coins=getattr(
+                                item, "last_call_consumed_coins", None
+                            ),
+                            last_call_consumed_money=getattr(
+                                item, "last_call_consumed_money", None
+                            ),
+                            last_call_cost_at=getattr(item, "last_call_cost_at", ""),
+                            last_call_job_id=getattr(item, "last_call_job_id", ""),
                         )
                         for slot_key in [key for key in self._engines if key[0] == node_id]:
                             self._engines.pop(slot_key, None)
@@ -761,20 +903,38 @@ class JobManager:
                         "url": url,
                         "provider": provider,
                         "workflow_id": workflow_id,
-                        "workflow_variant": None,
-                        "workflow_execution_mode": None,
+                        "workflow_url": workflow_url,
+                        "runninghub_resource_type": runninghub_resource_type,
+                        "workflow_name": workflow_name,
+                        "runninghub_schema": runninghub_schema,
                         "workflow_error": None,
-                        "account_balance_coins": None,
-                        "account_balance_money": None,
-                        "account_currency": "",
-                        "account_current_tasks": None,
-                        "last_call_consumed_coins": None,
-                        "last_call_consumed_money": None,
-                        "last_call_cost_at": None,
-                        "last_call_job_id": None,
+                        "account_balance_coins": getattr(
+                            item, "account_balance_coins", None
+                        ),
+                        "account_balance_money": getattr(
+                            item, "account_balance_money", None
+                        ),
+                        "account_currency": getattr(item, "account_currency", ""),
+                        "account_current_tasks": getattr(
+                            item, "account_current_tasks", None
+                        ),
+                        "account_api_type": getattr(item, "account_api_type", ""),
+                        "account_error": getattr(item, "account_error", ""),
+                        "last_call_consumed_coins": getattr(
+                            item, "last_call_consumed_coins", None
+                        ),
+                        "last_call_consumed_money": getattr(
+                            item, "last_call_consumed_money", None
+                        ),
+                        "last_call_cost_at": getattr(item, "last_call_cost_at", ""),
+                        "last_call_job_id": getattr(item, "last_call_job_id", ""),
                         "capacity": capacity,
                         "config": item,
-                        "healthy": self.health_probe is None,
+                        "healthy": self.health_probe is None
+                        or (
+                            provider == "runninghub"
+                            and isinstance(runninghub_schema, dict)
+                        ),
                         "last_checked": None,
                         "error": None,
                         "retired": False,
@@ -922,18 +1082,36 @@ class JobManager:
                             self._order.remove(job_id)
                             continue
                         target = job.get("request", {}).get("comfy_node") or "auto"
-                        if target not in self._nodes:
+                        target_resource_id = runninghub_target_resource_id(target)
+                        if not target_resource_id and target not in self._nodes:
                             target = "auto"
-                        if target not in {"auto", node_id}:
-                            continue
-                        if target == "auto" and node["provider"] == "runninghub":
-                            request = job.get("request", {})
+                        if target_resource_id:
+                            request_resource_id = str(
+                                job.get("request", {}).get("runninghub_resource_id") or ""
+                            )
                             if (
-                                request.get("model_variant")
-                                != node.get("workflow_variant")
-                                or request.get("execution_mode")
-                                != node.get("workflow_execution_mode")
+                                node["provider"] != "runninghub"
+                                or node.get("workflow_id") != target_resource_id
+                                or (
+                                    request_resource_id
+                                    and request_resource_id != target_resource_id
+                                )
                             ):
+                                continue
+                        elif target not in {"auto", node_id}:
+                            continue
+                        if target == "auto":
+                            request = job.get("request", {})
+                            resource_id = str(
+                                request.get("runninghub_resource_id") or ""
+                            )
+                            if resource_id:
+                                if (
+                                    node["provider"] != "runninghub"
+                                    or node.get("workflow_id") != resource_id
+                                ):
+                                    continue
+                            elif node["provider"] == "runninghub":
                                 continue
                         self._order.remove(job_id)
                         self._running_job_ids[slot_key] = job_id
@@ -955,7 +1133,9 @@ class JobManager:
                 "name": node["name"],
                 "provider": node["provider"],
                 "workflow_id": node["workflow_id"],
-                "workflow_name": node["name"]
+                "workflow_url": node["workflow_url"],
+                "runninghub_resource_type": node["runninghub_resource_type"],
+                "workflow_name": node.get("workflow_name") or node["name"]
                 if node["provider"] == "runninghub"
                 else None,
             }
@@ -986,6 +1166,11 @@ class JobManager:
                     self.store.update(job_id, status="cancelled", stage="已取消", progress=0)
                     self._set_incognito_expiry(job_id)
                 else:
+                    request_update = None
+                    output_media_type = getattr(engine, "last_output_media_type", None)
+                    if output_media_type and job.get("request", {}).get("provider") == "runninghub":
+                        request_update = deepcopy(job["request"])
+                        request_update["media_type"] = output_media_type
                     self.store.update(
                         job_id,
                         status="completed",
@@ -994,6 +1179,7 @@ class JobManager:
                         result_path=str(result),
                         result_url=f"/api/v1/generations/{job_id}/result",
                         completed_at=utc_now(),
+                        **({"request": request_update} if request_update else {}),
                     )
                     self._set_incognito_expiry(job_id)
             except InterruptedError:
@@ -1015,25 +1201,35 @@ class JobManager:
                 billing = getattr(engine, "last_billing", None)
                 if isinstance(billing, dict):
                     self.store.update(job_id, runninghub_billing=billing)
+                    account_fields = (
+                        "account_balance_coins",
+                        "account_balance_money",
+                        "account_currency",
+                        "account_current_tasks",
+                        "account_api_type",
+                    )
+                    runtime_values = {
+                        field: billing[field]
+                        for field in account_fields
+                        if field in billing
+                    }
+                    runtime_values.update(
+                        {
+                            "last_call_consumed_coins": billing.get("consumed_coins"),
+                            "last_call_consumed_money": billing.get("consumed_money"),
+                            "last_call_cost_at": billing.get("measured_at") or "",
+                            "last_call_job_id": job_id,
+                        }
+                    )
                     with self._condition:
-                        node["account_balance_coins"] = billing.get(
-                            "account_balance_coins"
-                        )
-                        node["account_balance_money"] = billing.get(
-                            "account_balance_money"
-                        )
-                        node["account_currency"] = billing.get("account_currency") or ""
-                        node["account_current_tasks"] = billing.get(
-                            "account_current_tasks"
-                        )
-                        node["last_call_consumed_coins"] = billing.get(
-                            "consumed_coins"
-                        )
-                        node["last_call_consumed_money"] = billing.get(
-                            "consumed_money"
-                        )
-                        node["last_call_cost_at"] = billing.get("measured_at")
-                        node["last_call_job_id"] = job_id
+                        node.update(runtime_values)
+                    if self.node_runtime_update:
+                        try:
+                            self.node_runtime_update(node_id, runtime_values)
+                        except Exception:
+                            logger.exception(
+                                "RunningHub 调用费用写入失败，node_id=%s", node_id
+                            )
                 with self._condition:
                     self._running_job_ids.pop(slot_key, None)
                     self._revision += 1

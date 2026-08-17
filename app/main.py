@@ -25,6 +25,7 @@ from .music_prompts import MUSIC3_ARRANGEMENT_SYSTEM_PROMPT, MUSIC3_LYRICS_SYSTE
 from .nodes import NodeRegistry
 from .prompts import FL2VA_SYSTEM_PROMPT
 from .ref2va_prompts import REF2VA_SYSTEM_PROMPT
+from .runninghub import assign_media_fields, normalize_parameters, output_media_type
 from .settings import settings
 
 
@@ -45,6 +46,7 @@ manager = JobManager(
         else None
     ),
     health_interval=node_registry.health_interval(),
+    node_runtime_update=node_registry.update_runtime,
 )
 
 
@@ -67,7 +69,7 @@ class GenerationPatch(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     title: str | None = Field(None, max_length=120)
-    prompt: str | None = Field(None, min_length=2, max_length=12000)
+    prompt: str | None = Field(None, max_length=12000)
     width: int | None = None
     height: int | None = None
     duration: float | None = None
@@ -76,7 +78,8 @@ class GenerationPatch(BaseModel):
     model_variant: ModelVariant | None = None
     execution_mode: ExecutionMode | None = None
     lyrics: str | None = Field(None, max_length=12000)
-    comfy_node: str | None = Field(None, min_length=1, max_length=64)
+    comfy_node: str | None = Field(None, min_length=1, max_length=200)
+    runninghub_parameters: dict[str, object] | None = None
 
 
 class OptimizePromptRequest(BaseModel):
@@ -103,20 +106,20 @@ class MusicAssistRequest(BaseModel):
 
 class ComfyNodeCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    url: str = Field(min_length=8, max_length=500)
+    url: str = Field(default="", max_length=500)
     provider: Literal["comfyui", "runninghub"] = "comfyui"
     api_key: str = Field(default="", max_length=2000)
-    workflow_id: str = Field(default="", max_length=120)
+    workflow_url: str = Field(default="", max_length=500)
     max_concurrency: int = Field(default=1, ge=1, le=64)
 
 
 class ComfyNodeUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    url: str = Field(min_length=8, max_length=500)
+    url: str = Field(default="", max_length=500)
     enabled: bool = True
     provider: Literal["comfyui", "runninghub"] | None = None
     api_key: str | None = Field(default=None, max_length=2000)
-    workflow_id: str | None = Field(default=None, max_length=120)
+    workflow_url: str | None = Field(default=None, max_length=500)
     max_concurrency: int | None = Field(default=None, ge=1, le=64)
 
 
@@ -167,7 +170,7 @@ def validate_generation(
         raise HTTPException(status_code=422, detail="采样步数范围为 4–50")
 
 
-def classify_upload(upload: UploadFile) -> str:
+def classify_upload(upload: UploadFile, allow_file: bool = False) -> str:
     content_type = (upload.content_type or "").lower()
     if content_type.startswith("image/"):
         return "image"
@@ -182,6 +185,8 @@ def classify_upload(upload: UploadFile) -> str:
         return "video"
     if suffix in {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".opus"}:
         return "audio"
+    if allow_file:
+        return "file"
     raise HTTPException(status_code=422, detail=f"不支持的素材类型：{upload.filename}")
 
 
@@ -234,7 +239,7 @@ def validate_execution_mode(
         raise HTTPException(status_code=422, detail="H3 NSFW 模式仅支持 Ref2VA FP8")
 
 
-def probe_media(path: Path) -> tuple[float, bool]:
+def probe_media(path: Path, max_duration: float | None = 15.1) -> tuple[float, bool]:
     try:
         result = subprocess.run(
             [
@@ -259,7 +264,9 @@ def probe_media(path: Path) -> tuple[float, bool]:
         has_audio = any(item.get("codec_type") == "audio" for item in payload.get("streams", []))
     except (OSError, ValueError, json.JSONDecodeError, subprocess.SubprocessError) as exc:
         raise HTTPException(status_code=422, detail=f"无法读取媒体时长：{path.name}") from exc
-    if duration < 1 or duration > 15.1:
+    if duration <= 0:
+        raise HTTPException(status_code=422, detail=f"无法读取媒体时长：{path.name}")
+    if max_duration is not None and (duration < 1 or duration > max_duration):
         raise HTTPException(status_code=422, detail=f"视频和音频素材时长必须为 1–15 秒：{path.name}")
     return duration, has_audio
 
@@ -301,6 +308,55 @@ def reload_comfy_nodes() -> None:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+def runninghub_runtime_values(profile: dict[str, object]) -> dict[str, object]:
+    allowed = {
+        "workflow_name",
+        "runninghub_schema",
+        "runninghub_schema_updated_at",
+        "account_balance_coins",
+        "account_balance_money",
+        "account_currency",
+        "account_current_tasks",
+        "account_api_type",
+        "account_error",
+    }
+    return {key: value for key, value in profile.items() if key in allowed}
+
+
+async def identify_runninghub_node(config) -> dict[str, object]:
+    profile = await asyncio.to_thread(probe_node, config)
+    if not isinstance(profile, dict):
+        raise HTTPException(status_code=422, detail="RunningHub 工作流参数识别失败")
+    if profile.get("workflow_error"):
+        raise HTTPException(status_code=422, detail=str(profile["workflow_error"]))
+    if not isinstance(profile.get("runninghub_schema"), dict):
+        raise HTTPException(status_code=422, detail="RunningHub 工作流未返回参数定义")
+    return profile
+
+
+def prepare_runninghub_request(
+    workflow_profile: dict[str, object],
+    prompt: str,
+    parameters: object,
+    manifest: list[dict[str, object]],
+) -> tuple[dict[str, object], list[dict[str, object]]]:
+    schema = workflow_profile.get("runninghub_schema")
+    if not isinstance(schema, dict):
+        raise HTTPException(status_code=422, detail="RunningHub 工作流参数定义不可用")
+    if not isinstance(parameters, dict):
+        raise HTTPException(status_code=422, detail="runninghub_parameters 必须是对象")
+    try:
+        primary_text_key = str(schema.get("primary_text_key") or "")
+        submitted_parameters = dict(parameters)
+        if primary_text_key and prompt:
+            submitted_parameters[primary_text_key] = prompt
+        normalized = normalize_parameters(schema, submitted_parameters)
+        assigned_manifest = assign_media_fields(schema, manifest)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return normalized, assigned_manifest
+
+
 @app.get("/api/v1/comfy/nodes", dependencies=[Depends(authorize)])
 async def list_comfy_nodes():
     statuses = {item["id"]: item for item in manager.nodes_public()}
@@ -318,17 +374,36 @@ async def list_comfy_nodes():
 async def create_comfy_node(payload: ComfyNodeCreate):
     node_id = f"node-{secrets.token_hex(4)}"
     try:
+        profile: dict[str, object] = {}
+        config = node_registry.build_config(
+            node_id,
+            payload.name,
+            payload.url,
+            payload.provider,
+            payload.api_key,
+            payload.workflow_url,
+            payload.max_concurrency,
+        )
+        if payload.provider == "runninghub":
+            profile = await identify_runninghub_node(config)
         node = node_registry.create(
             node_id,
             payload.name,
             payload.url,
             payload.provider,
             payload.api_key,
-            payload.workflow_id,
+            payload.workflow_url,
             payload.max_concurrency,
+            str(profile.get("workflow_name") or ""),
+            profile.get("runninghub_schema")
+            if isinstance(profile.get("runninghub_schema"), dict)
+            else None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if profile:
+        node_registry.update_runtime(node_id, runninghub_runtime_values(profile))
+        node = node_registry.get(node_id) or node
     reload_comfy_nodes()
     return node
 
@@ -339,19 +414,22 @@ async def update_comfy_node(node_id: str, payload: ComfyNodeUpdate):
     if not existing:
         raise HTTPException(status_code=404, detail="推理节点不存在")
     provider = payload.provider or existing["provider"]
-    workflow_id = (
-        payload.workflow_id if payload.workflow_id is not None else existing["workflow_id"]
+    workflow_url = (
+        payload.workflow_url
+        if payload.workflow_url is not None
+        else existing["workflow_url"]
     )
     max_concurrency = (
         payload.max_concurrency
         if payload.max_concurrency is not None
         else int(existing["max_concurrency"])
     )
+    node_url = payload.url.strip() or existing["url"]
     config_changed = any(
         (
-            existing["url"] != payload.url.rstrip("/"),
+            existing["url"] != node_url.rstrip("/"),
             existing["provider"] != provider,
-            existing["workflow_id"] != workflow_id,
+            existing["workflow_url"] != workflow_url,
             int(existing["max_concurrency"]) != max_concurrency,
             bool((payload.api_key or "").strip()),
         )
@@ -363,18 +441,61 @@ async def update_comfy_node(node_id: str, payload: ComfyNodeUpdate):
         if enabled_count == 0:
             raise HTTPException(status_code=409, detail="至少需要保留一个启用的推理节点")
     try:
+        current_config = node_registry.config(node_id)
+        effective_api_key = payload.api_key
+        if (
+            provider == existing["provider"]
+            and not (payload.api_key or "").strip()
+            and current_config
+        ):
+            effective_api_key = current_config.api_key
+        profile: dict[str, object] = {}
+        config = node_registry.build_config(
+            node_id,
+            payload.name,
+            node_url,
+            provider,
+            effective_api_key or "",
+            workflow_url,
+            max_concurrency,
+        )
+        if provider == "runninghub":
+            profile = await identify_runninghub_node(config)
         node = node_registry.update(
             node_id,
             payload.name,
-            payload.url,
+            node_url,
             payload.enabled,
             provider,
             payload.api_key,
-            workflow_id,
+            workflow_url,
             max_concurrency,
+            str(profile.get("workflow_name") or ""),
+            profile.get("runninghub_schema")
+            if isinstance(profile.get("runninghub_schema"), dict)
+            else None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    runtime_values = runninghub_runtime_values(profile)
+    if provider != "runninghub":
+        runtime_values = {
+            "workflow_name": "",
+            "runninghub_schema": None,
+            "account_balance_coins": None,
+            "account_balance_money": None,
+            "account_currency": "",
+            "account_current_tasks": None,
+            "account_api_type": "",
+            "account_error": "",
+            "last_call_consumed_coins": None,
+            "last_call_consumed_money": None,
+            "last_call_cost_at": "",
+            "last_call_job_id": "",
+        }
+    if runtime_values:
+        node_registry.update_runtime(node_id, runtime_values)
+        node = node_registry.get(node_id) or node
     reload_comfy_nodes()
     return node
 
@@ -443,7 +564,7 @@ async def list_generations(
 
 @app.post("/api/v1/generations", status_code=202, dependencies=[Depends(authorize)])
 async def create_generation(
-    prompt: Annotated[str, Form(description="H3 audiovisual prompt or Music3 music description.")],
+    prompt: Annotated[str, Form(description="Generation prompt or primary workflow text input.")] = "",
     reference_manifest: Annotated[
         str, Form(description="Ordered image, video, and audio reference manifest.")
     ] = "[]",
@@ -459,32 +580,41 @@ async def create_generation(
     seed: Annotated[str | None, Form()] = None,
     lyrics: Annotated[str, Form(max_length=12000)] = "",
     title: Annotated[str | None, Form(max_length=120)] = None,
-    comfy_node: Annotated[str, Form(max_length=64)] = "auto",
+    comfy_node: Annotated[str, Form(max_length=200)] = "auto",
+    runninghub_parameters: Annotated[
+        str, Form(description="JSON object keyed by RunningHub schema field keys.")
+    ] = "{}",
     incognito: Annotated[bool, Form()] = False,
     incognito_code: Annotated[str | None, Header(alias="X-H3-Incognito-Code")] = None,
 ):
     prompt = prompt.strip()
+    if len(prompt) > 12000:
+        raise HTTPException(status_code=422, detail="提示词不能超过 12000 个字符")
     if incognito and not secrets.compare_digest(incognito_code or "", settings.incognito_code):
         raise HTTPException(status_code=403, detail="无痕模式授权已失效")
     if not manager.accepts_node(comfy_node):
         raise HTTPException(status_code=422, detail="指定的推理节点不存在")
     workflow_profile = manager.workflow_profile(comfy_node)
-    if workflow_profile:
-        model_variant = workflow_profile["model_variant"]
-        execution_mode = workflow_profile["execution_mode"]
-    minimum_prompt_length = 2 if execution_mode == "music3" else 8
-    if len(prompt) < minimum_prompt_length:
-        raise HTTPException(
-            status_code=422,
-            detail=f"提示词至少需要 {minimum_prompt_length} 个字符",
-        )
-    validate_execution_mode(execution_mode, model_variant, incognito)
-    validate_generation(width, height, duration, steps, execution_mode)
+    if manager.node_provider(comfy_node) == "runninghub" and not workflow_profile:
+        raise HTTPException(status_code=422, detail="RunningHub 工作流参数定义不可用")
+    is_runninghub = bool(
+        workflow_profile and workflow_profile.get("provider") == "runninghub"
+    )
+    if not is_runninghub:
+        minimum_prompt_length = 2 if execution_mode == "music3" else 8
+        if len(prompt) < minimum_prompt_length:
+            raise HTTPException(
+                status_code=422,
+                detail=f"提示词至少需要 {minimum_prompt_length} 个字符",
+            )
+        validate_execution_mode(execution_mode, model_variant, incognito)
+        validate_generation(width, height, duration, steps, execution_mode)
 
     try:
         seed_raw = (seed or "").strip()
         seed_value = int(seed_raw) if seed_raw else secrets.randbelow(2**31)
         manifest = json.loads(reference_manifest)
+        dynamic_parameters = json.loads(runninghub_parameters)
     except (TypeError, ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=422, detail="参数格式不正确") from exc
     if not 0 <= seed_value < 2**31:
@@ -496,12 +626,25 @@ async def create_generation(
     if len(uploads) != len(manifest):
         raise HTTPException(status_code=422, detail="素材数量与 reference_manifest 不一致")
 
-    kinds = [classify_upload(upload) for upload in uploads]
     if any(not isinstance(item, dict) for item in manifest):
         raise HTTPException(status_code=422, detail="reference_manifest 的每一项必须是对象")
-    if kinds != [item.get("type") for item in manifest]:
+    manifest_kinds = [item.get("type") for item in manifest]
+    kinds = [
+        "file"
+        if is_runninghub and expected_kind == "file"
+        else classify_upload(upload, allow_file=is_runninghub)
+        for upload, expected_kind in zip(uploads, manifest_kinds, strict=True)
+    ]
+    if kinds != manifest_kinds:
         raise HTTPException(status_code=422, detail="素材顺序或类型与 reference_manifest 不一致")
-    validate_references(model_variant, kinds, execution_mode)
+    if is_runninghub:
+        if not isinstance(dynamic_parameters, dict):
+            raise HTTPException(status_code=422, detail="runninghub_parameters 必须是对象")
+        dynamic_parameters, manifest = prepare_runninghub_request(
+            workflow_profile or {}, prompt, dynamic_parameters, manifest
+        )
+    else:
+        validate_references(model_variant, kinds, execution_mode)
 
     job_id = secrets.token_hex(8)
     upload_dir = settings.uploads_dir / job_id
@@ -518,10 +661,15 @@ async def create_generation(
                 "name": upload.filename,
                 "size": size,
             }
-            if model_variant == "fl2va-fp8":
+            field_key = str(manifest[index - 1].get("field_key") or "")
+            if field_key:
+                item["field_key"] = field_key
+            if not is_runninghub and model_variant == "fl2va-fp8":
                 item["role"] = "first_frame" if index == 1 else "last_frame"
             if kind in {"video", "audio"}:
-                media_duration, has_audio = probe_media(destination)
+                media_duration, has_audio = probe_media(
+                    destination, None if is_runninghub else 15.1
+                )
                 item["duration"] = round(media_duration, 3)
                 if kind == "video":
                     item["has_audio"] = has_audio
@@ -531,15 +679,32 @@ async def create_generation(
         shutil.rmtree(upload_dir, ignore_errors=True)
         raise
 
-    if execution_mode == "digital-human":
+    if not is_runninghub and execution_mode == "digital-human":
         audio_reference = next(item for item in public_manifest if item["type"] == "audio")
         duration = float(audio_reference["duration"])
         validate_generation(width, height, duration, steps, execution_mode)
 
     created_at = utc_now()
+    schema = (
+        workflow_profile.get("runninghub_schema")
+        if is_runninghub and workflow_profile
+        else None
+    )
+    media_type = (
+        output_media_type(schema)
+        if isinstance(schema, dict)
+        else "audio"
+        if execution_mode == "music3"
+        else "video"
+    )
+    workflow_name = str(
+        workflow_profile.get("workflow_name") or "RunningHub"
+        if is_runninghub and workflow_profile
+        else ""
+    )
     job = {
         "id": job_id,
-        "title": (title or prompt.splitlines()[0])[:120],
+        "title": (title or (prompt.splitlines()[0] if prompt else workflow_name))[:120],
         "status": "queued",
         "stage": "等待推理节点执行",
         "progress": 0,
@@ -558,9 +723,23 @@ async def create_generation(
             "steps": steps,
             "seed": seed_value,
             "references": public_manifest,
-            "media_type": "audio" if execution_mode == "music3" else "video",
+            "media_type": media_type,
             "comfy_node": comfy_node,
             "incognito": incognito,
+            **(
+                {
+                    "provider": "runninghub",
+                    "runninghub_resource_id": workflow_profile.get("workflow_id"),
+                    "runninghub_resource_type": workflow_profile.get(
+                        "runninghub_resource_type"
+                    ),
+                    "runninghub_workflow_name": workflow_name,
+                    "runninghub_schema": schema,
+                    "runninghub_parameters": dynamic_parameters,
+                }
+                if is_runninghub and workflow_profile
+                else {}
+            ),
         },
         "input_paths": input_paths,
     }
@@ -603,42 +782,79 @@ async def update_generation(
     if not manager.accepts_node(request_data["comfy_node"]):
         raise HTTPException(status_code=422, detail="指定的推理节点不存在")
     workflow_profile = manager.workflow_profile(request_data["comfy_node"])
-    if workflow_profile:
-        request_data.update(workflow_profile)
-    minimum_prompt_length = 2 if request_data["execution_mode"] == "music3" else 8
-    if len(request_data.get("prompt", "").strip()) < minimum_prompt_length:
-        raise HTTPException(
-            status_code=422,
-            detail=f"提示词至少需要 {minimum_prompt_length} 个字符",
-        )
-    validate_execution_mode(
-        request_data["execution_mode"],
-        request_data["model_variant"],
-        bool(request_data.get("incognito")),
-    )
-    if request_data["execution_mode"] == "h3-nsfw" and not secrets.compare_digest(
-        incognito_code or "",
-        settings.incognito_code,
+    if (
+        manager.node_provider(request_data["comfy_node"]) == "runninghub"
+        and not workflow_profile
     ):
-        raise HTTPException(status_code=403, detail="无痕模式授权已失效")
-    validate_references(
-        request_data["model_variant"],
-        [item["type"] for item in request_data.get("references", [])],
-        request_data["execution_mode"],
+        raise HTTPException(status_code=422, detail="RunningHub 工作流参数定义不可用")
+    is_runninghub = bool(
+        workflow_profile and workflow_profile.get("provider") == "runninghub"
     )
-    if request_data["execution_mode"] == "digital-human":
-        audio_reference = next(
-            item for item in request_data["references"] if item["type"] == "audio"
+    if request_data.get("provider") == "runninghub" and not is_runninghub:
+        raise HTTPException(status_code=422, detail="请选择与原任务工作流匹配的 RunningHub 节点")
+    if is_runninghub and workflow_profile:
+        references = request_data.get("references", [])
+        manifest = [
+            {
+                "type": item.get("type"),
+                "field_key": item.get("field_key", ""),
+            }
+            for item in references
+        ]
+        parameters, assigned_manifest = prepare_runninghub_request(
+            workflow_profile,
+            str(request_data.get("prompt") or "").strip(),
+            request_data.get("runninghub_parameters"),
+            manifest,
         )
-        request_data["duration"] = float(audio_reference["duration"])
-    validate_generation(
-        request_data["width"],
-        request_data["height"],
-        request_data["duration"],
-        request_data["steps"],
-        request_data["execution_mode"],
-    )
-    request_data["num_frames"] = align_frames(request_data["duration"])
+        for reference, assigned in zip(references, assigned_manifest, strict=True):
+            reference["field_key"] = assigned["field_key"]
+        schema = workflow_profile["runninghub_schema"]
+        request_data.update(
+            provider="runninghub",
+            runninghub_resource_id=workflow_profile["workflow_id"],
+            runninghub_resource_type=workflow_profile["runninghub_resource_type"],
+            runninghub_workflow_name=workflow_profile["workflow_name"],
+            runninghub_schema=schema,
+            runninghub_parameters=parameters,
+            media_type=output_media_type(schema),
+        )
+    else:
+        request_data.pop("provider", None)
+        minimum_prompt_length = 2 if request_data["execution_mode"] == "music3" else 8
+        if len(request_data.get("prompt", "").strip()) < minimum_prompt_length:
+            raise HTTPException(
+                status_code=422,
+                detail=f"提示词至少需要 {minimum_prompt_length} 个字符",
+            )
+        validate_execution_mode(
+            request_data["execution_mode"],
+            request_data["model_variant"],
+            bool(request_data.get("incognito")),
+        )
+        if request_data["execution_mode"] == "h3-nsfw" and not secrets.compare_digest(
+            incognito_code or "",
+            settings.incognito_code,
+        ):
+            raise HTTPException(status_code=403, detail="无痕模式授权已失效")
+        validate_references(
+            request_data["model_variant"],
+            [item["type"] for item in request_data.get("references", [])],
+            request_data["execution_mode"],
+        )
+        if request_data["execution_mode"] == "digital-human":
+            audio_reference = next(
+                item for item in request_data["references"] if item["type"] == "audio"
+            )
+            request_data["duration"] = float(audio_reference["duration"])
+        validate_generation(
+            request_data["width"],
+            request_data["height"],
+            request_data["duration"],
+            request_data["steps"],
+            request_data["execution_mode"],
+        )
+        request_data["num_frames"] = align_frames(request_data["duration"])
     changes: dict[str, object] = {"request": request_data, "event_message": "任务参数已修改"}
     if title is not None:
         changes["title"] = title.strip() or job.get("title", "")
@@ -680,20 +896,53 @@ async def regenerate_generation(
     if not manager.accepts_node(comfy_node):
         raise HTTPException(status_code=422, detail="原任务指定的推理节点不存在")
     workflow_profile = manager.workflow_profile(comfy_node)
-    if workflow_profile:
-        request_data.update(workflow_profile)
-        model_variant = workflow_profile["model_variant"]
-        execution_mode = workflow_profile["execution_mode"]
-    validate_execution_mode(execution_mode, model_variant, incognito)
-    validate_generation(
-        request_data.get("width", 832),
-        request_data.get("height", 480),
-        request_data.get("duration", 5),
-        request_data.get("steps", 10),
-        execution_mode,
-    )
     references = request_data.get("references", [])
-    validate_references(model_variant, [item.get("type") for item in references], execution_mode)
+    if request_data.get("provider") == "runninghub":
+        if not workflow_profile or workflow_profile.get("provider") != "runninghub":
+            raise HTTPException(status_code=422, detail="原任务的 RunningHub 工作流当前不可用")
+        if str(workflow_profile.get("workflow_id") or "") != str(
+            request_data.get("runninghub_resource_id") or ""
+        ):
+            raise HTTPException(status_code=422, detail="原任务绑定的 RunningHub 工作流已变更")
+        manifest = [
+            {
+                "type": item.get("type"),
+                "field_key": item.get("field_key", ""),
+            }
+            for item in references
+        ]
+        parameters, assigned_manifest = prepare_runninghub_request(
+            workflow_profile,
+            str(request_data.get("prompt") or "").strip(),
+            request_data.get("runninghub_parameters"),
+            manifest,
+        )
+        for reference, assigned in zip(references, assigned_manifest, strict=True):
+            reference["field_key"] = assigned["field_key"]
+        schema = workflow_profile["runninghub_schema"]
+        request_data.update(
+            runninghub_resource_type=workflow_profile["runninghub_resource_type"],
+            runninghub_workflow_name=workflow_profile["workflow_name"],
+            runninghub_schema=schema,
+            runninghub_parameters=parameters,
+            media_type=output_media_type(schema),
+        )
+    else:
+        if manager.node_provider(comfy_node) == "runninghub":
+            raise HTTPException(status_code=422, detail="原任务指定节点的类型已变更")
+        validate_execution_mode(execution_mode, model_variant, incognito)
+        validate_generation(
+            request_data.get("width", 832),
+            request_data.get("height", 480),
+            request_data.get("duration", 5),
+            request_data.get("steps", 10),
+            execution_mode,
+        )
+        validate_references(
+            model_variant,
+            [item.get("type") for item in references],
+            execution_mode,
+        )
 
     source_paths = source_job.get("input_paths", [])
     if len(source_paths) != len(references):
@@ -722,7 +971,8 @@ async def regenerate_generation(
 
     for reference in references:
         reference.pop("url", None)
-    request_data["num_frames"] = align_frames(request_data.get("duration", 5))
+    if request_data.get("provider") != "runninghub":
+        request_data["num_frames"] = align_frames(request_data.get("duration", 5))
     created_at = utc_now()
     regenerated_job = {
         "id": new_job_id,
@@ -765,8 +1015,7 @@ async def get_result(job_id: str):
     path = Path(job["result_path"])
     if not path.exists():
         raise HTTPException(status_code=410, detail="结果文件已不存在")
-    media_types = {".mp4": "video/mp4", ".flac": "audio/flac", ".wav": "audio/wav"}
-    media_type = media_types.get(path.suffix.lower(), "application/octet-stream")
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return FileResponse(path, media_type=media_type, filename=path.name)
 
 

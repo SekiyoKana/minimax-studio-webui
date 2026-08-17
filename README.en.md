@@ -30,11 +30,11 @@ The project wraps ComfyUI and RunningHub workflows in a responsive Web interface
 **RunningHub API Nodes**
 
 - Inference nodes now support `comfyui` and `runninghub` providers with automatic or manual task routing.
-- RunningHub nodes store an API key, target workflow ID, and maximum concurrency. The default maximum concurrency is 1.
+- RunningHub nodes store an API key, a workflow or AI app URL, and maximum concurrency. The service resolves the resource ID, workflow name, input schema, and output type.
 - RunningHub API keys remain in the server-side SQLite database. Node responses expose only whether a key is saved.
 - Scheduling capacity is the sum of available node slots. A ComfyUI node has one slot, while a RunningHub node uses its configured maximum concurrency.
 - RunningHub node status displays the current API-key balance, account task count, and the balance difference measured for the most recent call. Account-query failures preserve the latest data and record the error without marking the node offline.
-- Node-status refreshes read the target workflow JSON and identify its generation mode. Selecting a RunningHub node hides the model and execution controls and displays the workflow name and ID.
+- Generic AI apps and regular workflows follow the [official RunningHub API documentation](https://www.runninghub.ai/runninghub-api-doc-en/). The interface renders text, number, enum, switch, and media controls from each workflow schema.
 
 **Generation Composer**
 
@@ -204,11 +204,11 @@ See the [cloud GPU deployment guide](docs/en/DEPLOYMENT.md) for all installation
 
 ## Multi-node Scheduling
 
-Use the server icon in the page header to manage ComfyUI and RunningHub inference nodes. Choose the provider and enter a name and API address when adding a node; the service generates its ID. Select **Auto** when creating a task, or choose an online node for directed execution.
+Use the server icon in the page header to manage ComfyUI and RunningHub inference nodes. Choose the provider and enter a name when adding a node; the service generates its ID. A task can use ComfyUI automatic scheduling, a concrete node, or a RunningHub workflow-specific automatic option. Available nodes with the same RunningHub resource ID share concurrency capacity.
 
-For a RunningHub node, enter the workflow name as the node name, then provide the API key, target workflow ID, and maximum concurrency. The target workflow must contain the node IDs and node types used by the corresponding generation mode in this project. Node query responses never return the API key. Leaving the key field empty while editing preserves the saved key.
+For a RunningHub node, provide a name, API key, full RunningHub workflow or AI app URL, and maximum concurrency. The service derives the API base URL and reads the resource ID, workflow name, parameter schema, and output type. Node query responses never return the API key. Leaving the key field empty while editing preserves the saved key.
 
-Health checks identify H3 FL2VA, Ref2VA, 8-step LoRA, digital-human, H3 NSFW, or Music3 workflows from the target workflow JSON. Selecting a RunningHub node causes the service to override `model_variant` and `execution_mode` with the detected profile. Automatic scheduling locks the workflow when all online nodes use the same RunningHub workflow. Mixed node sets route jobs only to compatible RunningHub entries.
+AI app parameters come from the official `apiCallDemo` and `webapp/detail` endpoints. Regular workflow parameters come from `getJsonApiFormat`. Selecting a RunningHub node hides the fixed H3 model, size, duration, and step controls and displays fields for the selected workflow. Account-status failures populate `account_error` without preventing use of an already identified workflow.
 
 When multiple nodes run on the same server, each ComfyUI process needs an independent port, GPU, user directory, and database. For example:
 
@@ -221,7 +221,7 @@ Nodes and settings are stored in:
 
 ```text
 data/config.db
-├── comfy_nodes       Provider, API address, API key, workflow ID, maximum concurrency, and enabled state
+├── comfy_nodes       Nodes, secrets, workflow schemas, account data, recent call cost, and concurrency
 └── service_settings  comfy_health_seconds, 60 seconds by default
 ```
 
@@ -269,7 +269,7 @@ curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
 
 curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
   -H 'Content-Type: application/json' \
-  -d '{"name":"RunningHub H3","provider":"runninghub","url":"https://www.runninghub.ai","api_key":"YOUR_RUNNINGHUB_API_KEY","workflow_id":"1904136902449209346","max_concurrency":2}'
+  -d '{"name":"RunningHub workflow","provider":"runninghub","api_key":"YOUR_RUNNINGHUB_API_KEY","workflow_url":"https://www.runninghub.ai/zh-cn/ai-detail/2086401261143273474","max_concurrency":2}'
 
 curl -X PATCH http://127.0.0.1:8193/api/v1/comfy/settings \
   -H 'Content-Type: application/json' \

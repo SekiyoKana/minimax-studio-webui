@@ -27,6 +27,11 @@ const state = {
   nodes: [],
   managedNodes: [],
   nodeEditingId: null,
+  runningHubSchemaKey: "",
+  runningHubRenderSignature: "",
+  runningHubResourceId: "",
+  runningHubParameters: {},
+  pendingRunningHubMediaField: "",
   logs: [],
   stream: null,
   incognito: false,
@@ -43,6 +48,7 @@ const promptInput = el("prompt");
 const referenceInput = el("referenceInput");
 const H3_DURATIONS = Array.from({ length: 15 }, (_, index) => index + 1);
 const MUSIC3_DURATIONS = [30, 60, 120, 180, 240, 300];
+const RUNNINGHUB_TARGET_PREFIX = "rh:";
 
 const COPY = {
   "zh-CN": {
@@ -52,7 +58,7 @@ const COPY = {
     balance: "余额", credits: "点数", recentCost: "最近调用消耗", accountUnavailable: "账户信息不可用", workflowUnavailable: "工作流信息不可用", balancePending: "余额读取中", accountTasks: "账户任务", balanceUpdated: "余额更新", balanceFailed: "余额读取失败",
     noAssets: "暂无素材", loading: "加载中", allLoaded: "已加载全部", loadFailed: "加载失败", startCreating: "开始创作", you: "你",
     native: "普通流 · 原生 H3", turbo: "8-step LoRA · 强度 1.0", digitalHuman: "数字人 · 音频驱动", music3: "Music3 · 30 步", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache（已停用）",
-    reuse: "回填到发送区", regenerate: "重新生成", edit: "修改", cancel: "取消", delete: "删除", deleteRecord: "删除记录", downloadVideo: "下载 MP4", downloadAudio: "下载 FLAC", videoReady: "视频已生成", musicReady: "音乐已生成",
+    reuse: "回填到发送区", regenerate: "重新生成", edit: "修改", cancel: "取消", delete: "删除", deleteRecord: "删除记录", downloadVideo: "下载视频", downloadAudio: "下载音频", downloadImage: "下载图片", downloadFile: "下载文件", videoReady: "视频已生成", musicReady: "音频已生成", imageReady: "图片已生成", fileReady: "文件已生成",
     assetDetail: "素材详情", prompt: "关键词与提示词", lyrics: "歌词", sourceFiles: "使用的文件", parameters: "生成参数", noSourceFiles: "未使用参考文件", outputUnavailable: "当前没有可预览的生成产物",
     deleteConfirm: "删除后将同时清理任务记录、上传素材和生成产物，确认继续？", regenerateConfirm: "将使用本条任务的参数和参考文件创建新的生成任务，确认继续？", fillLoading: "正在读取原始文件", fillDone: "已回填到发送区", fileUnavailable: "参考文件已不存在，无法完整回填",
     overallTime: "总体耗时", steps: "步", seed: "seed", seconds: "秒", queuePosition: "队列位置", incognito: "无痕", destroy: "销毁",
@@ -64,7 +70,7 @@ const COPY = {
     balance: "Balance", credits: "credits", recentCost: "Recent call cost", accountUnavailable: "Account unavailable", workflowUnavailable: "Workflow information unavailable", balancePending: "Loading balance", accountTasks: "Account tasks", balanceUpdated: "balance updated", balanceFailed: "balance read failed",
     noAssets: "No assets", loading: "Loading", allLoaded: "All assets loaded", loadFailed: "Load failed", startCreating: "Start creating", you: "You",
     native: "Native H3", turbo: "8-step LoRA · 1.0", digitalHuman: "Digital human · audio driven", music3: "Music3 · 30 steps", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache (disabled)",
-    reuse: "Fill composer", regenerate: "Regenerate", edit: "Edit", cancel: "Cancel", delete: "Delete", deleteRecord: "Delete record", downloadVideo: "Download MP4", downloadAudio: "Download FLAC", videoReady: "Video generated", musicReady: "Music generated",
+    reuse: "Fill composer", regenerate: "Regenerate", edit: "Edit", cancel: "Cancel", delete: "Delete", deleteRecord: "Delete record", downloadVideo: "Download video", downloadAudio: "Download audio", downloadImage: "Download image", downloadFile: "Download file", videoReady: "Video generated", musicReady: "Audio generated", imageReady: "Image generated", fileReady: "File generated",
     assetDetail: "Asset details", prompt: "Keywords and prompt", lyrics: "Lyrics", sourceFiles: "Source files", parameters: "Parameters", noSourceFiles: "No reference files", outputUnavailable: "No generated output is available for preview",
     deleteConfirm: "This removes the record, uploaded files, and generated output. Continue?", regenerateConfirm: "Create a new generation with this task's parameters and reference files?", fillLoading: "Loading source files", fillDone: "Filled into the composer", fileUnavailable: "A source file is unavailable and cannot be restored",
     overallTime: "Elapsed", steps: "steps", seed: "seed", seconds: "s", queuePosition: "Queue position", incognito: "Incognito", destroy: "expires",
@@ -160,7 +166,7 @@ function applyStaticLocale() {
   setText('label[for="nodeName"]', "Node name");
   setText('label[for="nodeUrl"]', "API URL");
   setText('label[for="nodeApiKey"]', "API Key");
-  setText('label[for="nodeWorkflowId"]', "Target workflow ID");
+  setText('label[for="nodeWorkflowUrl"]', "RunningHub workflow or AI app URL");
   setText('label[for="nodeMaxConcurrency"]', "Maximum API concurrency");
   setText(".node-enabled-row > span:first-child", "Enable node");
   setText("#cancelNodeEdit", "Cancel");
@@ -256,15 +262,28 @@ function formatTime(value, includeDate = false) {
 }
 
 function modelLabel(job) {
-  if (job.assigned_node?.provider === "runninghub") {
-    return job.assigned_node.workflow_name || job.assigned_node.name || "RunningHub";
+  if (job.request?.provider === "runninghub" || job.assigned_node?.provider === "runninghub") {
+    return job.request?.runninghub_workflow_name || job.assigned_node?.workflow_name || job.assigned_node?.name || "RunningHub";
   }
   if (job.request?.model_variant === "music3-int8") return "Music3 INT8";
   return job.request?.model_variant === "ref2va-fp8" ? "Ref2VA FP8" : "FL2VA FP8";
 }
 
+function jobMediaType(job) {
+  const mediaType = job.request?.media_type;
+  return ["audio", "video", "image", "file"].includes(mediaType) ? mediaType : "video";
+}
+
+function mediaReadyLabel(mediaType) {
+  return mediaType === "audio" ? t("musicReady") : mediaType === "image" ? t("imageReady") : mediaType === "file" ? t("fileReady") : t("videoReady");
+}
+
+function mediaDownloadLabel(mediaType) {
+  return mediaType === "audio" ? t("downloadAudio") : mediaType === "image" ? t("downloadImage") : mediaType === "file" ? t("downloadFile") : t("downloadVideo");
+}
+
 function executionModeLabel(job) {
-  if (job.assigned_node?.provider === "runninghub") return "RunningHub";
+  if (job.request?.provider === "runninghub" || job.assigned_node?.provider === "runninghub") return "RunningHub";
   if (job.request?.execution_mode === "music3") return t("music3");
   if (job.request?.execution_mode === "digital-human") return t("digitalHuman");
   if (job.request?.execution_mode === "h3-nsfw") return t("nsfw");
@@ -306,6 +325,9 @@ function nodeLabel(job) {
   if (job.assigned_node?.name) return job.assigned_node.name;
   const requested = job.request?.comfy_node || "auto";
   if (requested === "auto") return job.status === "queued" ? t("autoSchedule") : t("nodePending");
+  if (requested.startsWith(RUNNINGHUB_TARGET_PREFIX)) {
+    return job.request?.runninghub_workflow_name || "RunningHub";
+  }
   return state.nodes.find((node) => node.id === requested)?.name || requested;
 }
 
@@ -338,7 +360,7 @@ function runningHubBalanceLabel(node) {
   const coins = formatAccountNumber(node.account_balance_coins);
   if (coins) parts.push(`${coins} ${t("credits")}`);
   if (parts.length) return `${t("balance")} ${parts.join(" / ")}`;
-  return node.error ? t("accountUnavailable") : t("balancePending");
+  return node.account_error ? t("accountUnavailable") : t("balancePending");
 }
 
 function runningHubCostLabel(node) {
@@ -358,20 +380,45 @@ function renderNodeOptions(nodes = state.nodes) {
   state.nodes = Array.isArray(nodes) ? nodes : [];
   const select = el("comfyNode");
   const current = select.value || "auto";
-  const online = state.nodes.filter((node) => node.healthy).length;
-  const options = [`<option value="auto">${t("autoSchedule")} · ${online}/${state.nodes.length} ${t("available")}</option>`];
+  const healthyNodes = state.nodes.filter((node) => node.healthy);
+  const comfyNodes = state.nodes.filter((node) => node.provider !== "runninghub");
+  const healthyComfyNodes = comfyNodes.filter((node) => node.healthy);
+  const legacyRunningHubAuto = healthyNodes.length > 0
+    && healthyNodes.every((node) => node.provider === "runninghub")
+    && new Set(healthyNodes.map((node) => node.workflow_id)).size === 1;
+  const autoOnline = legacyRunningHubAuto ? healthyNodes.length : healthyComfyNodes.length;
+  const autoTotal = legacyRunningHubAuto ? state.nodes.length : comfyNodes.length;
+  const options = [`<option value="auto">${t("autoSchedule")} · ${autoOnline}/${autoTotal} ${t("available")}</option>`];
+  const runningHubGroups = new Map();
+  state.nodes.filter((node) => node.provider === "runninghub" && node.workflow_id && node.runninghub_schema).forEach((node) => {
+    if (!runningHubGroups.has(node.workflow_id)) runningHubGroups.set(node.workflow_id, []);
+    runningHubGroups.get(node.workflow_id).push(node);
+  });
+  runningHubGroups.forEach((group, resourceId) => {
+    const available = group.filter((node) => node.healthy);
+    const representative = available[0] || group[0];
+    const running = group.reduce((total, node) => total + Number(node.running_count || 0), 0);
+    const capacity = available.reduce((total, node) => total + Number(node.capacity || 1), 0);
+    const stateLabel = running
+      ? `${t("busy")} ${running}/${capacity}`
+      : `${available.length}/${group.length} ${t("available")} · ${localized("并发", "capacity")} ${capacity}`;
+    const label = `${t("autoSchedule")} · ${representative.workflow_name || representative.name}`;
+    options.push(`<option value="${escapeHtml(`${RUNNINGHUB_TARGET_PREFIX}${resourceId}`)}"${available.length ? "" : " disabled"}>${escapeHtml(label)} · ${escapeHtml(stateLabel)}</option>`);
+  });
   state.nodes.forEach((node) => {
     const running = Number(node.running_count || 0);
     const capacity = Number(node.capacity || 1);
     const stateLabel = node.provider === "runninghub"
-      ? `${running ? `${t("busy")} ${running}/${capacity} · ` : ""}${runningHubBalanceLabel(node)}`
+      ? !node.healthy
+        ? t("workflowUnavailable")
+        : `${running ? `${t("busy")} ${running}/${capacity} · ` : ""}${runningHubBalanceLabel(node)}`
       : !node.healthy
         ? t("nodeOffline")
         : running
           ? `${t("busy")} ${running}/${capacity}`
           : `${t("online")} 0/${capacity}`;
     const label = node.provider === "runninghub"
-      ? `${escapeHtml(node.workflow_name || node.name)} · ID ${escapeHtml(node.workflow_id || "-")}`
+      ? `${escapeHtml(node.workflow_name || node.name)} · ${node.runninghub_resource_type === "ai-app" ? "AI App" : "Workflow"}`
       : escapeHtml(node.name);
     options.push(`<option value="${escapeHtml(node.id)}"${node.healthy ? "" : " disabled"}>${label} · ${escapeHtml(stateLabel)}</option>`);
   });
@@ -398,10 +445,11 @@ function renderHealthState(nodes = state.nodes, queueDepth = state.queue.length)
 function nodeStatus(node) {
   if (!node.enabled) return { label: t("disabled"), className: "disabled" };
   if (node.provider === "runninghub") {
+    if (!node.healthy) return { label: t("workflowUnavailable"), className: "offline" };
     if (node.busy) return { label: t("busy"), className: "busy" };
     return {
       label: runningHubBalanceLabel(node),
-      className: node.error ? "disabled" : "online",
+      className: "online",
     };
   }
   if (!node.healthy) return { label: t("nodeOffline"), className: "offline" };
@@ -418,7 +466,10 @@ function syncNodeProviderFields() {
   document.querySelectorAll('[data-node-provider="runninghub"]').forEach((field) => {
     field.hidden = !runningHub;
   });
-  el("nodeWorkflowId").required = runningHub;
+  el("nodeUrlLabel").hidden = runningHub;
+  el("nodeUrl").hidden = runningHub;
+  el("nodeUrl").required = !runningHub;
+  el("nodeWorkflowUrl").required = runningHub;
   el("nodeMaxConcurrency").required = runningHub;
   const editing = state.managedNodes.find((node) => node.id === state.nodeEditingId);
   el("nodeApiKey").required = runningHub && !editing?.has_api_key;
@@ -429,9 +480,7 @@ function syncNodeProviderFields() {
   el("nodeApiKeyHint").textContent = runningHub
     ? (editing?.has_api_key ? localized("已保存 API Key，留空不会修改", "An API Key is saved; leave blank to keep it") : localized("RunningHub API Key 仅保存在服务端数据库", "The RunningHub API Key is stored only in the server database"))
     : localized("ComfyUI 未启用鉴权时可留空", "Leave blank when ComfyUI authentication is disabled");
-  el("nodeNameLabel").textContent = runningHub
-    ? localized("工作流名称", "Workflow name")
-    : localized("节点名称", "Node name");
+  el("nodeNameLabel").textContent = localized("节点名称", "Node name");
 }
 
 function renderManagedNodes() {
@@ -444,7 +493,8 @@ function renderManagedNodes() {
       ? ` · ${localized("并发", "capacity")} ${running}/${capacity}`
       : node.queue_depth ? ` · 排队 ${node.queue_depth}` : "";
     const provider = node.provider === "runninghub" ? "RunningHub API" : "ComfyUI API";
-    const workflow = node.provider === "runninghub" ? ` · Workflow ${escapeHtml(node.workflow_id || "-")}` : "";
+    const workflowType = node.runninghub_resource_type === "ai-app" ? "AI App" : "Workflow";
+    const workflow = node.provider === "runninghub" ? ` · ${workflowType} ${escapeHtml(node.workflow_url || "-")}` : "";
     const keyState = node.has_api_key ? ` · ${localized("API Key 已保存", "API Key saved")}` : "";
     const accountTasks = node.provider === "runninghub" && node.account_current_tasks != null
       ? ` · ${t("accountTasks")} ${escapeHtml(String(node.account_current_tasks))}`
@@ -452,7 +502,7 @@ function renderManagedNodes() {
     const recentCost = node.provider === "runninghub" ? runningHubCostLabel(node) : "";
     const accountingTitle = [
       localized("按调用前后余额差值计算；同一 API Key 并发使用时可能包含同期扣费", "Calculated from the balance difference before and after a call; concurrent use of the same API key can include other charges"),
-      node.error || "",
+      node.account_error || "",
       node.workflow_error || "",
     ].filter(Boolean).join(" · ");
     const accounting = node.provider === "runninghub"
@@ -462,11 +512,11 @@ function renderManagedNodes() {
       ? `<small class="node-accounting" title="${escapeHtml(node.workflow_error)}">${escapeHtml(t("workflowUnavailable"))}</small>`
       : "";
     const checkedLabel = node.provider === "runninghub"
-      ? node.error ? t("balanceFailed") : t("balanceUpdated")
+      ? node.account_error ? t("balanceFailed") : t("balanceUpdated")
       : localized("检测", "checked");
     return `<div class="node-row" data-node-id="${escapeHtml(node.id)}">
       <span class="node-state ${status.className}" aria-hidden="true"></span>
-      <div class="node-row-copy"><div><strong>${escapeHtml(node.name)}</strong><span>${escapeHtml(status.label)}${activity}</span></div><code title="${escapeHtml(node.url)}">${escapeHtml(node.url)}</code>${accounting}${workflowIssue}<small>${provider}${workflow}${keyState} · ID ${escapeHtml(node.id)}${node.last_checked ? ` · ${formatTime(node.last_checked, true)} ${checkedLabel}` : ""}</small></div>
+      <div class="node-row-copy"><div><strong>${escapeHtml(node.provider === "runninghub" ? node.workflow_name || node.name : node.name)}</strong><span>${escapeHtml(status.label)}${activity}</span></div><code title="${escapeHtml(node.url)}">${escapeHtml(node.url)}</code>${accounting}${workflowIssue}<small>${provider}${workflow}${node.provider === "runninghub" && node.workflow_name && node.workflow_name !== node.name ? ` · ${escapeHtml(node.name)}` : ""}${keyState} · ID ${escapeHtml(node.id)}${node.last_checked ? ` · ${formatTime(node.last_checked, true)} ${checkedLabel}` : ""}</small></div>
       <div class="node-row-actions"><button type="button" data-node-action="edit" title="编辑节点" aria-label="编辑 ${escapeHtml(node.name)}">${icon("pencil")}</button><button type="button" data-node-action="delete" title="删除节点" aria-label="删除 ${escapeHtml(node.name)}">${icon("trash-2")}</button></div>
     </div>`;
   }).join("") : `<p class="quiet">${state.locale === "en" ? "No nodes" : "暂无节点"}</p>`;
@@ -499,7 +549,7 @@ function openNodeEditor(nodeId = null) {
   el("nodeName").value = node?.name || "";
   el("nodeUrl").value = node?.url || "";
   el("nodeApiKey").value = "";
-  el("nodeWorkflowId").value = node?.workflow_id || "";
+  el("nodeWorkflowUrl").value = node?.workflow_url || "";
   el("nodeMaxConcurrency").value = String(node?.max_concurrency || 1);
   el("nodeEnabled").checked = node ? Boolean(node.enabled) : true;
   el("nodeEnabled").closest(".node-enabled-row").hidden = !node;
@@ -567,7 +617,7 @@ async function saveNode(event) {
     url: el("nodeUrl").value.trim(),
     provider: el("nodeProvider").value,
     api_key: el("nodeApiKey").value.trim(),
-    workflow_id: el("nodeWorkflowId").value.trim(),
+    workflow_url: el("nodeWorkflowUrl").value.trim(),
     max_concurrency: Number(el("nodeMaxConcurrency").value || 1),
   };
   let url = "/api/v1/comfy/nodes";
@@ -629,15 +679,156 @@ function selectedInferenceNode() {
 }
 
 function selectedRunningHubNode() {
+  const selected = el("comfyNode").value;
+  if (selected.startsWith(RUNNINGHUB_TARGET_PREFIX)) {
+    const resourceId = selected.slice(RUNNINGHUB_TARGET_PREFIX.length);
+    return state.nodes.find((node) => node.healthy && node.provider === "runninghub" && node.workflow_id === resourceId)
+      || state.nodes.find((node) => node.provider === "runninghub" && node.workflow_id === resourceId)
+      || null;
+  }
   const node = selectedInferenceNode();
   if (node?.provider === "runninghub") return node;
   if (el("comfyNode").value !== "auto") return null;
   const candidates = state.nodes.filter((item) => item.healthy);
   if (!candidates.length || candidates.some((item) => item.provider !== "runninghub")) return null;
   const workflowIds = new Set(candidates.map((item) => item.workflow_id));
-  const variants = new Set(candidates.map((item) => item.workflow_variant));
-  const modes = new Set(candidates.map((item) => item.workflow_execution_mode));
-  return workflowIds.size === 1 && variants.size === 1 && modes.size === 1 ? candidates[0] : null;
+  return workflowIds.size === 1 ? candidates[0] : null;
+}
+
+function selectedRunningHubSchema() {
+  const schema = selectedRunningHubNode()?.runninghub_schema;
+  return schema && Array.isArray(schema.fields) ? schema : null;
+}
+
+function runningHubFieldLabel(field) {
+  return state.locale === "en" ? field.label_en || field.label || field.key : field.label || field.label_en || field.key;
+}
+
+function runningHubSchemaKey(schema) {
+  if (!schema) return "";
+  const fields = (schema.fields || []).map((field) => [
+    field.key, field.field_type, field.default, field.options, field.editable,
+    field.media_kind, field.min, field.max, field.step, field.multiline,
+    field.required, field.label, field.label_en,
+  ]);
+  return `${schema.resource_id || ""}:${JSON.stringify(fields)}`;
+}
+
+function runningHubDefaultParameters(schema) {
+  return Object.fromEntries((schema?.fields || [])
+    .filter((field) => field.editable !== false && !field.media_kind)
+    .map((field) => [field.key, field.default ?? (field.field_type === "BOOLEAN" ? false : "")]));
+}
+
+function syncRunningHubSchema() {
+  const schema = selectedRunningHubSchema();
+  const key = runningHubSchemaKey(schema);
+  const resourceId = String(schema?.resource_id || "");
+  if (!schema) {
+    state.runningHubSchemaKey = "";
+    state.runningHubResourceId = "";
+    state.runningHubParameters = {};
+    state.pendingRunningHubMediaField = "";
+    renderRunningHubParameters();
+    return;
+  }
+  const schemaChanged = key !== state.runningHubSchemaKey;
+  if (resourceId !== state.runningHubResourceId) {
+    state.runningHubParameters = runningHubDefaultParameters(schema);
+  } else if (schemaChanged) {
+    state.runningHubParameters = {
+      ...runningHubDefaultParameters(schema),
+      ...state.runningHubParameters,
+    };
+  }
+  state.runningHubSchemaKey = key;
+  state.runningHubResourceId = resourceId;
+  if (schemaChanged) renderRunningHubParameters();
+}
+
+function runningHubMediaFields(kind = "", schema = selectedRunningHubSchema()) {
+  return (schema?.fields || []).filter((field) => (
+    field.editable !== false && field.media_kind && (!kind || field.media_kind === kind)
+  ));
+}
+
+function runningHubReferenceField(item, schema = selectedRunningHubSchema()) {
+  return runningHubMediaFields("", schema).find((field) => field.key === item.field_key) || null;
+}
+
+function runningHubAvailableMediaField(kind, references = state.references) {
+  const used = new Set(references.map((item) => item.field_key).filter(Boolean));
+  return runningHubMediaFields(kind).find((field) => !used.has(field.key)) || null;
+}
+
+function runningHubParameterMarkup(field) {
+  const key = escapeHtml(String(field.key || ""));
+  const label = escapeHtml(runningHubFieldLabel(field));
+  const value = state.runningHubParameters[field.key] ?? field.default ?? "";
+  if (field.media_kind) {
+    const reference = state.references.find((item) => item.field_key === field.key);
+    const mediaIcon = field.media_kind === "video" ? "film" : field.media_kind === "audio" ? "audio-lines" : field.media_kind === "file" ? "file" : "image";
+    return `<button class="runninghub-media-input" type="button" data-runninghub-media-key="${key}" data-runninghub-media-kind="${escapeHtml(field.media_kind)}">${icon(mediaIcon)}<span><b>${label}</b><small>${escapeHtml(reference?.name || localized("选择文件", "Choose file"))}</small></span></button>`;
+  }
+  if (field.key === selectedRunningHubSchema()?.primary_text_key) return "";
+  if (field.field_type === "BOOLEAN") {
+    const checked = value === true || String(value).toLowerCase() === "true";
+    return `<label class="runninghub-parameter runninghub-boolean switch-row"><span title="${label}">${label}</span><input type="checkbox" data-runninghub-key="${key}"${checked ? " checked" : ""}><span class="switch"></span></label>`;
+  }
+  if (Array.isArray(field.options) && field.options.length) {
+    const options = field.options.map((option) => `<option value="${escapeHtml(String(option.value))}"${String(option.value) === String(value) ? " selected" : ""}>${escapeHtml(option.label || String(option.value))}</option>`).join("");
+    return `<label class="runninghub-parameter"><span title="${label}">${label}</span><select data-runninghub-key="${key}">${options}</select></label>`;
+  }
+  if (["INTEGER", "FLOAT"].includes(field.field_type)) {
+    const min = field.min == null ? "" : ` min="${escapeHtml(String(field.min))}"`;
+    const max = field.max == null ? "" : ` max="${escapeHtml(String(field.max))}"`;
+    const step = field.step == null ? (field.field_type === "INTEGER" ? "1" : "any") : String(field.step);
+    return `<label class="runninghub-parameter"><span title="${label}">${label}</span><input type="number" data-runninghub-key="${key}" value="${escapeHtml(String(value))}" step="${escapeHtml(step)}"${min}${max}></label>`;
+  }
+  if (field.multiline) {
+    return `<label class="runninghub-parameter runninghub-parameter-wide"><span title="${label}">${label}</span><textarea data-runninghub-key="${key}" maxlength="12000">${escapeHtml(String(value))}</textarea></label>`;
+  }
+  return `<label class="runninghub-parameter"><span title="${label}">${label}</span><input type="text" data-runninghub-key="${key}" value="${escapeHtml(String(value))}" maxlength="12000"></label>`;
+}
+
+function runningHubParameterRenderSignature() {
+  const schema = selectedRunningHubSchema();
+  if (!schema) return "";
+  const media = state.references.map((item) => [item.field_key, item.name]);
+  return JSON.stringify([runningHubSchemaKey(schema), state.runningHubParameters, media, state.locale]);
+}
+
+function renderRunningHubParameters() {
+  const container = el("runningHubParameters");
+  const schema = selectedRunningHubSchema();
+  if (!schema) {
+    state.runningHubRenderSignature = "";
+    container.hidden = true;
+    container.innerHTML = "";
+    return;
+  }
+  const signature = runningHubParameterRenderSignature();
+  if (signature === state.runningHubRenderSignature) return;
+  const fields = (schema.fields || []).filter((field) => field.editable !== false);
+  const markup = fields.map(runningHubParameterMarkup).filter(Boolean).join("");
+  container.innerHTML = markup;
+  container.hidden = !markup;
+  state.runningHubRenderSignature = signature;
+  refreshIcons();
+}
+
+function collectRunningHubParameters() {
+  const schema = selectedRunningHubSchema();
+  if (!schema) return {};
+  const values = {};
+  (schema.fields || []).forEach((field) => {
+    if (field.editable === false || field.media_kind || field.key === schema.primary_text_key) return;
+    const input = Array.from(el("runningHubParameters").querySelectorAll("[data-runninghub-key]")).find((item) => item.dataset.runninghubKey === field.key);
+    if (!input) return;
+    values[field.key] = input.type === "checkbox" ? input.checked : input.value;
+  });
+  state.runningHubParameters = { ...state.runningHubParameters, ...values };
+  return values;
 }
 
 function jobScope() {
@@ -657,6 +848,12 @@ function isMusic3(variant = selectedVariant()) {
 }
 
 function referenceLimits(variant = selectedVariant()) {
+  const schema = selectedRunningHubSchema();
+  if (schema) {
+    const limits = { image: 0, video: 0, audio: 0, file: 0 };
+    runningHubMediaFields("", schema).forEach((field) => { limits[field.media_kind] += 1; });
+    return limits;
+  }
   if (isMusic3(variant)) return { image: 0, video: 0, audio: 0 };
   if (isDigitalHuman()) return { image: 1, video: 0, audio: 1 };
   return isRef2VA(variant)
@@ -672,6 +869,7 @@ function kindFor(file) {
   if (["jpg", "jpeg", "png", "webp", "bmp", "gif"].includes(extension)) return "image";
   if (["mp4", "mov", "mkv", "webm", "avi", "m4v"].includes(extension)) return "video";
   if (["mp3", "wav", "flac", "m4a", "aac", "ogg", "opus"].includes(extension)) return "audio";
+  if (selectedRunningHubSchema() && runningHubMediaFields("file").length) return "file";
   return null;
 }
 
@@ -679,11 +877,14 @@ function referenceLabels(
   references = state.references,
   variant = selectedVariant(),
   executionMode = selectedExecutionMode(),
+  schema = selectedRunningHubSchema(),
 ) {
-  const counts = { image: 0, video: 0, audio: 0 };
+  const counts = { image: 0, video: 0, audio: 0, file: 0 };
   return references.map((item) => {
     const kind = item.kind || item.type;
     counts[kind] += 1;
+    const runningHubField = runningHubReferenceField(item, schema);
+    if (runningHubField) return runningHubFieldLabel(runningHubField);
     if (isDigitalHuman(executionMode)) return kind === "image" ? localized("人物图像", "Portrait") : localized("驱动音频", "Driving audio");
     if (!isRef2VA(variant)) return counts.image === 1 ? localized("首帧", "First frame") : localized("尾帧", "Last frame");
     return `<${{ image: "Picture", video: "Video", audio: "Audio" }[kind]} ${counts[kind]}>`;
@@ -691,10 +892,24 @@ function referenceLabels(
 }
 
 function validateReferenceSet(references = state.references, variant = selectedVariant()) {
+  const schema = selectedRunningHubSchema();
+  if (schema) {
+    const available = new Map(runningHubMediaFields("", schema).map((field) => [field.key, field]));
+    const used = new Set();
+    for (const item of references) {
+      const field = available.get(item.field_key);
+      if (!field || field.media_kind !== (item.kind || item.type) || used.has(item.field_key)) {
+        return localized("参考文件与 RunningHub 媒体字段不匹配", "A reference file does not match the RunningHub media field");
+      }
+      used.add(item.field_key);
+    }
+    const missing = runningHubMediaFields("", schema).find((field) => field.required && !used.has(field.key));
+    return missing ? localized(`请填写 ${runningHubFieldLabel(missing)}`, `Provide ${runningHubFieldLabel(missing)}`) : "";
+  }
   if (isMusic3(variant)) return references.length ? localized("Music3 不使用参考素材", "Music3 does not use reference files") : "";
   if (!references.length) return localized("请至少添加一份参考素材", "Add at least one reference file");
   const limits = referenceLimits(variant);
-  const counts = { image: 0, video: 0, audio: 0 };
+  const counts = { image: 0, video: 0, audio: 0, file: 0 };
   references.forEach((item) => { counts[item.kind || item.type] += 1; });
   if (isDigitalHuman()) {
     if (references.length !== 2 || counts.image !== 1 || counts.audio !== 1) {
@@ -748,19 +963,15 @@ async function api(url, options = {}) {
 
 function updateModelUi() {
   const runningHubNode = selectedRunningHubNode();
-  if (runningHubNode?.workflow_variant) {
-    el("modelVariant").value = runningHubNode.workflow_variant;
-  }
-  if (runningHubNode?.workflow_execution_mode) {
-    el("executionMode").value = runningHubNode.workflow_execution_mode;
-  }
+  const runningHub = Boolean(runningHubNode?.runninghub_schema);
+  syncRunningHubSchema();
   el("modelControl").hidden = Boolean(runningHubNode);
   el("executionControl").hidden = Boolean(runningHubNode);
   el("runningHubWorkflowControl").hidden = !runningHubNode;
   el("runningHubWorkflowName").textContent = runningHubNode
-    ? `${runningHubNode.workflow_name || runningHubNode.name} · ID ${runningHubNode.workflow_id || "-"}`
+    ? `${runningHubNode.workflow_name || runningHubNode.name} · ${runningHubNode.runninghub_resource_type === "ai-app" ? "AI App" : "Workflow"}`
     : "";
-  const music3 = isMusic3();
+  const music3 = !runningHub && isMusic3();
   const music3ExecutionOption = el("music3ExecutionOption");
   music3ExecutionOption.hidden = !music3;
   if (music3) {
@@ -789,7 +1000,7 @@ function updateModelUi() {
     el("duration").dataset.mode = music3 ? "music3" : "h3";
   }
   el("steps").value = music3 ? "30" : accelerated ? "8" : digitalHuman ? "20" : el("steps").value;
-  el("steps").disabled = music3 || accelerated || digitalHuman;
+  el("steps").disabled = music3 || accelerated || digitalHuman || runningHub;
   el("duration").disabled = digitalHuman;
   const durationControl = el("duration").closest(".duration-control");
   durationControl.classList.toggle("digital-human", digitalHuman);
@@ -797,17 +1008,23 @@ function updateModelUi() {
     ? digitalHuman ? "Video length follows the driving audio" : music3 ? "Maximum music duration" : "Video duration"
     : digitalHuman ? "视频长度由驱动音频长度决定" : music3 ? "音乐最长时长" : "视频时长";
   el("durationHint").hidden = !digitalHuman;
-  referenceInput.accept = music3 ? "" : digitalHuman ? "image/*,audio/*" : ref2va ? "image/*,video/*,audio/*" : "image/*";
+  const runningHubKinds = new Set(runningHubMediaFields().map((field) => field.media_kind));
+  referenceInput.accept = runningHub
+    ? [...runningHubKinds].map((kind) => kind === "file" ? "*/*" : `${kind}/*`).join(",")
+    : music3 ? "" : digitalHuman ? "image/*,audio/*" : ref2va ? "image/*,video/*,audio/*" : "image/*";
   el("addReference").title = state.locale === "en"
-    ? digitalHuman ? "Add portrait and driving audio" : ref2va ? "Add image, video, or audio references" : "Add first or last frame"
-    : digitalHuman ? "添加人物图片和驱动音频" : ref2va ? "添加图片、视频或音频参考" : "添加首帧或尾帧";
+    ? runningHub ? "Add a workflow input file" : digitalHuman ? "Add portrait and driving audio" : ref2va ? "Add image, video, or audio references" : "Add first or last frame"
+    : runningHub ? "添加工作流输入文件" : digitalHuman ? "添加人物图片和驱动音频" : ref2va ? "添加图片、视频或音频参考" : "添加首帧或尾帧";
   el("addReference").setAttribute("aria-label", el("addReference").title);
-  el("addReference").hidden = music3;
-  el("aspectControl").hidden = music3;
-  el("resolutionControl").hidden = music3;
+  el("addReference").hidden = music3 || (runningHub && runningHubKinds.size === 0);
+  el("aspectControl").hidden = music3 || runningHub;
+  el("resolutionControl").hidden = music3 || runningHub;
+  el("duration").closest(".duration-control").hidden = runningHub;
+  el("stepsControl").hidden = runningHub;
   el("lyrics").hidden = !music3;
+  el("globalSeedControl").hidden = runningHub;
   el("stepsControl").title = state.locale === "en" ? music3 ? "Music3 uses 30 steps" : "Sampling steps" : music3 ? "Music3 固定使用 30 步" : "采样步数";
-  el("optimizePrompt").hidden = false;
+  el("optimizePrompt").hidden = runningHub;
   el("optimizePrompt").title = state.locale === "en" ? music3 ? "Optimize style" : "Optimize prompt" : music3 ? "优化曲风" : "优化提示词";
   el("optimizePrompt").setAttribute("aria-label", el("optimizePrompt").title);
   el("optimizePromptLabel").textContent = el("optimizePrompt").title;
@@ -815,22 +1032,65 @@ function updateModelUi() {
   el("writeLyrics").title = localized("优化歌词", "Optimize lyrics");
   el("writeLyrics").setAttribute("aria-label", el("writeLyrics").title);
   el("writeLyrics").querySelector("span").textContent = el("writeLyrics").title;
-  promptInput.placeholder = state.locale === "en"
-    ? music3 ? "Describe genre, mood, tempo, key, instruments, vocals, and arrangement..." : "Describe the scene, characters, action, camera, and sound..."
-    : music3 ? "描述曲风、情绪、速度、调式、乐器、人声与编曲…" : "输入自然语言，描述场景、人物、动作、镜头与声音…";
+  const primaryText = selectedRunningHubSchema()?.fields?.find((field) => field.key === selectedRunningHubSchema()?.primary_text_key);
+  promptInput.placeholder = runningHub
+    ? primaryText
+      ? runningHubFieldLabel(primaryText)
+      : localized("该工作流没有主文本输入，可留空", "This workflow has no primary text input; this field may be empty")
+    : state.locale === "en"
+      ? music3 ? "Describe genre, mood, tempo, key, instruments, vocals, and arrangement..." : "Describe the scene, characters, action, camera, and sound..."
+      : music3 ? "描述曲风、情绪、速度、调式、乐器、人声与编曲…" : "输入自然语言，描述场景、人物、动作、镜头与声音…";
   renderReferences();
   const error = validateReferenceSet(state.references);
   showError(state.references.length ? error : "");
 }
 
-function addFiles(files) {
+function addFiles(files, forcedFieldKey = "") {
   if (state.editingJobId) {
     showError(localized("修改排队任务时不能更换参考素材", "Reference files cannot be changed while editing a queued task"));
     return;
   }
   let error = "";
-  Array.from(files).forEach((file) => {
-    const kind = kindFor(file);
+  const runningHubSchema = selectedRunningHubSchema();
+  Array.from(files).forEach((file, fileIndex) => {
+    let kind = kindFor(file);
+    if (runningHubSchema) {
+      const requestedKey = fileIndex === 0 ? forcedFieldKey : "";
+      const requestedField = requestedKey
+        ? runningHubMediaFields("", runningHubSchema).find((field) => field.key === requestedKey)
+        : null;
+      if (requestedField?.media_kind === "file") kind = "file";
+      if (!kind) {
+        error = localized(`不支持的素材类型：${file.name}`, `Unsupported file type: ${file.name}`);
+        return;
+      }
+      if (requestedField && requestedField.media_kind !== kind) {
+        error = localized(`该字段需要${{ image: "图片", video: "视频", audio: "音频", file: "普通" }[requestedField.media_kind]}文件`, `This field requires a ${requestedField.media_kind} file`);
+        return;
+      }
+      if (requestedField) {
+        const existingIndex = state.references.findIndex((item) => item.field_key === requestedField.key);
+        if (existingIndex >= 0) {
+          const [existing] = state.references.splice(existingIndex, 1);
+          if (existing?.url) URL.revokeObjectURL(existing.url);
+        }
+      }
+      const field = requestedField || runningHubAvailableMediaField(kind) || runningHubAvailableMediaField("file");
+      if (!field) {
+        error = localized(`工作流没有可用的${{ image: "图片", video: "视频", audio: "音频", file: "普通文件" }[kind]}字段`, `The workflow has no available ${kind} field`);
+        return;
+      }
+      kind = field.media_kind;
+      state.references.push({
+        file,
+        kind,
+        field_key: field.key,
+        name: file.name,
+        size: file.size,
+        url: URL.createObjectURL(file),
+      });
+      return;
+    }
     if (!kind) {
       error = localized(`不支持的素材类型：${file.name}`, `Unsupported file type: ${file.name}`);
       return;
@@ -857,6 +1117,7 @@ function addFiles(files) {
       url: URL.createObjectURL(file),
     });
   });
+  state.pendingRunningHubMediaField = "";
   showError(error);
   renderReferences();
 }
@@ -870,7 +1131,7 @@ function renderReferences() {
       ? `<img src="${escapeHtml(item.url)}" alt="${escapeHtml(name)}">`
       : item.url && kind === "video"
         ? `<video src="${escapeHtml(item.url)}" muted playsinline preload="metadata" aria-label="${escapeHtml(name)}"></video>`
-        : `<span class="reference-type">${icon(kind === "video" ? "film" : kind === "audio" ? "audio-lines" : "image")}</span>`;
+        : `<span class="reference-type">${icon(kind === "video" ? "film" : kind === "audio" ? "audio-lines" : kind === "file" ? "file" : "image")}</span>`;
     const thumb = item.url
       ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer" class="reference-link" aria-label="查看${escapeHtml(name)}">${media}</a>`
       : media;
@@ -880,6 +1141,7 @@ function renderReferences() {
       ${item.remote ? "" : `<button type="button" data-remove-reference="${index}" title="移除素材" aria-label="移除素材">${icon("x")}</button>`}
     </div>`;
   }).join("");
+  renderRunningHubParameters();
   renderMentionMenu();
   refreshIcons();
 }
@@ -889,7 +1151,7 @@ function renderMentionMenu() {
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => (item.kind || item.type) === "image");
   const section = el("mentionReferenceSection");
-  section.hidden = isMusic3() || !references.length;
+  section.hidden = (!selectedRunningHubSchema() && isMusic3()) || !references.length;
   el("mentionReferenceList").innerHTML = references.map(({ item, index }) => {
     const name = item.name || item.file?.name || localized("未命名图片", "Untitled image");
     const preview = item.url
@@ -1126,14 +1388,19 @@ function assetAction(job) {
 }
 
 function renderAssetCard(job) {
-  const music3 = job.request?.media_type === "audio";
+  const mediaType = jobMediaType(job);
+  const audio = mediaType === "audio";
   const preview = job.status === "completed" && job.result_url
-    ? music3
+    ? audio
       ? `<span class="asset-audio-icon" aria-hidden="true">${icon("audio-lines")}</span>`
-      : `<video src="${job.result_url}" muted playsinline preload="metadata" aria-label="${modelLabel(job)} 生成视频"></video><span class="asset-play">${icon("play")}</span>`
+      : mediaType === "image"
+        ? `<img src="${escapeHtml(job.result_url)}" alt="${escapeHtml(modelLabel(job))}" loading="lazy">`
+        : mediaType === "file"
+          ? `<span class="asset-audio-icon" aria-hidden="true">${icon("file")}</span>`
+          : `<video src="${job.result_url}" muted playsinline preload="metadata" aria-label="${modelLabel(job)} 生成视频"></video><span class="asset-play">${icon("play")}</span>`
     : `<span class="asset-placeholder ${job.status}">${icon(job.status === "running" ? "loader-circle" : job.status === "queued" ? "clock-3" : job.status === "failed" ? "triangle-alert" : "circle-slash-2")}${job.status === "running" ? `<b>${job.progress || 0}%</b>` : ""}</span>`;
   return `<article class="asset-card" data-asset-job="${job.id}" tabindex="0" aria-label="${executionModeLabel(job)}, ${modelLabel(job)}, ${statusLabel(job.status)}">
-    <div class="asset-preview${music3 ? " music" : ""}">${preview}${assetAction(job)}</div>
+    <div class="asset-preview${audio || mediaType === "file" ? " music" : ""}">${preview}${assetAction(job)}</div>
     <div class="asset-meta"><span class="task-status ${job.status}"></span><strong>${modelLabel(job)}</strong><small class="asset-plan ${executionModeClass(job)}">${executionModeLabel(job)}</small><time>${escapeHtml(nodeLabel(job))}</time><time>${t("overallTime")} ${formatElapsed(job.elapsed_seconds)}</time></div>
   </article>`;
 }
@@ -1318,6 +1585,7 @@ function referenceSummary(job) {
     references,
     job.request?.model_variant || "fl2va-fp8",
     job.request?.execution_mode || "native",
+    job.request?.runninghub_schema || null,
   );
   if (!references.length) return "";
   return `<div class="message-assets">${references.map((item, index) => {
@@ -1352,7 +1620,9 @@ function messageActions(job) {
 
 function renderJobExchange(job) {
   const request = job.request || {};
-  const music3 = request.media_type === "audio" || request.model_variant === "music3-int8";
+  const mediaType = jobMediaType(job);
+  const audio = mediaType === "audio";
+  const runningHub = request.provider === "runninghub";
   const active = isActive(job);
   const detail = job.error || (job.queue_position ? `${t("queuePosition")} ${job.queue_position}` : job.stage);
   const incognito = request.incognito
@@ -1368,16 +1638,21 @@ function renderJobExchange(job) {
       <small>${escapeHtml(detail || statusLabel(job.status))}</small>
     </div>`;
   } else if (job.status === "completed") {
-    assistantBody = music3
-      ? `<p class="terminal-state completed">${t("musicReady")}</p><div class="audio-result"><audio controls preload="metadata" src="${job.result_url}"></audio><a href="${job.result_url}" download>${icon("download")}<span>${t("downloadAudio")}</span></a></div>`
-      : `<p class="terminal-state completed">${t("videoReady")}</p><div class="video-result"><video controls playsinline preload="metadata" src="${job.result_url}"></video><a href="${job.result_url}" download>${icon("download")}<span>${t("downloadVideo")}</span></a></div>`;
+    const result = audio
+      ? `<div class="audio-result"><audio controls preload="metadata" src="${job.result_url}"></audio><a href="${job.result_url}" download>${icon("download")}<span>${mediaDownloadLabel(mediaType)}</span></a></div>`
+      : mediaType === "image"
+        ? `<div class="image-result"><img src="${job.result_url}" alt="${escapeHtml(shortTitle(job))}"><a href="${job.result_url}" download>${icon("download")}<span>${mediaDownloadLabel(mediaType)}</span></a></div>`
+        : mediaType === "file"
+          ? `<div class="file-result"><a href="${job.result_url}" download>${icon("download")}<span>${mediaDownloadLabel(mediaType)}</span></a></div>`
+          : `<div class="video-result"><video controls playsinline preload="metadata" src="${job.result_url}"></video><a href="${job.result_url}" download>${icon("download")}<span>${mediaDownloadLabel(mediaType)}</span></a></div>`;
+    assistantBody = `<p class="terminal-state completed">${mediaReadyLabel(mediaType)}</p>${result}`;
   } else {
     assistantBody = `<p class="terminal-state ${job.status}">${escapeHtml(detail || statusLabel(job.status))}</p>`;
   }
   return `<section class="exchange" id="job-${job.id}" data-job-id="${job.id}">
     <article class="message user-message">
       <div class="message-avatar user-avatar">${t("you")}</div>
-      <div class="message-body">${referenceSummary(job)}<div class="message-text">${escapeHtml(request.prompt || "")}${music3 && request.lyrics ? `\n\n${escapeHtml(request.lyrics)}` : ""}</div><div class="message-meta">${executionMode}<span>${modelLabel(job)}</span><span>${escapeHtml(nodeLabel(job))}</span>${music3 ? "" : `<span>${request.width} × ${request.height}</span>`}<span>${request.duration}${t("seconds")}</span><span>${request.steps} ${t("steps")}</span><span>${t("seed")} ${request.seed}</span>${elapsed}${incognito}</div></div>
+      <div class="message-body">${referenceSummary(job)}<div class="message-text">${escapeHtml(request.prompt || request.runninghub_workflow_name || "")}${audio && request.lyrics ? `\n\n${escapeHtml(request.lyrics)}` : ""}</div><div class="message-meta">${executionMode}<span>${modelLabel(job)}</span><span>${escapeHtml(nodeLabel(job))}</span>${runningHub || audio ? "" : `<span>${request.width} × ${request.height}</span>`}${runningHub ? "" : `<span>${request.duration}${t("seconds")}</span><span>${request.steps} ${t("steps")}</span><span>${t("seed")} ${request.seed}</span>`}${elapsed}${incognito}</div></div>
     </article>
     <article class="message assistant-message">
       <div class="message-avatar assistant-avatar">H3</div>
@@ -1433,25 +1708,48 @@ function assetDetailFile(item, index, job) {
   return `<a class="asset-detail-file" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${media}<div><b>${escapeHtml(name)}</b><small>${escapeHtml(item.type || "file")}${item.size ? ` · ${formatBytes(item.size)}` : ""}</small></div></a>`;
 }
 
+function runningHubParameterFacts(request) {
+  const schema = request.runninghub_schema;
+  const parameters = request.runninghub_parameters || {};
+  if (!schema || !Array.isArray(schema.fields)) return [];
+  return schema.fields
+    .filter((field) => field.editable !== false && !field.media_kind && field.key !== schema.primary_text_key)
+    .map((field) => {
+      const raw = parameters[field.key];
+      const option = (field.options || []).find((item) => String(item.value) === String(raw));
+      const value = option?.label || (typeof raw === "boolean" ? localized(raw ? "开启" : "关闭", raw ? "On" : "Off") : String(raw ?? ""));
+      return `${runningHubFieldLabel(field)}: ${value.slice(0, 160)}`;
+    });
+}
+
 function renderAssetDetail(job) {
   const request = job.request || {};
-  const music3 = request.media_type === "audio" || request.model_variant === "music3-int8";
+  const mediaType = jobMediaType(job);
+  const audio = mediaType === "audio";
+  const runningHub = request.provider === "runninghub";
   const download = el("downloadAssetDetail");
   const downloadable = job.status === "completed" && Boolean(job.result_url);
   const references = request.references || [];
   const preview = job.status === "completed" && job.result_url
-    ? music3
+    ? audio
       ? `<audio controls preload="metadata" src="${escapeHtml(job.result_url)}"></audio>`
-      : `<video controls playsinline preload="metadata" src="${escapeHtml(job.result_url)}"></video>`
+      : mediaType === "image"
+        ? `<img src="${escapeHtml(job.result_url)}" alt="${escapeHtml(shortTitle(job))}">`
+        : mediaType === "file"
+          ? `<a class="detail-download" href="${escapeHtml(job.result_url)}" download>${icon("download")}<span>${mediaDownloadLabel(mediaType)}</span></a>`
+          : `<video controls playsinline preload="metadata" src="${escapeHtml(job.result_url)}"></video>`
     : `<div class="asset-detail-placeholder">${icon(job.status === "running" ? "loader-circle" : "file-x-2")}<span>${t("outputUnavailable")}</span></div>`;
   const files = references.length
     ? `<div class="asset-detail-files">${references.map((item, index) => assetDetailFile(item, index, job)).join("")}</div>`
     : `<p class="quiet">${t("noSourceFiles")}</p>`;
   const facts = [
     executionModeLabel(job), modelLabel(job), nodeLabel(job),
-    music3 ? null : `${request.width} × ${request.height}`,
-    `${request.duration}${t("seconds")}`, `${request.steps} ${t("steps")}`,
-    `${t("seed")} ${request.seed}`, `${t("overallTime")} ${formatElapsed(job.elapsed_seconds)}`,
+    runningHub || audio ? null : `${request.width} × ${request.height}`,
+    runningHub ? null : `${request.duration}${t("seconds")}`,
+    runningHub ? null : `${request.steps} ${t("steps")}`,
+    runningHub ? null : `${t("seed")} ${request.seed}`,
+    ...runningHubParameterFacts(request),
+    `${t("overallTime")} ${formatElapsed(job.elapsed_seconds)}`,
   ].filter(Boolean).map((value) => `<span>${escapeHtml(value)}</span>`).join("");
   el("assetDetailTitle").textContent = shortTitle(job);
   el("assetDetailMeta").textContent = `${statusLabel(job.status)} · ${formatTime(job.created_at, true)} · ${job.id}`;
@@ -1464,8 +1762,8 @@ function renderAssetDetail(job) {
   el("deleteAssetDetail").disabled = isActive(job);
   download.hidden = !downloadable;
   download.href = downloadable ? job.result_url : "#";
-  download.download = music3 ? `${job.id}.flac` : `${job.id}.mp4`;
-  download.querySelector("span").textContent = music3 ? t("downloadAudio") : t("downloadVideo");
+  download.download = job.id;
+  download.querySelector("span").textContent = mediaDownloadLabel(mediaType);
   el("regenerateAssetDetail").disabled = isActive(job);
   el("reuseAssetDetail").disabled = false;
   refreshIcons();
@@ -1509,13 +1807,28 @@ async function restoredReferences(job) {
       const blob = await response.blob();
       const fallbackTypes = { image: "image/png", video: "video/mp4", audio: "audio/mpeg" };
       const file = new File([blob], item.name || `${item.type}-${index + 1}`, { type: blob.type || fallbackTypes[item.type] || "application/octet-stream" });
-      restored.push({ file, kind: item.type, name: file.name, size: file.size, url: URL.createObjectURL(file) });
+      restored.push({ file, kind: item.type, field_key: item.field_key || "", name: file.name, size: file.size, url: URL.createObjectURL(file) });
     }
     return restored;
   } catch (error) {
     restored.forEach((item) => URL.revokeObjectURL(item.url));
     throw error;
   }
+}
+
+function composerNodeForJob(job) {
+  const requestedNode = job.request?.comfy_node || "auto";
+  if (requestedNode !== "auto" && Array.from(el("comfyNode").options).some((option) => option.value === requestedNode && !option.disabled)) {
+    return requestedNode;
+  }
+  if (job.request?.provider === "runninghub") {
+    const replacement = state.nodes.find((node) => (
+      node.healthy && node.provider === "runninghub" && node.workflow_id === job.request.runninghub_resource_id
+    ));
+    if (replacement) return replacement.id;
+  }
+  if (requestedNode === "auto") return "auto";
+  return "auto";
 }
 
 async function backfillJob(jobId) {
@@ -1531,9 +1844,12 @@ async function backfillJob(jobId) {
     el("lyrics").value = job.request?.lyrics || "";
     el("modelVariant").value = job.request?.model_variant || "fl2va-fp8";
     el("executionMode").value = job.request?.execution_mode || "native";
-    const requestedNode = job.request?.comfy_node || "auto";
-    el("comfyNode").value = Array.from(el("comfyNode").options).some((option) => option.value === requestedNode) ? requestedNode : "auto";
+    el("comfyNode").value = composerNodeForJob(job);
     updateModelUi();
+    if (job.request?.provider === "runninghub") {
+      state.runningHubParameters = { ...runningHubDefaultParameters(selectedRunningHubSchema()), ...(job.request.runninghub_parameters || {}) };
+      renderRunningHubParameters();
+    }
     if (job.request?.width && job.request?.height) setDimensions(job.request.width, job.request.height);
     el("duration").value = String(job.request?.duration ?? el("duration").value);
     el("steps").value = String(job.request?.steps ?? el("steps").value);
@@ -1560,6 +1876,8 @@ function resetComposer() {
   promptInput.value = "";
   el("lyrics").value = "";
   el("seed").value = "";
+  state.runningHubParameters = runningHubDefaultParameters(selectedRunningHubSchema());
+  state.pendingRunningHubMediaField = "";
   el("editBanner").hidden = true;
   el("addReference").disabled = false;
   el("generateButton").classList.remove("editing");
@@ -1584,11 +1902,15 @@ async function startEdit(jobId) {
     el("lyrics").value = job.request.lyrics || "";
     el("modelVariant").value = job.request.model_variant || "fl2va-fp8";
     el("executionMode").value = job.request.execution_mode || "native";
-    el("comfyNode").value = job.request.comfy_node || "auto";
+    el("comfyNode").value = composerNodeForJob(job);
     el("seed").value = String(job.request.seed);
     setDimensions(job.request.width, job.request.height);
     state.references = (job.request.references || []).map((item) => ({ ...item, kind: item.type, remote: true }));
     updateModelUi();
+    if (job.request?.provider === "runninghub") {
+      state.runningHubParameters = { ...runningHubDefaultParameters(selectedRunningHubSchema()), ...(job.request.runninghub_parameters || {}) };
+      renderRunningHubParameters();
+    }
     el("duration").value = String(job.request.duration);
     el("steps").value = String(job.request.steps);
     el("editBanner").hidden = false;
@@ -1662,28 +1984,31 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   showError("");
   const prompt = promptInput.value.trim();
+  const runningHubNode = selectedRunningHubNode();
+  const runningHub = Boolean(runningHubNode?.runninghub_schema);
   const minimumPromptLength = isMusic3() ? 2 : 8;
-  if (prompt.length < minimumPromptLength) return showError(localized(`请填写至少 ${minimumPromptLength} 个字符的提示词`, `Enter a prompt with at least ${minimumPromptLength} characters`));
+  if (!runningHub && prompt.length < minimumPromptLength) return showError(localized(`请填写至少 ${minimumPromptLength} 个字符的提示词`, `Enter a prompt with at least ${minimumPromptLength} characters`));
   const steps = isMusic3() ? 30 : selectedExecutionMode() === "turbo-lora" ? 8 : isDigitalHuman() ? 20 : Number(el("steps").value);
-  if (!Number.isInteger(steps) || steps < 4 || steps > 50) return showError(localized("采样步数请输入 4–50 的整数", "Sampling steps must be an integer from 4 to 50"));
+  if (!runningHub && (!Number.isInteger(steps) || steps < 4 || steps > 50)) return showError(localized("采样步数请输入 4–50 的整数", "Sampling steps must be an integer from 4 to 50"));
   const [width, height] = getDimensions();
   const button = el("generateButton");
   button.disabled = true;
   try {
-    const runningHubNode = selectedRunningHubNode();
     let payload;
     if (state.editingJobId) {
       const requestBody = {
         prompt,
-        lyrics: isMusic3() ? el("lyrics").value.trim() : "",
-        width,
-        height,
-        duration: Number(el("duration").value),
-        steps,
-        seed: el("seed").value === "" ? undefined : Number(el("seed").value),
         comfy_node: el("comfyNode").value,
       };
-      if (!runningHubNode) {
+      if (runningHub) {
+        requestBody.runninghub_parameters = collectRunningHubParameters();
+      } else {
+        requestBody.lyrics = isMusic3() ? el("lyrics").value.trim() : "";
+        requestBody.width = width;
+        requestBody.height = height;
+        requestBody.duration = Number(el("duration").value);
+        requestBody.steps = steps;
+        requestBody.seed = el("seed").value === "" ? undefined : Number(el("seed").value);
         requestBody.model_variant = selectedVariant();
         requestBody.execution_mode = selectedExecutionMode();
       }
@@ -1706,13 +2031,15 @@ form.addEventListener("submit", async (event) => {
       data.append("duration", el("duration").value);
       data.append("steps", String(steps));
       data.append("seed", el("seed").value);
-      if (!runningHubNode) {
+      if (runningHub) {
+        data.append("runninghub_parameters", JSON.stringify(collectRunningHubParameters()));
+      } else {
         data.append("model_variant", selectedVariant());
         data.append("execution_mode", selectedExecutionMode());
       }
       data.append("comfy_node", el("comfyNode").value);
       data.append("incognito", state.incognito ? "true" : "false");
-      data.append("reference_manifest", JSON.stringify(state.references.map((item) => ({ type: item.kind }))));
+      data.append("reference_manifest", JSON.stringify(state.references.map((item) => ({ type: item.kind, ...(item.field_key ? { field_key: item.field_key } : {}) }))));
       state.references.forEach((item) => data.append("references", item.file, item.file.name));
       const headers = state.incognito ? { "X-H3-Incognito-Code": state.incognitoCode } : {};
       payload = await api("/api/v1/generations", { method: "POST", headers, body: data });
@@ -2074,10 +2401,27 @@ el("referenceList").addEventListener("click", (event) => {
   renderReferences();
 });
 
-el("addReference").addEventListener("click", () => referenceInput.click());
+el("addReference").addEventListener("click", () => {
+  state.pendingRunningHubMediaField = "";
+  referenceInput.click();
+});
 referenceInput.addEventListener("change", () => {
-  addFiles(referenceInput.files);
+  addFiles(referenceInput.files, state.pendingRunningHubMediaField);
   referenceInput.value = "";
+  updateModelUi();
+});
+el("runningHubParameters").addEventListener("input", (event) => {
+  const input = event.target.closest("[data-runninghub-key]");
+  if (!input) return;
+  state.runningHubParameters[input.dataset.runninghubKey] = input.type === "checkbox" ? input.checked : input.value;
+  state.runningHubRenderSignature = runningHubParameterRenderSignature();
+});
+el("runningHubParameters").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-runninghub-media-key]");
+  if (!button) return;
+  state.pendingRunningHubMediaField = button.dataset.runninghubMediaKey;
+  referenceInput.accept = button.dataset.runninghubMediaKind === "file" ? "*/*" : `${button.dataset.runninghubMediaKind}/*`;
+  referenceInput.click();
 });
 
 const composerBox = el("dropZone");

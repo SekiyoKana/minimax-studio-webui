@@ -30,11 +30,11 @@
 **RunningHub API 节点**
 
 - 推理节点新增 `comfyui` 与 `runninghub` 两种类型，创建任务时可自动调度或手动指定。
-- RunningHub 节点配置 API Key、目标工作流 ID 和最大并发数，最大并发数默认值为 1。
+- RunningHub 节点配置 API Key、工作流或 AI 应用地址和最大并发数，服务端自动解析资源 ID、工作流名称、输入参数和输出类型。
 - RunningHub API Key 仅保存在服务端 SQLite，节点接口只返回密钥保存状态。
 - 调度容量按可用节点槽位总数计算。ComfyUI 节点容量为 1，RunningHub 节点容量由最大并发数控制。
 - RunningHub 节点状态显示当前 API Key 的账户余额、账户任务数和最近一次调用的余额差值。账户查询失败会保留最近一次数据并记录错误，不会将节点标记为离线。
-- 节点状态刷新读取目标工作流 JSON 并识别对应生成方案。选中 RunningHub 节点后，页面隐藏模型与执行方案控件，显示工作流名称和 ID。
+- 按 [RunningHub 官方 API 文档](https://www.runninghub.ai/runninghub-api-doc-en/) 支持通用 AI 应用与普通工作流。页面根据工作流参数定义动态显示文本、数值、枚举、开关和媒体输入。
 
 **生成编辑器**
 
@@ -204,11 +204,11 @@ bash scripts/install.sh
 
 ## 多节点调度
 
-页面标题区域的服务器图标用于管理 ComfyUI 与 RunningHub 推理节点。新增节点时选择节点类型并填写名称和 API 地址，节点 ID 自动生成。创建任务时选择“自动调度”，或选择一个在线节点定向执行。
+页面标题区域的服务器图标用于管理 ComfyUI 与 RunningHub 推理节点。新增节点时选择节点类型并填写名称，节点 ID 自动生成。创建任务时可以选择 ComfyUI 自动调度、指定节点，或选择某个 RunningHub 工作流的自动调度入口。同一 RunningHub 资源 ID 对应的可用节点共享并发容量。
 
-RunningHub 节点需要将节点名称填写为工作流名称，并填写 API Key、目标工作流 ID 和最大并发数。目标工作流必须包含与本项目对应生成方案相同的节点 ID 和节点类型。API Key 不会通过节点查询接口返回，编辑节点时留空会保留当前密钥。
+RunningHub 节点需要填写名称、API Key、工作流或 AI 应用的完整 RunningHub 地址和最大并发数。服务会从地址确定 API 基础地址，并读取资源 ID、工作流名称、参数定义和输出类型。API Key 不会通过节点查询接口返回，编辑节点时留空会保留当前密钥。
 
-健康检查通过目标工作流 JSON 自动识别 H3 FL2VA、Ref2VA、8-step LoRA、数字人、H3 NSFW 或 Music3。手动选择 RunningHub 节点时，服务使用识别结果覆盖请求中的 `model_variant` 和 `execution_mode`。自动调度仅在全部在线节点对应同一个 RunningHub 工作流时自动锁定该工作流；混合节点按生成方案筛选兼容入口。
+AI 应用参数来自官方 `apiCallDemo` 和 `webapp/detail` 接口，普通工作流参数来自 `getJsonApiFormat`。选择 RunningHub 节点后，页面隐藏 H3 固定模型、尺寸、时长和步数控件，并按目标工作流显示对应字段。账户状态查询失败会记录 `account_error`，不会阻止已识别工作流继续使用。
 
 同一服务器部署多个节点时，每个 ComfyUI 实例需要使用独立端口、GPU、用户目录和数据库。例如：
 
@@ -221,7 +221,7 @@ RunningHub 节点需要将节点名称填写为工作流名称，并填写 API K
 
 ```text
 data/config.db
-├── comfy_nodes       节点类型、API 地址、API Key、工作流 ID、最大并发数和启用状态
+├── comfy_nodes       节点、密钥、工作流参数定义、账户数据、最近调用费用和并发配置
 └── service_settings  comfy_health_seconds，默认 60 秒
 ```
 
@@ -269,7 +269,7 @@ curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
 
 curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
   -H 'Content-Type: application/json' \
-  -d '{"name":"RunningHub H3","provider":"runninghub","url":"https://www.runninghub.ai","api_key":"YOUR_RUNNINGHUB_API_KEY","workflow_id":"1904136902449209346","max_concurrency":2}'
+  -d '{"name":"RunningHub 工作流","provider":"runninghub","api_key":"YOUR_RUNNINGHUB_API_KEY","workflow_url":"https://www.runninghub.ai/zh-cn/ai-detail/2086401261143273474","max_concurrency":2}'
 
 curl -X PATCH http://127.0.0.1:8193/api/v1/comfy/settings \
   -H 'Content-Type: application/json' \
