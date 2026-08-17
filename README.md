@@ -35,6 +35,8 @@
 - 调度容量按可用节点槽位总数计算。ComfyUI 节点容量为 1，RunningHub 节点容量由最大并发数控制。
 - RunningHub 节点状态显示当前 API Key 的账户余额、账户任务数和最近一次调用的余额差值。账户查询失败会保留最近一次数据并记录错误，不会将节点标记为离线。
 - 按 [RunningHub 官方 API 文档](https://www.runninghub.ai/runninghub-api-doc-en/) 支持通用 AI 应用与普通工作流。页面根据工作流参数定义动态显示文本、数值、枚举、开关和媒体输入。
+- 选择 RunningHub 工作流后，页面隐藏本地 ComfyUI 的模型、执行方案、分辨率、时长和步数控件，改为显示该工作流的动态参数。
+- RunningHub 任务支持素材字段映射、回填发送区和重新生成，动态参数与媒体字段绑定会保存在任务记录中。
 
 **生成编辑器**
 
@@ -53,10 +55,10 @@
 
 **多节点并发**
 
-- 新增 ComfyUI 节点管理界面，支持新增、查看、修改、启用、停用和删除节点。
+- 新增推理节点管理界面，支持 ComfyUI 与 RunningHub 节点的新增、查看、修改、启用、停用和删除。
 - 节点 ID 由服务自动生成。节点地址和状态刷新间隔保存在 `data/config.db`。
 - 默认每 60 秒刷新一次节点状态，页面可将间隔调整为 5 至 3600 秒。
-- 支持自动负载均衡和手动指定节点。每个在线节点执行一个任务，在线节点数量等于当前并行容量。
+- 支持自动负载均衡和手动指定节点。ComfyUI 节点容量固定为 1，RunningHub 节点容量由最大并发数决定，当前并行容量为全部在线节点槽位之和。
 - 任务记录、运行窗口和素材详情显示实际执行主机。
 
 **页面交互**
@@ -98,6 +100,7 @@
 | 数字人 | Ref2VA FP8 Scaled，音频驱动 | 1 张人物图片、1 段驱动音频 | 音频决定长度，固定 20 步，MP4 |
 | Music3 | Music3 DiT INT8 与文本编码器 INT8 | 音乐描述、可选分段歌词 | 1 至 300 秒，固定 30 步，FLAC |
 | H3 NSFW | Ref2VA FP8 Scaled 与 NaughtyTimes LoRA | Ref2VA 参考素材 | 仅限无痕模式，MP4 |
+| RunningHub | 目标 AI 应用或 API 工作流定义的模型 | 工作流定义的文本、数值、枚举、开关及媒体字段 | 参数与输出类型由目标工作流决定 |
 
 ### 数字人
 
@@ -116,6 +119,15 @@ Music3 使用 ComfyUI 原生 `MiniMaxMusic3TextEncode`、`EmptyMiniMaxMusic3Late
 
 > [!NOTE]
 > `comfy-kitchen` 需要与服务器驱动支持的 CUDA Runtime 兼容。已验证服务器使用 NVIDIA 驱动 `575.51.03` 和 CUDA 12.9 本地构建。若日志出现 `CUDA driver version is insufficient for CUDA runtime version`，请检查 wheel 的 CUDA 版本和服务器驱动支持范围。
+
+### RunningHub 通用工作流
+
+RunningHub 节点使用工作流或 AI 应用的完整官方地址完成绑定。服务从地址解析资源类型与资源 ID，读取工作流名称、输入参数和输出类型，并将账户余额、当前任务数和最近一次调用消耗写入节点状态。
+
+动态参数支持文本、整数、浮点数、枚举、开关、图片、视频、音频和普通文件。媒体素材可以自动按类型分配，也可以使用字段键定向绑定。任务回填与重新生成会校验原工作流资源 ID，避免参数提交到其他工作流。
+
+> [!IMPORTANT]
+> 节点配置必须填写 `runninghub.ai` 或 `runninghub.cn` 的完整 HTTPS 工作流地址或 AI 应用地址。单独填写资源 ID 无法创建节点。
 
 ## 页面功能
 
@@ -210,6 +222,8 @@ RunningHub 节点需要填写名称、API Key、工作流或 AI 应用的完整 
 
 AI 应用参数来自官方 `apiCallDemo` 和 `webapp/detail` 接口，普通工作流参数来自 `getJsonApiFormat`。选择 RunningHub 节点后，页面隐藏 H3 固定模型、尺寸、时长和步数控件，并按目标工作流显示对应字段。账户状态查询失败会记录 `account_error`，不会阻止已识别工作流继续使用。
 
+支持的地址路径包括 `/ai-detail/{id}`、`/workflow/{id}`、`/workflow-detail/{id}` 和 `/post/{id}`，可包含 `zh-cn` 等语言路径前缀。节点名称与工作流名称分别保存，页面选择器显示已识别的工作流名称。
+
 同一服务器部署多个节点时，每个 ComfyUI 实例需要使用独立端口、GPU、用户目录和数据库。例如：
 
 | 节点 | API 地址 | GPU | 建议配置 |
@@ -258,6 +272,21 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
   -F 'duration=120' \
   -F 'steps=30'
 ```
+
+### 创建 RunningHub 任务
+
+字段键需要从 `GET /api/v1/comfy/nodes` 返回的 `runninghub_schema` 中读取：
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations \
+  -F 'comfy_node=rh:2086401261143273474' \
+  -F 'prompt=人物在室内缓慢转身，固定镜头，动作自然。' \
+  -F 'runninghub_parameters={"89.aspect_ratio":"16:9 (Widescreen)","37.value":8}' \
+  -F 'reference_manifest=[{"type":"image","field_key":"36.image"}]' \
+  -F 'references=@reference.png;type=image/png'
+```
+
+`rh:<resource_id>` 会在绑定同一资源的可用 RunningHub 节点之间调度。填写具体节点 ID 时，任务定向到该节点。
 
 ### 管理节点
 
