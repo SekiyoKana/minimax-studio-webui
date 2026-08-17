@@ -2,7 +2,7 @@
 
 # MiniMax Full Model API / WebUI
 
-A ComfyUI Web service for MiniMax H3 video and MiniMax Music3 audio generation
+A ComfyUI and RunningHub API Web service for MiniMax H3 video and MiniMax Music3 audio generation
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -16,7 +16,7 @@ A ComfyUI Web service for MiniMax H3 video and MiniMax Music3 audio generation
 
 </div>
 
-The project wraps ComfyUI workflows in a responsive Web interface and HTTP API. It manages asset uploads, parameter validation, persistent queues, real-time progress, node scheduling, generated artifacts, and privacy isolation. Current workflows include H3 FL2VA, Ref2VA, 8-step LoRA v1.0, audio-driven digital humans, Music3 INT8, and an optional H3 NSFW mode.
+The project wraps ComfyUI and RunningHub workflows in a responsive Web interface and HTTP API. It manages asset uploads, parameter validation, persistent queues, real-time progress, node scheduling, generated artifacts, and privacy isolation. Current workflows include H3 FL2VA, Ref2VA, 8-step LoRA v1.0, audio-driven digital humans, Music3 INT8, and an optional H3 NSFW mode.
 
 ![MiniMax Studio workspace](docs/images/h3-studio-overview.jpg)
 
@@ -25,11 +25,27 @@ The project wraps ComfyUI workflows in a responsive Web interface and HTTP API. 
 
 ## Feature Updates
 
+### 2026-08-17
+
+**RunningHub API Nodes**
+
+- Inference nodes now support `comfyui` and `runninghub` providers with automatic or manual task routing.
+- RunningHub nodes store an API key, target workflow ID, and maximum concurrency. The default maximum concurrency is 1.
+- RunningHub API keys remain in the server-side SQLite database. Node responses expose only whether a key is saved.
+- Scheduling capacity is the sum of online node slots. A ComfyUI node has one slot, while a RunningHub node uses its configured maximum concurrency.
+- Health checks read the target workflow JSON and identify its generation mode. Selecting a RunningHub node hides the model and execution controls and displays the workflow name and ID.
+
+**Generation Composer**
+
+- Combined parameters, quick actions, advanced settings, and the generate button into one toolbar row.
+- Added an `@` hover menu for inserting uploaded image names and running quick actions. H3 provides prompt optimization, while Music3 provides style and lyric optimization.
+
 ### 2026-08-14
 
 **Music3 INT8**
 
 - Added a MiniMax Music3 INT8 workflow with music-description and section-tagged lyric inputs for tracks up to 300 seconds.
+- Music3 API jobs enable forced-duration mode, suppressing the model end token until the requested duration is reached.
 - Produces 32 kHz, 16-bit stereo FLAC with a fixed 30-step Euler sampler.
 - Added AI Arrangement and AI Lyrics. AI Arrangement follows the official MiniMax Music3 `music-caption-rewriter` Structured Caption specification. AI Lyrics returns section-tagged lyrics ready for Music3 input.
 - The Music3 CUDA device is read from `/system_stats` on the ComfyUI node assigned to the task. Music3 therefore uses the CUDA device exposed by that node.
@@ -95,7 +111,7 @@ This workflow requires the `VRGDG_MiniMaxH3AudioDrive` node from `comfyui-vrgame
 
 ### Music3
 
-Music3 uses ComfyUI's native `MiniMaxMusic3TextEncode` and `EmptyMiniMaxMusic3LatentAudio` nodes together with `CLIPLoaderMultiGPU` from ComfyUI-MultiGPU. The service injects the CUDA device reported by the executing node into the workflow, preventing the text encoder from falling back to CPU.
+Music3 uses ComfyUI's native `MiniMaxMusic3TextEncode` and `EmptyMiniMaxMusic3LatentAudio` nodes together with `CLIPLoaderMultiGPU` from ComfyUI-MultiGPU. The service injects the CUDA device reported by the executing node into the workflow, preventing the text encoder from falling back to CPU. API jobs enable forced-duration mode, suppressing `<|audio_end|>` until the requested duration is reached.
 
 > [!NOTE]
 > `comfy-kitchen` must be compatible with the CUDA Runtime supported by the server driver. The verified server uses NVIDIA driver `575.51.03` with a local CUDA 12.9 build. If the log reports `CUDA driver version is insufficient for CUDA runtime version`, check the wheel's CUDA version against the driver's supported range.
@@ -108,7 +124,7 @@ Music3 uses ComfyUI's native `MiniMaxMusic3TextEncode` and `EmptyMiniMaxMusic3La
 | Prompts | H3 prompt optimization, Music3 AI Arrangement, AI Lyrics, and streamed output |
 | Conversation | Latest 10 records, upward history loading, progress, host labels, downloads, edits, cancellation, deletion, and composer refill |
 | Asset library | Infinite loading, search, status filtering, detail dialog, previews, composer refill, and deletion |
-| Node manager | Node CRUD, generated IDs, health status, check interval, enable, and disable controls |
+| Node manager | ComfyUI and RunningHub node CRUD, generated IDs, health status, concurrency, check interval, enable, and disable controls |
 | Page settings | Chinese and English switching, OpenAPI shortcut, and responsive mobile layout |
 
 ![OpenAPI interactive documentation](docs/images/h3-api-docs.jpg)
@@ -124,14 +140,16 @@ flowchart LR
     Q --> L["Automatic or assigned-node scheduling"]
     L --> C1["ComfyUI node A :8188"]
     L --> C2["ComfyUI node B :8189"]
+    L --> R["RunningHub API workflow"]
     C1 --> G1["GPU 0"]
     C2 --> G2["GPU 1"]
     C1 --> O["MP4 or FLAC"]
     C2 --> O
+    R --> O
     O --> A
 ```
 
-FastAPI creates one task worker for each enabled ComfyUI node. Reference assets are uploaded through the ComfyUI HTTP API and generated outputs are returned over HTTP, so the API service and ComfyUI nodes do not require a shared filesystem.
+FastAPI creates one task worker for each ComfyUI node and creates the configured number of task slots for each RunningHub node. Reference assets are uploaded through the selected provider API, and generated outputs are returned over HTTP.
 
 ## System Requirements
 
@@ -185,7 +203,11 @@ See the [cloud GPU deployment guide](docs/en/DEPLOYMENT.md) for all installation
 
 ## Multi-node Scheduling
 
-Use the server icon in the page header to manage ComfyUI nodes. Enter a name and API address when adding a node; the service generates its ID. Select **Auto** when creating a task, or choose an online node for directed execution.
+Use the server icon in the page header to manage ComfyUI and RunningHub inference nodes. Choose the provider and enter a name and API address when adding a node; the service generates its ID. Select **Auto** when creating a task, or choose an online node for directed execution.
+
+For a RunningHub node, enter the workflow name as the node name, then provide the API key, target workflow ID, and maximum concurrency. The target workflow must contain the node IDs and node types used by the corresponding generation mode in this project. Node query responses never return the API key. Leaving the key field empty while editing preserves the saved key.
+
+Health checks identify H3 FL2VA, Ref2VA, 8-step LoRA, digital-human, H3 NSFW, or Music3 workflows from the target workflow JSON. Selecting a RunningHub node causes the service to override `model_variant` and `execution_mode` with the detected profile. Automatic scheduling locks the workflow when all online nodes use the same RunningHub workflow. Mixed node sets route jobs only to compatible RunningHub entries.
 
 When multiple nodes run on the same server, each ComfyUI process needs an independent port, GPU, user directory, and database. For example:
 
@@ -198,7 +220,7 @@ Nodes and settings are stored in:
 
 ```text
 data/config.db
-├── comfy_nodes       Node ID, name, API address, enabled state, and timestamps
+├── comfy_nodes       Provider, API address, API key, workflow ID, maximum concurrency, and enabled state
 └── service_settings  comfy_health_seconds, 60 seconds by default
 ```
 
@@ -243,6 +265,10 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
 curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
   -H 'Content-Type: application/json' \
   -d '{"name":"GPU 1","url":"http://127.0.0.1:8189"}'
+
+curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"RunningHub H3","provider":"runninghub","url":"https://www.runninghub.ai","api_key":"YOUR_RUNNINGHUB_API_KEY","workflow_id":"1904136902449209346","max_concurrency":2}'
 
 curl -X PATCH http://127.0.0.1:8193/api/v1/comfy/settings \
   -H 'Content-Type: application/json' \

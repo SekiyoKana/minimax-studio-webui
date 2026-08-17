@@ -93,7 +93,7 @@ if [[ "$DRY_RUN" == "1" ]]; then
   exit 0
 fi
 
-for command in aria2c ffmpeg rsync nvidia-smi systemctl; do
+for command in aria2c ffmpeg patch rsync nvidia-smi systemctl; do
   require_command "$command"
 done
 
@@ -114,6 +114,10 @@ clone_at_commit \
   "https://github.com/pollockjj/ComfyUI-MultiGPU.git" \
   "$COMFY_ROOT/custom_nodes/comfyui-multigpu" \
   "$MULTIGPU_COMMIT"
+
+if ! grep -q 'force_duration' "$COMFY_ROOT/comfy_extras/nodes_minimax_music.py"; then
+  patch -d "$COMFY_ROOT" -p1 < "$REPO_ROOT/patches/comfyui-music3-force-duration.patch"
+fi
 
 if [[ ! -x "$COMFY_ROOT/.venv/bin/python" ]]; then
   "$PYTHON_BIN" -m venv "$COMFY_ROOT/.venv"

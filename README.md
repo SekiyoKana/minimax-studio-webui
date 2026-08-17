@@ -2,7 +2,7 @@
 
 # MiniMax Full Model API / WebUI
 
-面向 MiniMax H3 视频与 MiniMax Music3 音乐生成的 ComfyUI Web 服务
+面向 MiniMax H3 视频与 MiniMax Music3 音乐生成的 ComfyUI 与 RunningHub API Web 服务
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -16,7 +16,7 @@
 
 </div>
 
-项目将 ComfyUI 工作流封装为响应式网页与 HTTP API，统一处理素材上传、参数校验、任务排队、实时进度、节点调度、产物管理和隐私隔离。当前包含 H3 FL2VA、Ref2VA、8-step LoRA v1.0、数字人音频驱动、Music3 INT8 及可选 H3 NSFW 工作流。
+项目将 ComfyUI 与 RunningHub 工作流封装为响应式网页与 HTTP API，统一处理素材上传、参数校验、任务排队、实时进度、节点调度、产物管理和隐私隔离。当前包含 H3 FL2VA、Ref2VA、8-step LoRA v1.0、数字人音频驱动、Music3 INT8 及可选 H3 NSFW 工作流。
 
 ![MiniMax Studio 工作台](docs/images/h3-studio-overview.jpg)
 
@@ -25,11 +25,27 @@
 
 ## 功能更新
 
+### 2026-08-17
+
+**RunningHub API 节点**
+
+- 推理节点新增 `comfyui` 与 `runninghub` 两种类型，创建任务时可自动调度或手动指定。
+- RunningHub 节点配置 API Key、目标工作流 ID 和最大并发数，最大并发数默认值为 1。
+- RunningHub API Key 仅保存在服务端 SQLite，节点接口只返回密钥保存状态。
+- 调度容量按在线节点槽位总数计算。ComfyUI 节点容量为 1，RunningHub 节点容量由最大并发数控制。
+- 健康检查读取目标工作流 JSON 并识别对应生成方案。选中 RunningHub 节点后，页面隐藏模型与执行方案控件，显示工作流名称和 ID。
+
+**生成编辑器**
+
+- 底部参数、快捷入口、高级设置和发送按钮合并为单行工具栏。
+- 新增 `@` 悬浮菜单，可插入已上传图片名称并调用快捷功能。H3 提供提示词优化，Music3 提供曲风优化和歌词优化。
+
 ### 2026-08-14
 
 **Music3 INT8**
 
 - 新增 MiniMax Music3 INT8 工作流，支持音乐描述与分段歌词输入，最长 300 秒。
+- Music3 API 任务启用强制时长模式，在请求时长达到前屏蔽模型结束标记，输出长度按请求时长生成。
 - 输出 32 kHz、16-bit、立体声 FLAC，固定使用 30 步 Euler 采样。
 - 新增 AI 编曲和 AI 写词。AI 编曲遵循 MiniMax Music3 官方 `music-caption-rewriter` Structured Caption 规范，AI 写词输出可直接用于 Music3 的分段标签歌词。
 - Music3 CUDA 设备从当前执行任务的 ComfyUI 节点 `/system_stats` 读取。节点运行在指定 GPU 时，Music3 使用该节点对应的 CUDA 设备。
@@ -95,7 +111,7 @@
 
 ### Music3
 
-Music3 使用 ComfyUI 原生 `MiniMaxMusic3TextEncode`、`EmptyMiniMaxMusic3LatentAudio` 节点和 ComfyUI-MultiGPU 的 `CLIPLoaderMultiGPU`。服务向工作流写入执行节点报告的 CUDA 设备，避免文本编码器回退到 CPU。
+Music3 使用 ComfyUI 原生 `MiniMaxMusic3TextEncode`、`EmptyMiniMaxMusic3LatentAudio` 节点和 ComfyUI-MultiGPU 的 `CLIPLoaderMultiGPU`。服务向工作流写入执行节点报告的 CUDA 设备，避免文本编码器回退到 CPU。API 任务启用强制时长模式，在目标时长前屏蔽 `<|audio_end|>`，达到目标时长后停止解码。
 
 > [!NOTE]
 > `comfy-kitchen` 需要与服务器驱动支持的 CUDA Runtime 兼容。已验证服务器使用 NVIDIA 驱动 `575.51.03` 和 CUDA 12.9 本地构建。若日志出现 `CUDA driver version is insufficient for CUDA runtime version`，请检查 wheel 的 CUDA 版本和服务器驱动支持范围。
@@ -108,7 +124,7 @@ Music3 使用 ComfyUI 原生 `MiniMaxMusic3TextEncode`、`EmptyMiniMaxMusic3Late
 | 提示词 | H3 提示词优化、Music3 AI 编曲、AI 写词和流式输出 |
 | 对话流 | 最近 10 条、上滑加载、进度、主机标记、下载、修改、取消、删除和回填 |
 | 素材库 | 触底加载、搜索、状态筛选、详情弹框、素材预览、回填和删除 |
-| 节点管理 | 节点增删改查、自动 ID、健康状态、检测间隔和启停控制 |
+| 节点管理 | ComfyUI 与 RunningHub 节点增删改查、自动 ID、健康状态、并发数、检测间隔和启停控制 |
 | 页面设置 | 中英文切换、OpenAPI 文档入口和响应式移动端布局 |
 
 ![OpenAPI 交互文档](docs/images/h3-api-docs.jpg)
@@ -124,14 +140,16 @@ flowchart LR
     Q --> L["自动调度或指定节点"]
     L --> C1["ComfyUI 节点 A :8188"]
     L --> C2["ComfyUI 节点 B :8189"]
+    L --> R["RunningHub API 工作流"]
     C1 --> G1["GPU 0"]
     C2 --> G2["GPU 1"]
     C1 --> O["MP4 或 FLAC"]
     C2 --> O
+    R --> O
     O --> A
 ```
 
-FastAPI 为每个启用的 ComfyUI 节点创建一个任务工作线程。参考素材通过 ComfyUI HTTP API 上传，生成结果通过 HTTP 回传，因此 API 服务和 ComfyUI 节点无需共享文件系统。
+FastAPI 为每个 ComfyUI 节点创建一个任务工作线程，并按 RunningHub 节点的最大并发数创建对应数量的任务槽位。参考素材通过目标节点 API 上传，生成结果通过 HTTP 回传。
 
 ## 系统要求
 
@@ -185,7 +203,11 @@ bash scripts/install.sh
 
 ## 多节点调度
 
-页面标题区域的服务器图标用于管理 ComfyUI 节点。新增节点时填写名称和 API 地址，节点 ID 自动生成。创建任务时选择“自动调度”，或选择一个在线节点定向执行。
+页面标题区域的服务器图标用于管理 ComfyUI 与 RunningHub 推理节点。新增节点时选择节点类型并填写名称和 API 地址，节点 ID 自动生成。创建任务时选择“自动调度”，或选择一个在线节点定向执行。
+
+RunningHub 节点需要将节点名称填写为工作流名称，并填写 API Key、目标工作流 ID 和最大并发数。目标工作流必须包含与本项目对应生成方案相同的节点 ID 和节点类型。API Key 不会通过节点查询接口返回，编辑节点时留空会保留当前密钥。
+
+健康检查通过目标工作流 JSON 自动识别 H3 FL2VA、Ref2VA、8-step LoRA、数字人、H3 NSFW 或 Music3。手动选择 RunningHub 节点时，服务使用识别结果覆盖请求中的 `model_variant` 和 `execution_mode`。自动调度仅在全部在线节点对应同一个 RunningHub 工作流时自动锁定该工作流；混合节点按生成方案筛选兼容入口。
 
 同一服务器部署多个节点时，每个 ComfyUI 实例需要使用独立端口、GPU、用户目录和数据库。例如：
 
@@ -198,7 +220,7 @@ bash scripts/install.sh
 
 ```text
 data/config.db
-├── comfy_nodes       节点 ID、名称、API 地址、启用状态和时间
+├── comfy_nodes       节点类型、API 地址、API Key、工作流 ID、最大并发数和启用状态
 └── service_settings  comfy_health_seconds，默认 60 秒
 ```
 
@@ -243,6 +265,10 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
 curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
   -H 'Content-Type: application/json' \
   -d '{"name":"GPU 1","url":"http://127.0.0.1:8189"}'
+
+curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"RunningHub H3","provider":"runninghub","url":"https://www.runninghub.ai","api_key":"YOUR_RUNNINGHUB_API_KEY","workflow_id":"1904136902449209346","max_concurrency":2}'
 
 curl -X PATCH http://127.0.0.1:8193/api/v1/comfy/settings \
   -H 'Content-Type: application/json' \

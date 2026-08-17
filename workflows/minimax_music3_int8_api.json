@@ -50,6 +50,7 @@
       "lyrics": "[Instrumental]",
       "seed": 0,
       "max_duration": 60.0,
+      "force_duration": false,
       "cfg_scale": 1.7,
       "top_k": 50
     },

@@ -18,13 +18,13 @@ The current web interface has no service-level API-key field. Public deployments
 curl http://127.0.0.1:8193/health
 ```
 
-The `nodes` array reports each ComfyUI node's health, active job, and manual queue depth. `parallel_capacity` is the current number of online nodes. The service checks and keeps each node active every 60 seconds.
+The `nodes` array reports each inference node's provider, health, capacity, active jobs, and manual queue depth. `parallel_capacity` is the sum of all online node capacities. The service checks and keeps each node active every 60 seconds by default.
 
 Use `comfy_node=auto` for automatic scheduling or provide a `nodes[].id` value to select a node manually. The default is `auto`.
 
-## ComfyUI Node Management
+## Inference Node Management
 
-Nodes and the health-check interval are stored in `data/config.db`. These changes apply to the scheduler immediately:
+ComfyUI and RunningHub nodes and the health-check interval are stored in `data/config.db`. These changes apply to the scheduler immediately:
 
 ```bash
 curl http://127.0.0.1:8193/api/v1/comfy/nodes
@@ -32,6 +32,10 @@ curl http://127.0.0.1:8193/api/v1/comfy/nodes
 curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
   -H 'Content-Type: application/json' \
   -d '{"name":"GPU 2","url":"http://10.0.0.12:8188"}'
+
+curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"RunningHub H3","provider":"runninghub","url":"https://www.runninghub.ai","api_key":"YOUR_RUNNINGHUB_API_KEY","workflow_id":"1904136902449209346","max_concurrency":2}'
 
 curl -X PATCH http://127.0.0.1:8193/api/v1/comfy/nodes/gpu-2 \
   -H 'Content-Type: application/json' \
@@ -43,6 +47,21 @@ curl -X PATCH http://127.0.0.1:8193/api/v1/comfy/settings \
 ```
 
 The service generates the node ID and returns it in the response `id` field.
+
+Node fields:
+
+| Field | ComfyUI | RunningHub |
+|---|---|---|
+| `name` | Node name | Workflow name displayed in the interface |
+| `provider` | `comfyui` | `runninghub` |
+| `url` | ComfyUI HTTP API address | RunningHub API address |
+| `api_key` | Optional | Required |
+| `workflow_id` | Ignored | Required target workflow ID |
+| `max_concurrency` | Fixed at 1 | 1 to 64, default 1 |
+
+API keys are written only to SQLite. Node query responses include `has_api_key` and omit the secret value. Leaving `api_key` empty while editing the same provider preserves the saved key. Changing providers requires a key valid for the new provider.
+
+RunningHub health checks read the target workflow JSON and return `workflow_variant` and `workflow_execution_mode`. When a task targets a RunningHub node, the service overrides the requested model and execution mode with this profile, and the interface displays only the workflow name and ID. With multiple RunningHub workflows in automatic scheduling, jobs are assigned only to compatible nodes.
 
 Delete a node with `DELETE /api/v1/comfy/nodes/{node_id}`. The service rejects disabling or deleting a node that is running a job, has manually targeted queued jobs, or is the final enabled node.
 
@@ -121,7 +140,7 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
   -F 'steps=30'
 ```
 
-Music3 accepts a maximum duration of 300 seconds and may end a song earlier. The service returns 32 kHz, 16-bit stereo FLAC.
+Music3 accepts a maximum duration of 300 seconds. API jobs enable forced-duration mode, suppressing the model end token until the requested duration is reached. The service returns 32 kHz, 16-bit stereo FLAC.
 
 ## Query Jobs
 
@@ -151,6 +170,14 @@ After execution starts, only the title can be changed.
 curl -X POST http://127.0.0.1:8193/api/v1/generations/JOB_ID/cancel
 curl -X DELETE http://127.0.0.1:8193/api/v1/generations/JOB_ID
 ```
+
+## Regenerate
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations/JOB_ID/regenerate
+```
+
+A completed, failed, or cancelled job can be regenerated. The new job keeps the original prompt, reference files, generation parameters, seed, and node selection. Reference files are copied into the new job directory.
 
 ## Download an Artifact
 

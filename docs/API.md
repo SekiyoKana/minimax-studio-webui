@@ -18,13 +18,13 @@ Authorization: Bearer YOUR_API_KEY
 curl http://127.0.0.1:8193/health
 ```
 
-响应中的 `nodes` 包含各 ComfyUI 节点的在线状态、当前任务和手动队列深度。`parallel_capacity` 为当前在线节点数量。服务每 60 秒检查并保活一次节点。
+响应中的 `nodes` 包含各推理节点的类型、在线状态、容量、当前任务和手动队列深度。`parallel_capacity` 为所有在线节点的容量总和。服务默认每 60 秒检查并保活一次节点。
 
 创建任务时使用 `comfy_node=auto` 自动调度，或填写 `nodes[].id` 手动指定节点。未填写时默认为 `auto`。
 
-## ComfyUI 节点管理
+## 推理节点管理
 
-节点和健康检查间隔保存在 `data/config.db`。以下修改会立即应用到调度器：
+ComfyUI 与 RunningHub 节点及健康检查间隔保存在 `data/config.db`。以下修改会立即应用到调度器：
 
 ```bash
 curl http://127.0.0.1:8193/api/v1/comfy/nodes
@@ -32,6 +32,10 @@ curl http://127.0.0.1:8193/api/v1/comfy/nodes
 curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
   -H 'Content-Type: application/json' \
   -d '{"name":"GPU 2","url":"http://10.0.0.12:8188"}'
+
+curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"RunningHub H3","provider":"runninghub","url":"https://www.runninghub.ai","api_key":"YOUR_RUNNINGHUB_API_KEY","workflow_id":"1904136902449209346","max_concurrency":2}'
 
 curl -X PATCH http://127.0.0.1:8193/api/v1/comfy/nodes/gpu-2 \
   -H 'Content-Type: application/json' \
@@ -43,6 +47,21 @@ curl -X PATCH http://127.0.0.1:8193/api/v1/comfy/settings \
 ```
 
 创建节点时服务自动生成 ID，并在响应的 `id` 字段中返回。
+
+节点字段：
+
+| 字段 | ComfyUI | RunningHub |
+|---|---|---|
+| `name` | 节点名称 | 页面显示的工作流名称 |
+| `provider` | `comfyui` | `runninghub` |
+| `url` | ComfyUI HTTP API 地址 | RunningHub API 地址 |
+| `api_key` | 可留空 | 必填 |
+| `workflow_id` | 忽略 | 必填，目标工作流 ID |
+| `max_concurrency` | 固定为 1 | 1 至 64，默认 1 |
+
+API Key 仅写入 SQLite。查询节点时响应包含 `has_api_key`，不包含密钥内容。编辑同类型节点时将 `api_key` 留空会保留当前密钥。切换节点类型时需要重新填写适用于新类型的密钥。
+
+RunningHub 健康检查会读取目标工作流 JSON，并返回 `workflow_variant` 与 `workflow_execution_mode`。手动指定 RunningHub 节点时，服务使用这两个字段覆盖任务请求中的模型与执行方案，页面只显示工作流名称和 ID。自动调度存在多个不同 RunningHub 工作流时，任务只会进入生成方案匹配的节点。
 
 删除节点使用 `DELETE /api/v1/comfy/nodes/{node_id}`。正在执行任务、存在定向排队任务或属于最后一个启用节点时，服务拒绝停用或删除。
 
@@ -121,7 +140,7 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
   -F 'steps=30'
 ```
 
-Music3 最大时长为 300 秒，模型可能提前结束歌曲。产物格式为 32 kHz、16-bit、立体声 FLAC。
+Music3 最大时长为 300 秒。API 任务启用强制时长模式，在请求时长达到前屏蔽模型结束标记，产物长度按请求时长生成。产物格式为 32 kHz、16-bit、立体声 FLAC。
 
 ## 查询任务
 
@@ -151,6 +170,14 @@ curl -X PATCH http://127.0.0.1:8193/api/v1/generations/JOB_ID \
 curl -X POST http://127.0.0.1:8193/api/v1/generations/JOB_ID/cancel
 curl -X DELETE http://127.0.0.1:8193/api/v1/generations/JOB_ID
 ```
+
+## 重新生成
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations/JOB_ID/regenerate
+```
+
+原任务进入已完成、失败或已取消状态后可以重新生成。新任务保留原提示词、参考文件、生成参数、随机种子和节点选择，参考文件会复制到新任务目录。
 
 ## 下载产物
 

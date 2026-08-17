@@ -11,6 +11,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlsplit
 
 from PIL import Image
 
@@ -19,6 +20,48 @@ from .settings import Settings
 
 
 logger = logging.getLogger(__name__)
+
+
+class RunningHubTransientResponseError(RuntimeError):
+    pass
+
+
+def runninghub_workflow_profile(workflow: dict[str, Any]) -> dict[str, str]:
+    class_types = {
+        str(node.get("class_type") or "")
+        for node in workflow.values()
+        if isinstance(node, dict)
+    }
+    workflow_text = json.dumps(workflow, ensure_ascii=False).lower()
+    if {
+        "MiniMaxMusic3TextEncode",
+        "EmptyMiniMaxMusic3LatentAudio",
+    }.intersection(class_types):
+        return {
+            "workflow_variant": "music3-int8",
+            "workflow_execution_mode": "music3",
+        }
+    if "VRGDG_MiniMaxH3AudioDrive" in class_types:
+        return {
+            "workflow_variant": "ref2va-fp8",
+            "workflow_execution_mode": "digital-human",
+        }
+    if "ref2va" in workflow_text:
+        variant = "ref2va-fp8"
+    elif "fl2va" in workflow_text or "fl2v" in workflow_text:
+        variant = "fl2va-fp8"
+    else:
+        raise RuntimeError("无法识别 RunningHub 目标工作流的生成类型")
+    if "naughtytimes" in workflow_text:
+        execution_mode = "h3-nsfw"
+    elif "8step" in workflow_text or "8-step" in workflow_text:
+        execution_mode = "turbo-lora"
+    else:
+        execution_mode = "native"
+    return {
+        "workflow_variant": variant,
+        "workflow_execution_mode": execution_mode,
+    }
 
 
 class ProgressAdapter:
@@ -272,6 +315,11 @@ class ComfyUIH3Engine:
         self.settings = settings
         self.node = node or ComfyNodeConfig("default", settings.gpu_label, settings.comfy_url)
         self.comfy_url = self.node.url.rstrip("/")
+        self.api_headers = (
+            {"Authorization": f"Bearer {self.node.api_key}"}
+            if self.node.api_key
+            else {}
+        )
 
     @staticmethod
     def _variant(job: dict[str, Any]) -> str:
@@ -384,6 +432,7 @@ class ComfyUIH3Engine:
                 lyrics=request.get("lyrics") or "[Instrumental]",
                 seed=request["seed"],
                 max_duration=request["duration"],
+                force_duration=True,
             )
             workflow["9"]["inputs"].update(seed=request["seed"], steps=request["steps"])
             return workflow
@@ -498,6 +547,7 @@ class ComfyUIH3Engine:
         try:
             with httpx.Client(
                 base_url=self.comfy_url,
+                headers=self.api_headers,
                 timeout=httpx.Timeout(10, connect=5),
                 trust_env=False,
             ) as client:
@@ -657,7 +707,12 @@ class ComfyUIH3Engine:
             music3 = self._variant(job) == "music3-int8"
             progress(2, "准备 ComfyUI Music3 工作流" if music3 else "准备 ComfyUI FP8 工作流")
             timeout = httpx.Timeout(30, connect=10)
-            with httpx.Client(base_url=self.comfy_url, timeout=timeout, trust_env=False) as client:
+            with httpx.Client(
+                base_url=self.comfy_url,
+                headers=self.api_headers,
+                timeout=timeout,
+                trust_env=False,
+            ) as client:
                 stats_response = client.get("/system_stats")
                 stats_response.raise_for_status()
                 input_names = [] if music3 else self._upload_inputs(client, job)
@@ -665,7 +720,12 @@ class ComfyUIH3Engine:
                     self._comfy_cuda_device(stats_response.json()) if music3 else None
                 )
                 workflow = self._build_workflow(job, input_names, music3_device)
-                with connect(f"{websocket_url}/ws?clientId={client_id}", open_timeout=10, max_size=None) as socket:
+                with connect(
+                    f"{websocket_url}/ws?clientId={client_id}",
+                    additional_headers=self.api_headers or None,
+                    open_timeout=10,
+                    max_size=None,
+                ) as socket:
                     response = client.post("/prompt", json={"prompt": workflow, "client_id": client_id})
                     response.raise_for_status()
                     result = response.json()
@@ -685,6 +745,323 @@ class ComfyUIH3Engine:
             return output
         finally:
             self._release_vram()
+
+
+class RunningHubH3Engine:
+    MAX_UPLOAD_BYTES = 30 * 1024 * 1024
+    MAX_POLL_SECONDS = 2 * 60 * 60
+
+    def __init__(self, settings: Settings, node: ComfyNodeConfig):
+        self.settings = settings
+        self.node = node
+        self.base_url = node.url.rstrip("/")
+        self.headers = {"Authorization": f"Bearer {node.api_key}"}
+        self.workflow_builder = ComfyUIH3Engine(settings)
+        self._remote_workflow: dict[str, Any] | None = None
+
+    @staticmethod
+    def _json_response(response, action: str) -> dict[str, Any]:
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise RunningHubTransientResponseError(
+                f"RunningHub {action}返回了无效 JSON"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise RunningHubTransientResponseError(
+                f"RunningHub {action}返回格式无效"
+            )
+        code = payload.get("code")
+        if code not in {None, 0, "0"}:
+            message = str(payload.get("msg") or payload.get("message") or code)
+            raise RuntimeError(f"RunningHub {action}失败：{message[:500]}")
+        return payload
+
+    def _request_json(
+        self,
+        client,
+        method: str,
+        path: str,
+        *,
+        json_data: dict[str, Any],
+        action: str,
+    ) -> dict[str, Any]:
+        import httpx
+
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                response = client.request(method, path, json=json_data)
+                if response.status_code == 429 or response.status_code >= 500:
+                    response.raise_for_status()
+                if response.is_error:
+                    try:
+                        detail = response.json()
+                    except ValueError:
+                        detail = None
+                    message = (
+                        detail.get("msg") or detail.get("message")
+                        if isinstance(detail, dict)
+                        else None
+                    )
+                    raise RuntimeError(
+                        f"RunningHub {action}失败：{message or response.status_code}"
+                    )
+                return self._json_response(response, action)
+            except (httpx.HTTPError, RunningHubTransientResponseError) as exc:
+                last_error = exc
+                if attempt == 2:
+                    break
+                time.sleep(2**attempt)
+        raise RuntimeError(f"RunningHub {action}请求失败：{last_error}") from last_error
+
+    def _upload_inputs(self, client, job: dict[str, Any]) -> list[str]:
+        import httpx
+
+        paths = [Path(path) for path in job.get("input_paths", [])]
+        manifest = job.get("request", {}).get("references", [])
+        if len(paths) != len(manifest):
+            raise ValueError("参考素材清单与文件不一致")
+        uploaded = []
+        for source in paths:
+            if source.stat().st_size > self.MAX_UPLOAD_BYTES:
+                raise ValueError(f"RunningHub 单个上传文件不能超过 30 MB：{source.name}")
+            content_type = mimetypes.guess_type(source.name)[0] or "application/octet-stream"
+            last_error: Exception | None = None
+            for attempt in range(3):
+                try:
+                    with source.open("rb") as handle:
+                        response = client.post(
+                            "/task/openapi/upload",
+                            data={"apiKey": self.node.api_key, "fileType": "input"},
+                            files={"file": (source.name, handle, content_type)},
+                        )
+                    if response.status_code == 429 or response.status_code >= 500:
+                        response.raise_for_status()
+                    if response.is_error:
+                        try:
+                            detail = response.json()
+                        except ValueError:
+                            detail = None
+                        message = (
+                            detail.get("msg") or detail.get("message")
+                            if isinstance(detail, dict)
+                            else None
+                        )
+                        raise RuntimeError(
+                            f"RunningHub 文件上传失败：{source.name}："
+                            f"{message or response.status_code}"
+                        )
+                    response.raise_for_status()
+                    payload = self._json_response(response, "文件上传")
+                    file_name = str((payload.get("data") or {}).get("fileName") or "")
+                    if not file_name:
+                        raise RuntimeError("RunningHub 文件上传响应缺少 fileName")
+                    uploaded.append(file_name)
+                    break
+                except (httpx.HTTPError, RunningHubTransientResponseError) as exc:
+                    last_error = exc
+                    if attempt == 2:
+                        raise RuntimeError(
+                            f"RunningHub 文件上传失败：{source.name}：{last_error}"
+                        ) from last_error
+                    time.sleep(2**attempt)
+        return uploaded
+
+    def _get_remote_workflow(self, client) -> dict[str, Any]:
+        if self._remote_workflow is not None:
+            return self._remote_workflow
+        payload = self._request_json(
+            client,
+            "POST",
+            "/api/openapi/getJsonApiFormat",
+            json_data={
+                "apiKey": self.node.api_key,
+                "workflowId": self.node.workflow_id,
+            },
+            action="读取工作流",
+        )
+        prompt = (payload.get("data") or {}).get("prompt")
+        if isinstance(prompt, str):
+            try:
+                prompt = json.loads(prompt)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError("RunningHub 工作流 JSON 无法解析") from exc
+        if not isinstance(prompt, dict):
+            raise RuntimeError("RunningHub 工作流响应缺少 prompt")
+        self._remote_workflow = prompt
+        return prompt
+
+    def _node_info_list(
+        self,
+        job: dict[str, Any],
+        input_names: list[str],
+        remote_workflow: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        variant = self.workflow_builder._variant(job)
+        execution_mode = self.workflow_builder._execution_mode(job)
+        base_workflow = self.workflow_builder._load_workflow(variant, execution_mode)
+        built_workflow = self.workflow_builder._build_workflow(job, input_names)
+        result = []
+        changed_node_ids = set()
+        for node_id, node in built_workflow.items():
+            inputs = node.get("inputs") or {}
+            base_inputs = (base_workflow.get(node_id) or {}).get("inputs") or {}
+            for field_name, field_value in inputs.items():
+                if node_id not in base_workflow or base_inputs.get(field_name) != field_value:
+                    changed_node_ids.add(node_id)
+                    result.append(
+                        {
+                            "nodeId": str(node_id),
+                            "fieldName": str(field_name),
+                            "fieldValue": field_value,
+                        }
+                    )
+
+        missing = sorted(changed_node_ids.difference(remote_workflow))
+        mismatched = sorted(
+            node_id
+            for node_id in changed_node_ids.intersection(remote_workflow)
+            if (remote_workflow[node_id] or {}).get("class_type")
+            != (built_workflow[node_id] or {}).get("class_type")
+        )
+        if missing or mismatched:
+            details = []
+            if missing:
+                details.append("缺少节点 " + ", ".join(missing))
+            if mismatched:
+                details.append("节点类型不匹配 " + ", ".join(mismatched))
+            raise RuntimeError(
+                "RunningHub 目标工作流与当前生成方案不兼容：" + "；".join(details)
+            )
+        return result
+
+    def _cancel_task(self, client, task_id: str) -> None:
+        try:
+            self._request_json(
+                client,
+                "POST",
+                "/task/openapi/cancel",
+                json_data={"apiKey": self.node.api_key, "taskId": task_id},
+                action="取消任务",
+            )
+        except Exception:
+            logger.exception("RunningHub 任务取消失败，task_id=%s", task_id)
+
+    def _poll(self, client, task_id: str, progress, cancelled) -> list[dict[str, Any]]:
+        deadline = time.monotonic() + self.MAX_POLL_SECONDS
+        last_status = ""
+        while time.monotonic() < deadline:
+            if cancelled():
+                self._cancel_task(client, task_id)
+                raise InterruptedError("generation cancelled")
+            payload = self._request_json(
+                client,
+                "POST",
+                "/openapi/v2/query",
+                json_data={"taskId": task_id},
+                action="查询任务",
+            )
+            status = str(payload.get("status") or "").upper()
+            if status != last_status:
+                if status in {"CREATE", "QUEUED"}:
+                    progress(5, "等待 RunningHub 调度")
+                elif status == "RUNNING":
+                    progress(15, "RunningHub 工作流执行中")
+                last_status = status
+            if status == "SUCCESS":
+                results = payload.get("results") or []
+                if not isinstance(results, list) or not results:
+                    raise RuntimeError("RunningHub 任务成功但未返回生成结果")
+                return [item for item in results if isinstance(item, dict)]
+            if status in {"FAILED", "CANCEL"}:
+                message = payload.get("errorMessage") or payload.get("promptTips") or status
+                raise RuntimeError(f"RunningHub 任务{status}：{str(message)[:500]}")
+            time.sleep(max(2.0, self.settings.comfy_poll_seconds))
+        raise TimeoutError(f"RunningHub 任务轮询超时，taskId={task_id}")
+
+    def _download_result(self, job: dict[str, Any], results: list[dict[str, Any]]) -> Path:
+        import httpx
+
+        music3 = self.workflow_builder._variant(job) == "music3-int8"
+        expected_suffix = ".flac" if music3 else ".mp4"
+        candidates = []
+        for item in results:
+            url = str(
+                item.get("url")
+                or item.get("outputUrl")
+                or item.get("fileUrl")
+                or ""
+            )
+            if url:
+                candidates.append((url, str(item.get("outputType") or item.get("fileType") or "")))
+        selected = next(
+            (
+                url
+                for url, output_type in candidates
+                if urlsplit(url).path.lower().endswith(expected_suffix)
+                or output_type.lower().lstrip(".") == expected_suffix.lstrip(".")
+            ),
+            candidates[0][0] if candidates else "",
+        )
+        if not selected:
+            raise RuntimeError("RunningHub 生成结果中没有可下载文件")
+        output = self.settings.outputs_dir / f"{job['id']}{expected_suffix}"
+        with httpx.stream("GET", selected, timeout=600, follow_redirects=True, trust_env=False) as response:
+            response.raise_for_status()
+            with output.open("wb") as target:
+                for chunk in response.iter_bytes():
+                    target.write(chunk)
+        if not output.stat().st_size:
+            output.unlink(missing_ok=True)
+            raise RuntimeError("RunningHub 返回了空的生成文件")
+        output.with_suffix(".json").write_text(
+            json.dumps(job["request"], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return output
+
+    def generate(self, job, progress, cancelled):
+        import httpx
+
+        progress(2, "准备 RunningHub 工作流")
+        timeout = httpx.Timeout(60, connect=10)
+        with httpx.Client(
+            base_url=self.base_url,
+            headers=self.headers,
+            timeout=timeout,
+            follow_redirects=True,
+            trust_env=False,
+        ) as client:
+            input_names = self._upload_inputs(client, job)
+            remote_workflow = self._get_remote_workflow(client)
+            node_info_list = self._node_info_list(job, input_names, remote_workflow)
+            payload = self._request_json(
+                client,
+                "POST",
+                "/task/openapi/create",
+                json_data={
+                    "apiKey": self.node.api_key,
+                    "workflowId": self.node.workflow_id,
+                    "nodeInfoList": node_info_list,
+                },
+                action="提交任务",
+            )
+            data = payload.get("data") or {}
+            task_id = str(data.get("taskId") or payload.get("taskId") or "")
+            if not task_id:
+                raise RuntimeError("RunningHub 提交响应缺少 taskId")
+            if str(data.get("taskStatus") or "").upper() == "FAILED":
+                raise RuntimeError(
+                    "RunningHub 工作流校验失败："
+                    + str(data.get("promptTips") or payload.get("msg") or "未知错误")[:500]
+                )
+            progress(4, f"已提交 RunningHub 任务 {task_id[:8]}")
+            results = self._poll(client, task_id, progress, cancelled)
+        progress(98, "下载 RunningHub 生成产物")
+        output = self._download_result(job, results)
+        progress(99, "整理交付文件")
+        return output
 
 
 class SGLangH3Engine:
@@ -815,6 +1192,9 @@ def probe_comfy_node(node: ComfyNodeConfig) -> None:
 
     with httpx.Client(
         base_url=node.url,
+        headers=(
+            {"Authorization": f"Bearer {node.api_key}"} if node.api_key else None
+        ),
         timeout=httpx.Timeout(8, connect=4),
         trust_env=False,
     ) as client:
@@ -822,9 +1202,54 @@ def probe_comfy_node(node: ComfyNodeConfig) -> None:
         response.raise_for_status()
 
 
+def probe_runninghub_node(node: ComfyNodeConfig) -> dict[str, str]:
+    import httpx
+
+    with httpx.Client(
+        base_url=node.url,
+        headers={"Authorization": f"Bearer {node.api_key}"},
+        timeout=httpx.Timeout(10, connect=5),
+        follow_redirects=True,
+        trust_env=False,
+    ) as client:
+        response = client.post(
+            "/uc/openapi/accountStatus",
+            json={"apikey": node.api_key},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict) or payload.get("code") not in {0, "0"}:
+            message = payload.get("msg") if isinstance(payload, dict) else None
+            raise RuntimeError(f"RunningHub 健康检查失败：{message or '响应无效'}")
+        response = client.post(
+            "/api/openapi/getJsonApiFormat",
+            json={"apiKey": node.api_key, "workflowId": node.workflow_id},
+        )
+        response.raise_for_status()
+        payload = RunningHubH3Engine._json_response(response, "读取工作流")
+        prompt = (payload.get("data") or {}).get("prompt")
+        if isinstance(prompt, str):
+            try:
+                prompt = json.loads(prompt)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError("RunningHub 工作流 JSON 无法解析") from exc
+        if not isinstance(prompt, dict):
+            raise RuntimeError("RunningHub 工作流响应缺少 prompt")
+        return runninghub_workflow_profile(prompt)
+
+
+def probe_node(node: ComfyNodeConfig) -> None:
+    if node.provider == "runninghub":
+        probe_runninghub_node(node)
+        return
+    probe_comfy_node(node)
+
+
 def create_engine(settings: Settings, node: ComfyNodeConfig | None = None):
     if settings.fake_engine:
         return FakeEngine(settings)
+    if node and node.provider == "runninghub":
+        return RunningHubH3Engine(settings, node)
     if settings.engine_backend == "sglang":
         return SGLangH3Engine(settings)
     if settings.engine_backend == "comfyui":

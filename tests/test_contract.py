@@ -1,19 +1,26 @@
+import json
 import os
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("H3_ROOT", str(Path(tempfile.gettempdir()) / "minimax-h3-api-tests"))
 
 from fastapi import HTTPException
 
-from app.engine import ComfyUIH3Engine
+from app.engine import (
+    ComfyUIH3Engine,
+    RunningHubH3Engine,
+    create_engine,
+    runninghub_workflow_profile,
+)
 from app.jobs import JobManager, JobStore
 from app.main import align_frames, validate_execution_mode, validate_generation, validate_references
 from app.music_prompts import MUSIC3_ARRANGEMENT_SYSTEM_PROMPT, MUSIC3_LYRICS_SYSTEM_PROMPT
-from app.nodes import NodeRegistry
+from app.nodes import ComfyNodeConfig, NodeRegistry
 from app.prompts import FL2VA_SYSTEM_PROMPT
 from app.ref2va_prompts import REF2VA_SYSTEM_PROMPT
 from app.settings import Settings
@@ -30,7 +37,7 @@ class ContractTests(unittest.TestCase):
             styles,
             r"\.conversation-column \{[^}]*height: 100%;[^}]*overflow: hidden;",
         )
-        self.assertIn('/assets/styles.css?v=27', index)
+        self.assertIn('/assets/styles.css?v=36', index)
 
     def test_settings_popover_is_outside_horizontal_scroll_container(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -46,11 +53,218 @@ class ContractTests(unittest.TestCase):
         with TemporaryDirectory() as temp:
             registry = NodeRegistry(Path(temp) / "config.db")
             self.assertEqual(registry.configs()[0].url, "http://127.0.0.1:8188")
+            self.assertEqual(registry.configs()[0].provider, "comfyui")
             registry.create("gpu-2", "GPU 2", "http://10.0.0.12:8188/")
             self.assertEqual(len(registry.configs()), 2)
             self.assertEqual(registry.get("gpu-2")["url"], "http://10.0.0.12:8188")
             self.assertEqual(registry.set_health_interval(90), 90)
             self.assertEqual(registry.health_interval(), 90)
+
+    def test_runninghub_nodes_store_secrets_privately_and_allow_shared_base_urls(self):
+        with TemporaryDirectory() as temp:
+            registry = NodeRegistry(Path(temp) / "config.db")
+            first = registry.create(
+                "rh-1",
+                "RunningHub 1",
+                "https://www.runninghub.ai/",
+                "runninghub",
+                "secret-one",
+                "1904136902449209346",
+                3,
+            )
+            registry.create(
+                "rh-2",
+                "RunningHub 2",
+                "https://www.runninghub.ai",
+                "runninghub",
+                "secret-two",
+                "1904136902449209347",
+                2,
+            )
+
+            self.assertNotIn("api_key", first)
+            self.assertTrue(first["has_api_key"])
+            self.assertEqual(first["max_concurrency"], 3)
+            configs = {node.id: node for node in registry.configs()}
+            self.assertEqual(configs["rh-1"].api_key, "secret-one")
+            self.assertEqual(configs["rh-2"].workflow_id, "1904136902449209347")
+            updated = registry.update(
+                "rh-1",
+                "RunningHub 1",
+                "https://www.runninghub.ai",
+                True,
+                "runninghub",
+                "",
+                "1904136902449209346",
+                4,
+            )
+            self.assertTrue(updated["has_api_key"])
+            self.assertEqual(
+                {node.id: node for node in registry.configs()}["rh-1"].api_key,
+                "secret-one",
+            )
+
+    def test_node_provider_change_requires_or_clears_api_key(self):
+        with TemporaryDirectory() as temp:
+            registry = NodeRegistry(Path(temp) / "config.db")
+            registry.create(
+                "remote",
+                "Remote ComfyUI",
+                "https://comfy.example.com",
+                "comfyui",
+                "comfy-secret",
+            )
+            with self.assertRaisesRegex(ValueError, "必须填写 API Key"):
+                registry.update(
+                    "remote",
+                    "RunningHub",
+                    "https://www.runninghub.ai",
+                    True,
+                    "runninghub",
+                    "",
+                    "workflow-1",
+                    1,
+                )
+            registry.update(
+                "remote",
+                "RunningHub",
+                "https://www.runninghub.ai",
+                True,
+                "runninghub",
+                "runninghub-secret",
+                "workflow-1",
+                2,
+            )
+            registry.update(
+                "remote",
+                "Remote ComfyUI",
+                "https://comfy.example.com",
+                True,
+                "comfyui",
+                "",
+                "",
+                1,
+            )
+            config = {node.id: node for node in registry.configs()}["remote"]
+            self.assertEqual(config.provider, "comfyui")
+            self.assertEqual(config.api_key, "")
+
+    def test_legacy_node_table_migrates_without_unique_url_constraint(self):
+        with TemporaryDirectory() as temp:
+            database = Path(temp) / "config.db"
+            with sqlite3.connect(database) as connection:
+                connection.executescript(
+                    """
+                    CREATE TABLE comfy_nodes (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        url TEXT NOT NULL UNIQUE,
+                        enabled INTEGER NOT NULL DEFAULT 1,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+                    CREATE TABLE service_settings (
+                        key TEXT PRIMARY KEY,
+                        value TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+                    INSERT INTO comfy_nodes VALUES (
+                        'local', 'Local', 'http://127.0.0.1:8188', 1, 'now', 'now'
+                    );
+                    """
+                )
+            registry = NodeRegistry(database)
+            self.assertEqual(registry.get("local")["provider"], "comfyui")
+            registry.create("local-2", "Local 2", "http://127.0.0.1:8188")
+            self.assertEqual(len(registry.configs()), 2)
+
+    def test_runninghub_capacity_creates_multiple_scheduler_slots(self):
+        with TemporaryDirectory() as temp:
+            jobs_dir = Path(temp) / "jobs"
+            jobs_dir.mkdir()
+            manager = JobManager(
+                JobStore(jobs_dir),
+                lambda node: None,
+                nodes=(
+                    ComfyNodeConfig(
+                        "rh",
+                        "RunningHub",
+                        "https://www.runninghub.ai",
+                        "runninghub",
+                        "secret",
+                        "workflow",
+                        3,
+                    ),
+                ),
+            )
+            self.assertEqual(manager.parallel_capacity, 3)
+            self.assertEqual(manager.nodes_public()[0]["capacity"], 3)
+            manager.start()
+            try:
+                self.assertEqual(len(manager._threads), 3)
+            finally:
+                manager.stop()
+
+    def test_runninghub_health_profile_drives_workflow_selection(self):
+        project_root = Path(__file__).resolve().parents[1]
+        cases = (
+            (
+                "minimax_h3_fl2va_fp8_turbo_lora_api.json",
+                "fl2va-fp8",
+                "turbo-lora",
+            ),
+            (
+                "minimax_h3_ref2va_fp8_digital_human_api.json",
+                "ref2va-fp8",
+                "digital-human",
+            ),
+            ("minimax_music3_int8_api.json", "music3-int8", "music3"),
+        )
+        for filename, variant, mode in cases:
+            workflow = json.loads(
+                (project_root / "workflows" / filename).read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                runninghub_workflow_profile(workflow),
+                {
+                    "workflow_variant": variant,
+                    "workflow_execution_mode": mode,
+                },
+            )
+
+        with TemporaryDirectory() as temp:
+            jobs_dir = Path(temp) / "jobs"
+            jobs_dir.mkdir()
+            node = ComfyNodeConfig(
+                "rh",
+                "H3 Ref2VA 8 Step",
+                "https://www.runninghub.ai",
+                "runninghub",
+                "secret",
+                "workflow-1",
+                2,
+            )
+            manager = JobManager(
+                JobStore(jobs_dir),
+                lambda config: None,
+                nodes=(node,),
+                health_probe=lambda config: {
+                    "workflow_variant": "ref2va-fp8",
+                    "workflow_execution_mode": "turbo-lora",
+                },
+            )
+            manager.refresh_node_health()
+            self.assertEqual(
+                manager.workflow_profile("rh"),
+                {
+                    "model_variant": "ref2va-fp8",
+                    "execution_mode": "turbo-lora",
+                },
+            )
+            self.assertEqual(manager.workflow_profile("auto"), manager.workflow_profile("rh"))
+            public = manager.nodes_public()[0]
+            self.assertEqual(public["workflow_name"], "H3 Ref2VA 8 Step")
+            self.assertEqual(public["workflow_id"], "workflow-1")
 
     def test_prompt_optimizers_require_simplified_chinese(self):
         self.assertIn("必须使用简体中文", FL2VA_SYSTEM_PROMPT)
@@ -132,8 +346,20 @@ class ContractTests(unittest.TestCase):
         self.assertIn('id="openNodeManager"', index)
         self.assertIn('id="nodeEditor"', index)
         self.assertNotIn('id="nodeId"', index)
+        self.assertIn('id="nodeProvider"', index)
+        self.assertIn('value="runninghub"', index)
+        self.assertIn('id="nodeApiKey"', index)
+        self.assertIn('id="nodeWorkflowId"', index)
+        self.assertIn('id="nodeMaxConcurrency"', index)
+        self.assertIn('id="runningHubWorkflowControl"', index)
         self.assertIn('api("/api/v1/comfy/nodes")', app_js)
         self.assertIn('node_id = f"node-{secrets.token_hex(4)}"', main)
+        self.assertIn('function syncNodeProviderFields()', app_js)
+        self.assertIn('running_count', app_js)
+        self.assertIn('function selectedRunningHubNode()', app_js)
+        self.assertIn('el("modelControl").hidden = Boolean(runningHubNode);', app_js)
+        self.assertIn('if (!runningHubNode) {', app_js)
+        self.assertIn('request_data.update(workflow_profile)', main)
         self.assertIn('function applyJobUpsert(job)', app_js)
         self.assertIn('request.headers.get("last-event-id"', main)
         self.assertIn(".modal-overlay.node-modal", styles)
@@ -143,8 +369,11 @@ class ContractTests(unittest.TestCase):
         index = (project_root / "static" / "index.html").read_text(encoding="utf-8")
         app_js = (project_root / "static" / "app.js").read_text(encoding="utf-8")
         styles = (project_root / "static" / "styles.css").read_text(encoding="utf-8")
+        main = (project_root / "app" / "main.py").read_text(encoding="utf-8")
 
         self.assertIn('id="assetDetailModal"', index)
+        self.assertIn('id="downloadAssetDetail"', index)
+        self.assertIn('id="regenerateAssetDetail"', index)
         self.assertIn('id="languageToggle"', index)
         self.assertIn('id="apiDocsLink"', index)
         self.assertNotIn('id="previousAssetPage"', index)
@@ -153,6 +382,13 @@ class ContractTests(unittest.TestCase):
         self.assertIn('state.conversationReady && movingUp && currentTop < 72', app_js)
         self.assertIn('function openAssetDetail(jobId)', app_js)
         self.assertIn('async function backfillJob(jobId)', app_js)
+        self.assertIn('download.href = downloadable ? job.result_url : "#"', app_js)
+        self.assertIn('music3 ? t("downloadAudio") : t("downloadVideo")', app_js)
+        self.assertIn('data-job-action="regenerate"', app_js)
+        self.assertIn('window.confirm(t("regenerateConfirm"))', app_js)
+        self.assertIn('async function regenerateJob(jobId)', app_js)
+        self.assertIn('"/api/v1/generations/{job_id}/regenerate"', main)
+        self.assertIn("shutil.copy2(source, destination)", main)
         self.assertIn('data-job-action="reuse"', app_js)
         self.assertIn('loadAssets({ reset: true })', app_js)
         self.assertIn('grid.scrollHeight - grid.scrollTop - grid.clientHeight < 180', app_js)
@@ -296,6 +532,89 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(music3["42"]["class_type"], "VAEDecodeAudioTiled")
         self.assertEqual(music3["92"]["class_type"], "SaveAudio")
 
+    def test_runninghub_engine_maps_job_parameters_to_node_info_list(self):
+        project_root = Path(__file__).resolve().parents[1]
+        workflow_path = project_root / "workflows" / "minimax_h3_fl2va_fp8_720p_15s_api.json"
+        settings = Settings(comfy_workflow=workflow_path)
+        node = ComfyNodeConfig(
+            "rh",
+            "RunningHub",
+            "https://www.runninghub.ai",
+            "runninghub",
+            "secret",
+            "1904136902449209346",
+            2,
+        )
+        engine = RunningHubH3Engine(settings, node)
+        job = {
+            "id": "runninghub-job",
+            "request": {
+                "model_variant": "fl2va-fp8",
+                "execution_mode": "native",
+                "prompt": "test prompt",
+                "width": 864,
+                "height": 480,
+                "num_frames": 124,
+                "steps": 30,
+                "seed": 123,
+                "references": [{"type": "image"}],
+            },
+        }
+        uploaded = ["api/input.png"]
+        remote_workflow = engine.workflow_builder._build_workflow(job, uploaded)
+        node_info = engine._node_info_list(job, uploaded, remote_workflow)
+        mapped = {
+            (item["nodeId"], item["fieldName"]): item["fieldValue"]
+            for item in node_info
+        }
+
+        self.assertEqual(mapped[("136", "prompt")], "test prompt")
+        self.assertEqual(mapped[("137", "image")], "api/input.png")
+        self.assertEqual(mapped[("124", "steps")], 30)
+        self.assertEqual(mapped[("129", "noise_seed")], 123)
+        self.assertIsInstance(create_engine(settings, node), RunningHubH3Engine)
+
+    def test_runninghub_client_errors_are_not_retried(self):
+        node = ComfyNodeConfig(
+            "rh",
+            "RunningHub",
+            "https://www.runninghub.ai",
+            "runninghub",
+            "secret",
+            "workflow",
+            1,
+        )
+        engine = RunningHubH3Engine(Settings(), node)
+        client = MagicMock()
+        response = MagicMock(status_code=401, is_error=True)
+        response.json.return_value = {"msg": "unauthorized"}
+        client.request.return_value = response
+
+        with self.assertRaisesRegex(RuntimeError, "unauthorized"):
+            engine._request_json(
+                client,
+                "POST",
+                "/task/openapi/create",
+                json_data={"apiKey": "secret"},
+                action="提交任务",
+            )
+        client.request.assert_called_once()
+
+        with TemporaryDirectory() as temp:
+            source = Path(temp) / "input.png"
+            source.write_bytes(b"image")
+            client.post.reset_mock()
+            client.post.return_value = response
+            with self.assertRaisesRegex(RuntimeError, "unauthorized"):
+                engine._upload_inputs(
+                    client,
+                    {
+                        "input_paths": [str(source)],
+                        "request": {"references": [{"type": "image"}]},
+                    },
+                )
+            client.post.assert_called_once()
+
     def test_nsfw_mode_requires_incognito_ref2va(self):
         validate_execution_mode("h3-nsfw", "ref2va-fp8", True)
         validate_execution_mode("turbo-lora", "fl2va-fp8", False)
@@ -350,7 +669,7 @@ class ContractTests(unittest.TestCase):
         environment = (project_root / ".env.example").read_text(encoding="utf-8")
 
         self.assertIn('option value="digital-human">数字人 · 音频驱动', index)
-        self.assertIn('/assets/app.js?v=33', index)
+        self.assertIn('/assets/app.js?v=40', index)
         self.assertIn('return { image: 1, video: 0, audio: 1 };', app_js)
         self.assertIn('el("duration").disabled = digitalHuman;', app_js)
         self.assertIn('durationControl.classList.toggle("digital-human", digitalHuman);', app_js)
@@ -378,7 +697,13 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn('await Promise.all([loadAssets(), refreshConversation(), checkHealth()])', app_js)
         self.assertIn('id="writeLyrics"', index)
         self.assertIn('id="optimizePromptLabel"', index)
-        self.assertIn('optimizePromptLabel.textContent = music3 ? "AI 编曲"', app_js)
+        self.assertIn('music3 ? "优化曲风" : "优化提示词"', app_js)
+        self.assertIn('id="mentionTrigger"', index)
+        self.assertIn('data-mention-reference', app_js)
+        self.assertIn('insertReferenceMention', app_js)
+        self.assertIn('function textareaCaretRect(textarea)', app_js)
+        self.assertIn('function handleMentionKeydown(event)', app_js)
+        self.assertIn('max-height: min(320px, 48dvh)', (project_root / "static" / "styles.css").read_text(encoding="utf-8"))
         self.assertIn('async function assistMusic(task)', app_js)
         self.assertIn('fetch("/api/v1/music/assist"', app_js)
         self.assertIn('assistMusic("arrangement")', app_js)
@@ -548,10 +873,10 @@ class ContractTests(unittest.TestCase):
         run_sh = (project_root / "run.sh").read_text(encoding="utf-8")
 
         self.assertIn("function isAnonymousQueueJob(job)", app_js)
-        self.assertIn('? "有任务正在运行中"', app_js)
+        self.assertIn('"有任务正在运行中"', app_js)
         self.assertIn('const progress = item.progress == null ? ""', app_js)
-        self.assertIn('/assets/app.js?v=33', index)
-        self.assertIn('/assets/styles.css?v=27', index)
+        self.assertIn('/assets/app.js?v=40', index)
+        self.assertIn('/assets/styles.css?v=36', index)
         self.assertIn('id="steps" name="steps" type="number"', index)
         self.assertIn('min="4" max="50" step="1" value="10"', index)
         self.assertNotIn('<select id="steps"', index)
@@ -708,6 +1033,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(workflow["13"]["inputs"]["caption"], job["request"]["prompt"])
         self.assertEqual(workflow["13"]["inputs"]["lyrics"], job["request"]["lyrics"])
         self.assertEqual(workflow["13"]["inputs"]["max_duration"], 120)
+        self.assertTrue(workflow["13"]["inputs"]["force_duration"])
         self.assertEqual(workflow["13"]["inputs"]["seed"], 1234)
         self.assertEqual(workflow["9"]["inputs"]["seed"], 1234)
         self.assertEqual(workflow["92"]["inputs"]["filename_prefix"], "minimax-h3-api/music3-test")
@@ -863,9 +1189,12 @@ class ContractTests(unittest.TestCase):
 
         with (
             patch.object(engine, "_upload_inputs", side_effect=RuntimeError("prepare failed")),
+            patch("httpx.Client") as client_class,
             patch.object(engine, "_release_vram") as release_vram,
             self.assertRaisesRegex(RuntimeError, "prepare failed"),
         ):
+            client = client_class.return_value.__enter__.return_value
+            client.get.return_value.json.return_value = {}
             engine.generate(
                 {"id": "failed-job"},
                 lambda _percent, _stage: None,

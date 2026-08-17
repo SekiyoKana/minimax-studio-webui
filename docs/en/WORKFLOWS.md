@@ -58,7 +58,7 @@ The 8-step LoRA workflows use ComfyUI's built-in LoRA loader and sampling nodes,
 
 The digital human workflow requires the attached `comfyui-vrgamedevgirl` package for `VRGDG_MiniMaxH3AudioDrive`. The attached `ComfyUI-SoundFlow` package is installed in the cloud ComfyUI environment. The API workflow uses server-side `ffprobe` duration detection and does not depend on `SoundFlow_GetLength`.
 
-Music3 uses ComfyUI's native `MiniMaxMusic3TextEncode` and `EmptyMiniMaxMusic3LatentAudio` nodes with ComfyUI-MultiGPU's `CLIPLoaderMultiGPU`. The text encoder is pinned to the current ComfyUI process CUDA device. The workflow uses 30 Euler steps, the `simple` scheduler, tiled audio decoding, and FLAC output.
+Music3 uses ComfyUI's native `MiniMaxMusic3TextEncode` and `EmptyMiniMaxMusic3LatentAudio` nodes with ComfyUI-MultiGPU's `CLIPLoaderMultiGPU`. The text encoder is pinned to the current ComfyUI process CUDA device. API jobs enable forced-duration mode and suppress `<|audio_end|>` until the requested duration is reached. The workflow uses 30 Euler steps, the `simple` scheduler, tiled audio decoding, and FLAC output.
 
 ## Parameter Limits
 

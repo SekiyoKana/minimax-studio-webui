@@ -63,7 +63,7 @@ class JobStore:
             if job.get("status") in {"queued", "running"}:
                 job.update(
                     status="queued",
-                    stage="服务已恢复，等待 ComfyUI FP8 执行",
+                    stage="服务已恢复，等待推理节点执行",
                     progress=0,
                     cancel_requested=False,
                     updated_at=utc_now(),
@@ -434,21 +434,50 @@ class JobManager:
         store: JobStore,
         engine_factory: Callable[..., Any],
         nodes: list[Any] | tuple[Any, ...] | None = None,
-        health_probe: Callable[[Any], None] | None = None,
+        health_probe: Callable[[Any], Any] | None = None,
         health_interval: float = 60,
     ):
         self.store = store
         self.engine_factory = engine_factory
         self.health_probe = health_probe
         self.health_interval = max(5.0, health_interval)
-        configured_nodes = list(nodes or ({"id": "default", "name": "ComfyUI", "url": ""},))
+        configured_nodes = list(
+            nodes
+            or (
+                {
+                    "id": "default",
+                    "name": "ComfyUI",
+                    "url": "",
+                    "provider": "comfyui",
+                    "max_concurrency": 1,
+                },
+            )
+        )
         self._nodes: dict[str, dict[str, Any]] = {}
         for item in configured_nodes:
             node_id = str(getattr(item, "id", None) or item.get("id"))
+            provider = str(
+                getattr(item, "provider", None) or item.get("provider") or "comfyui"
+            )
+            capacity = int(
+                getattr(item, "max_concurrency", None)
+                or item.get("max_concurrency")
+                or 1
+            )
+            workflow_id = str(
+                item.get("workflow_id", "")
+                if isinstance(item, dict)
+                else getattr(item, "workflow_id", "")
+            )
             self._nodes[node_id] = {
                 "id": node_id,
                 "name": str(getattr(item, "name", None) or item.get("name") or node_id),
                 "url": str(getattr(item, "url", None) or item.get("url") or ""),
+                "provider": provider,
+                "workflow_id": workflow_id,
+                "workflow_variant": None,
+                "workflow_execution_mode": None,
+                "capacity": 1 if provider == "comfyui" else max(1, capacity),
                 "config": item,
                 "healthy": health_probe is None,
                 "last_checked": None,
@@ -457,13 +486,13 @@ class JobManager:
             }
         self._order: list[str] = []
         self._condition = threading.Condition(threading.RLock())
-        self._threads: dict[str, threading.Thread] = {}
+        self._threads: dict[tuple[str, int], threading.Thread] = {}
         self._health_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._health_wakeup = threading.Event()
         self._started = False
-        self._engines: dict[str, Any] = {}
-        self._running_job_ids: dict[str, str] = {}
+        self._engines: dict[tuple[str, int], Any] = {}
+        self._running_job_ids: dict[tuple[str, int], str] = {}
         self._running_job_id: str | None = None
         self._revision = 0
         self._factory_accepts_node = bool(inspect.signature(engine_factory).parameters)
@@ -487,9 +516,45 @@ class JobManager:
     def accepts_node(self, node_id: str) -> bool:
         return node_id == "auto" or node_id in self.node_ids
 
+    def workflow_profile(self, node_id: str) -> dict[str, str] | None:
+        with self._condition:
+            if node_id == "auto":
+                candidates = [
+                    node
+                    for node in self._nodes.values()
+                    if not node.get("retired") and node["healthy"]
+                ]
+                if not candidates or any(
+                    node["provider"] != "runninghub" for node in candidates
+                ):
+                    return None
+                profiles = {
+                    (
+                        node.get("workflow_variant"),
+                        node.get("workflow_execution_mode"),
+                        node.get("workflow_id"),
+                    )
+                    for node in candidates
+                }
+                if len(profiles) != 1:
+                    return None
+                node = candidates[0]
+            else:
+                node = self._nodes.get(node_id)
+                if not node or node.get("retired") or node["provider"] != "runninghub":
+                    return None
+            variant = node.get("workflow_variant")
+            execution_mode = node.get("workflow_execution_mode")
+            if not variant or not execution_mode:
+                return None
+            return {
+                "model_variant": variant,
+                "execution_mode": execution_mode,
+            }
+
     def node_in_use(self, node_id: str) -> bool:
         with self._condition:
-            if node_id in self._running_job_ids:
+            if any(slot_node_id == node_id for slot_node_id, _ in self._running_job_ids):
                 return True
             for job_id in self._order:
                 job = self.store.get(job_id)
@@ -504,13 +569,19 @@ class JobManager:
             for node_id, node in self._nodes.items():
                 if node.get("retired"):
                     continue
-                running_job_id = self._running_job_ids.get(node_id)
-                running_job = self.store.get(running_job_id) if running_job_id else None
-                public_running_job_id = (
-                    None
-                    if running_job and running_job.get("request", {}).get("incognito")
-                    else running_job_id
-                )
+                running_job_ids = [
+                    job_id
+                    for (running_node_id, _), job_id in sorted(self._running_job_ids.items())
+                    if running_node_id == node_id
+                ]
+                public_running_job_ids = []
+                for running_job_id in running_job_ids:
+                    running_job = self.store.get(running_job_id)
+                    if not (
+                        running_job
+                        and running_job.get("request", {}).get("incognito")
+                    ):
+                        public_running_job_ids.append(running_job_id)
                 manual_depth = sum(
                     1
                     for job in queued_jobs
@@ -520,15 +591,38 @@ class JobManager:
                     {
                         "id": node_id,
                         "name": node["name"],
+                        "provider": node["provider"],
+                        "workflow_id": node["workflow_id"],
+                        "workflow_name": node["name"]
+                        if node["provider"] == "runninghub"
+                        else None,
+                        "workflow_variant": node.get("workflow_variant"),
+                        "workflow_execution_mode": node.get(
+                            "workflow_execution_mode"
+                        ),
                         "healthy": node["healthy"],
                         "last_checked": node["last_checked"],
                         "error": node["error"],
-                        "busy": bool(running_job_id),
-                        "running_job_id": public_running_job_id,
+                        "busy": bool(running_job_ids),
+                        "running_job_id": public_running_job_ids[0]
+                        if public_running_job_ids
+                        else None,
+                        "running_job_ids": public_running_job_ids,
+                        "running_count": len(running_job_ids),
+                        "capacity": node["capacity"],
                         "queue_depth": manual_depth,
                     }
                 )
             return result
+
+    @property
+    def parallel_capacity(self) -> int:
+        with self._condition:
+            return sum(
+                node["capacity"]
+                for node in self._nodes.values()
+                if not node.get("retired") and node["healthy"]
+            )
 
     def refresh_node_health(self) -> None:
         with self._condition:
@@ -540,9 +634,12 @@ class JobManager:
         for node_id, node in active_nodes:
             healthy = True
             error = None
+            profile: dict[str, Any] = {}
             if self.health_probe:
                 try:
-                    self.health_probe(node["config"])
+                    probe_result = self.health_probe(node["config"])
+                    if isinstance(probe_result, dict):
+                        profile = probe_result
                 except Exception as exc:
                     healthy = False
                     error = str(exc)[:240]
@@ -550,6 +647,10 @@ class JobManager:
                 node["healthy"] = healthy
                 node["error"] = error
                 node["last_checked"] = utc_now()
+                node["workflow_variant"] = profile.get("workflow_variant")
+                node["workflow_execution_mode"] = profile.get(
+                    "workflow_execution_mode"
+                )
                 self._revision += 1
                 self._condition.notify_all()
 
@@ -567,68 +668,90 @@ class JobManager:
             for item in nodes
         }
         if not configured:
-            raise ValueError("至少需要一个启用的 ComfyUI 节点")
-        threads_to_start = []
+            raise ValueError("至少需要一个启用的推理节点")
+        threads_to_start: list[tuple[str, int]] = []
         with self._condition:
             for node_id, node in self._nodes.items():
                 if node_id not in configured and not node.get("retired") and self.node_in_use(node_id):
                     raise RuntimeError(f"节点正在执行任务或存在定向排队任务：{node['name']}")
             for node_id, item in configured.items():
                 current = self._nodes.get(node_id)
-                if (
-                    current
-                    and current["url"] != str(getattr(item, "url"))
-                    and self.node_in_use(node_id)
-                ):
+                if current and current["config"] != item and self.node_in_use(node_id):
                     raise RuntimeError(f"节点正在执行任务或存在定向排队任务：{current['name']}")
             for node_id, node in self._nodes.items():
                 if node_id not in configured:
                     node["retired"] = True
-                    self._engines.pop(node_id, None)
+                    for slot_key in [key for key in self._engines if key[0] == node_id]:
+                        self._engines.pop(slot_key, None)
             for node_id, item in configured.items():
                 name = str(getattr(item, "name"))
                 url = str(getattr(item, "url"))
+                provider = str(getattr(item, "provider", "comfyui"))
+                workflow_id = str(getattr(item, "workflow_id", ""))
+                capacity = (
+                    1
+                    if provider == "comfyui"
+                    else max(1, int(getattr(item, "max_concurrency", 1)))
+                )
                 current = self._nodes.get(node_id)
                 if current:
-                    url_changed = current["url"] != url
+                    config_changed = current["config"] != item
                     current.update(
                         name=name,
                         url=url,
+                        provider=provider,
+                        workflow_id=workflow_id,
+                        capacity=capacity,
                         config=item,
                         retired=False,
                     )
-                    if url_changed:
-                        current.update(healthy=False, error=None, last_checked=None)
-                        self._engines.pop(node_id, None)
+                    if config_changed:
+                        current.update(
+                            healthy=False,
+                            error=None,
+                            last_checked=None,
+                            workflow_variant=None,
+                            workflow_execution_mode=None,
+                        )
+                        for slot_key in [key for key in self._engines if key[0] == node_id]:
+                            self._engines.pop(slot_key, None)
                 else:
                     self._nodes[node_id] = {
                         "id": node_id,
                         "name": name,
                         "url": url,
+                        "provider": provider,
+                        "workflow_id": workflow_id,
+                        "workflow_variant": None,
+                        "workflow_execution_mode": None,
+                        "capacity": capacity,
                         "config": item,
                         "healthy": self.health_probe is None,
                         "last_checked": None,
                         "error": None,
                         "retired": False,
                     }
-                thread = self._threads.get(node_id)
-                if self._started and (not thread or not thread.is_alive()):
-                    threads_to_start.append(node_id)
+                for slot_index in range(capacity):
+                    slot_key = (node_id, slot_index)
+                    thread = self._threads.get(slot_key)
+                    if self._started and (not thread or not thread.is_alive()):
+                        threads_to_start.append(slot_key)
             self.health_interval = max(5.0, min(3600.0, float(health_interval)))
             self._revision += 1
             self._condition.notify_all()
-        for node_id in threads_to_start:
-            self._start_node_thread(node_id)
+        for node_id, slot_index in threads_to_start:
+            self._start_node_thread(node_id, slot_index)
         self._health_wakeup.set()
 
-    def _start_node_thread(self, node_id: str) -> None:
+    def _start_node_thread(self, node_id: str, slot_index: int) -> None:
+        slot_key = (node_id, slot_index)
         thread = threading.Thread(
             target=self._worker,
-            args=(node_id,),
-            name=f"h3-worker-{node_id}",
+            args=(node_id, slot_index),
+            name=f"h3-worker-{node_id}-{slot_index + 1}",
             daemon=True,
         )
-        self._threads[node_id] = thread
+        self._threads[slot_key] = thread
         thread.start()
 
     def start(self) -> None:
@@ -639,7 +762,9 @@ class JobManager:
         self._started = True
         self.refresh_node_health()
         for node_id in self.node_ids:
-            self._start_node_thread(node_id)
+            capacity = self._nodes[node_id]["capacity"]
+            for slot_index in range(capacity):
+                self._start_node_thread(node_id, slot_index)
         self._health_thread = threading.Thread(
             target=self._health_worker,
             name="h3-node-health",
@@ -729,11 +854,18 @@ class JobManager:
         job = self.store.get(job_id)
         return bool(job and job.get("cancel_requested"))
 
-    def _claim_job(self, node_id: str) -> tuple[str, dict[str, Any]] | None:
+    def _claim_job(
+        self, node_id: str, slot_index: int
+    ) -> tuple[str, dict[str, Any]] | None:
+        slot_key = (node_id, slot_index)
         with self._condition:
             while not self._stop_event.is_set():
                 node = self._nodes.get(node_id)
-                if not node or node.get("retired"):
+                if (
+                    not node
+                    or node.get("retired")
+                    or slot_index >= node["capacity"]
+                ):
                     return None
                 if node["healthy"]:
                     for job_id in list(self._order):
@@ -746,21 +878,39 @@ class JobManager:
                             target = "auto"
                         if target not in {"auto", node_id}:
                             continue
+                        if target == "auto" and node["provider"] == "runninghub":
+                            request = job.get("request", {})
+                            if (
+                                request.get("model_variant")
+                                != node.get("workflow_variant")
+                                or request.get("execution_mode")
+                                != node.get("workflow_execution_mode")
+                            ):
+                                continue
                         self._order.remove(job_id)
-                        self._running_job_ids[node_id] = job_id
+                        self._running_job_ids[slot_key] = job_id
                         self._revision += 1
                         return job_id, job
                 self._condition.wait(timeout=1)
         return None
 
-    def _worker(self, node_id: str) -> None:
+    def _worker(self, node_id: str, slot_index: int) -> None:
+        slot_key = (node_id, slot_index)
         while not self._stop_event.is_set():
-            claimed = self._claim_job(node_id)
+            claimed = self._claim_job(node_id, slot_index)
             if not claimed:
                 return
             node = self._nodes[node_id]
             job_id, job = claimed
-            assigned_node = {"id": node_id, "name": node["name"]}
+            assigned_node = {
+                "id": node_id,
+                "name": node["name"],
+                "provider": node["provider"],
+                "workflow_id": node["workflow_id"],
+                "workflow_name": node["name"]
+                if node["provider"] == "runninghub"
+                else None,
+            }
             self.store.update(
                 job_id,
                 status="running",
@@ -771,13 +921,13 @@ class JobManager:
                 event_message=f"任务已分配至 {node['name']}",
             )
             try:
-                if node_id not in self._engines:
-                    self._engines[node_id] = (
+                if slot_key not in self._engines:
+                    self._engines[slot_key] = (
                         self.engine_factory(node["config"])
                         if self._factory_accepts_node
                         else self.engine_factory()
                     )
-                engine = self._engines[node_id]
+                engine = self._engines[slot_key]
 
                 def progress(percent: int, stage: str) -> None:
                     self.store.update(job_id, progress=max(1, min(99, percent)), stage=stage)
@@ -814,7 +964,7 @@ class JobManager:
                 self._set_incognito_expiry(job_id)
             finally:
                 with self._condition:
-                    self._running_job_ids.pop(node_id, None)
+                    self._running_job_ids.pop(slot_key, None)
                     self._revision += 1
                     self._condition.notify_all()
 

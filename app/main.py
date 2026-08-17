@@ -8,6 +8,7 @@ import secrets
 import shutil
 import subprocess
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from pathlib import Path
 from typing import Annotated, AsyncIterator, Literal
 from urllib.parse import urlparse
@@ -18,7 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
-from .engine import create_engine, probe_comfy_node
+from .engine import create_engine, probe_node
 from .jobs import JobManager, JobStore, TERMINAL_STATES, utc_now
 from .music_prompts import MUSIC3_ARRANGEMENT_SYSTEM_PROMPT, MUSIC3_LYRICS_SYSTEM_PROMPT
 from .nodes import NodeRegistry
@@ -39,7 +40,7 @@ manager = JobManager(
     lambda node: create_engine(settings, node),
     nodes=node_registry.configs(),
     health_probe=(
-        probe_comfy_node
+        probe_node
         if settings.engine_backend == "comfyui" and not settings.fake_engine
         else None
     ),
@@ -57,7 +58,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="MiniMax H3 and Music3 API",
     version="6.0.0",
-    description="ComfyUI-backed MiniMax H3 video and MiniMax Music3 audio generation.",
+    description="MiniMax H3 video and MiniMax Music3 audio generation through ComfyUI and RunningHub API nodes.",
     lifespan=lifespan,
 )
 
@@ -103,12 +104,20 @@ class MusicAssistRequest(BaseModel):
 class ComfyNodeCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     url: str = Field(min_length=8, max_length=500)
+    provider: Literal["comfyui", "runninghub"] = "comfyui"
+    api_key: str = Field(default="", max_length=2000)
+    workflow_id: str = Field(default="", max_length=120)
+    max_concurrency: int = Field(default=1, ge=1, le=64)
 
 
 class ComfyNodeUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     url: str = Field(min_length=8, max_length=500)
     enabled: bool = True
+    provider: Literal["comfyui", "runninghub"] | None = None
+    api_key: str | None = Field(default=None, max_length=2000)
+    workflow_id: str | None = Field(default=None, max_length=120)
+    max_concurrency: int | None = Field(default=None, ge=1, le=64)
 
 
 class ComfySettingsUpdate(BaseModel):
@@ -279,7 +288,7 @@ async def health():
         "queue_depth": manager.queue_depth,
         "nodes": nodes,
         "online_nodes": online,
-        "parallel_capacity": online,
+        "parallel_capacity": manager.parallel_capacity,
         "health_interval_seconds": manager.health_interval,
         "revision": store.revision,
     }
@@ -309,7 +318,15 @@ async def list_comfy_nodes():
 async def create_comfy_node(payload: ComfyNodeCreate):
     node_id = f"node-{secrets.token_hex(4)}"
     try:
-        node = node_registry.create(node_id, payload.name, payload.url)
+        node = node_registry.create(
+            node_id,
+            payload.name,
+            payload.url,
+            payload.provider,
+            payload.api_key,
+            payload.workflow_id,
+            payload.max_concurrency,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     reload_comfy_nodes()
@@ -320,15 +337,42 @@ async def create_comfy_node(payload: ComfyNodeCreate):
 async def update_comfy_node(node_id: str, payload: ComfyNodeUpdate):
     existing = node_registry.get(node_id)
     if not existing:
-        raise HTTPException(status_code=404, detail="ComfyUI 节点不存在")
-    if (existing["url"] != payload.url.rstrip("/") or not payload.enabled) and manager.node_in_use(node_id):
+        raise HTTPException(status_code=404, detail="推理节点不存在")
+    provider = payload.provider or existing["provider"]
+    workflow_id = (
+        payload.workflow_id if payload.workflow_id is not None else existing["workflow_id"]
+    )
+    max_concurrency = (
+        payload.max_concurrency
+        if payload.max_concurrency is not None
+        else int(existing["max_concurrency"])
+    )
+    config_changed = any(
+        (
+            existing["url"] != payload.url.rstrip("/"),
+            existing["provider"] != provider,
+            existing["workflow_id"] != workflow_id,
+            int(existing["max_concurrency"]) != max_concurrency,
+            bool((payload.api_key or "").strip()),
+        )
+    )
+    if (config_changed or not payload.enabled) and manager.node_in_use(node_id):
         raise HTTPException(status_code=409, detail="节点正在执行任务或存在定向排队任务")
     if not payload.enabled:
         enabled_count = sum(1 for item in node_registry.list() if item["id"] != node_id)
         if enabled_count == 0:
-            raise HTTPException(status_code=409, detail="至少需要保留一个启用的 ComfyUI 节点")
+            raise HTTPException(status_code=409, detail="至少需要保留一个启用的推理节点")
     try:
-        node = node_registry.update(node_id, payload.name, payload.url, payload.enabled)
+        node = node_registry.update(
+            node_id,
+            payload.name,
+            payload.url,
+            payload.enabled,
+            provider,
+            payload.api_key,
+            workflow_id,
+            max_concurrency,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     reload_comfy_nodes()
@@ -339,11 +383,11 @@ async def update_comfy_node(node_id: str, payload: ComfyNodeUpdate):
 async def delete_comfy_node(node_id: str):
     existing = node_registry.get(node_id)
     if not existing:
-        raise HTTPException(status_code=404, detail="ComfyUI 节点不存在")
+        raise HTTPException(status_code=404, detail="推理节点不存在")
     if manager.node_in_use(node_id):
         raise HTTPException(status_code=409, detail="节点正在执行任务或存在定向排队任务")
     if existing["enabled"] and len(node_registry.list()) <= 1:
-        raise HTTPException(status_code=409, detail="至少需要保留一个启用的 ComfyUI 节点")
+        raise HTTPException(status_code=409, detail="至少需要保留一个启用的推理节点")
     node_registry.delete(node_id)
     reload_comfy_nodes()
     return {"deleted": True}
@@ -420,16 +464,20 @@ async def create_generation(
     incognito_code: Annotated[str | None, Header(alias="X-H3-Incognito-Code")] = None,
 ):
     prompt = prompt.strip()
+    if incognito and not secrets.compare_digest(incognito_code or "", settings.incognito_code):
+        raise HTTPException(status_code=403, detail="无痕模式授权已失效")
+    if not manager.accepts_node(comfy_node):
+        raise HTTPException(status_code=422, detail="指定的推理节点不存在")
+    workflow_profile = manager.workflow_profile(comfy_node)
+    if workflow_profile:
+        model_variant = workflow_profile["model_variant"]
+        execution_mode = workflow_profile["execution_mode"]
     minimum_prompt_length = 2 if execution_mode == "music3" else 8
     if len(prompt) < minimum_prompt_length:
         raise HTTPException(
             status_code=422,
             detail=f"提示词至少需要 {minimum_prompt_length} 个字符",
         )
-    if incognito and not secrets.compare_digest(incognito_code or "", settings.incognito_code):
-        raise HTTPException(status_code=403, detail="无痕模式授权已失效")
-    if not manager.accepts_node(comfy_node):
-        raise HTTPException(status_code=422, detail="指定的 ComfyUI 节点不存在")
     validate_execution_mode(execution_mode, model_variant, incognito)
     validate_generation(width, height, duration, steps, execution_mode)
 
@@ -493,7 +541,7 @@ async def create_generation(
         "id": job_id,
         "title": (title or prompt.splitlines()[0])[:120],
         "status": "queued",
-        "stage": "等待 ComfyUI Music3 执行" if execution_mode == "music3" else "等待 ComfyUI FP8 执行",
+        "stage": "等待推理节点执行",
         "progress": 0,
         "created_at": created_at,
         "updated_at": created_at,
@@ -553,7 +601,10 @@ async def update_generation(
     request_data.setdefault("execution_mode", "native")
     request_data.setdefault("comfy_node", "auto")
     if not manager.accepts_node(request_data["comfy_node"]):
-        raise HTTPException(status_code=422, detail="指定的 ComfyUI 节点不存在")
+        raise HTTPException(status_code=422, detail="指定的推理节点不存在")
+    workflow_profile = manager.workflow_profile(request_data["comfy_node"])
+    if workflow_profile:
+        request_data.update(workflow_profile)
     minimum_prompt_length = 2 if request_data["execution_mode"] == "music3" else 8
     if len(request_data.get("prompt", "").strip()) < minimum_prompt_length:
         raise HTTPException(
@@ -602,6 +653,94 @@ async def cancel_generation(job_id: str):
     if not manager.cancel(job_id):
         raise HTTPException(status_code=409, detail="任务已结束，无法取消")
     return store.public(job_id, manager.queue_position(job_id))
+
+
+@app.post(
+    "/api/v1/generations/{job_id}/regenerate",
+    status_code=202,
+    dependencies=[Depends(authorize)],
+)
+async def regenerate_generation(
+    job_id: str,
+    incognito_code: Annotated[str | None, Header(alias="X-H3-Incognito-Code")] = None,
+):
+    source_job = store.get(job_id)
+    if not source_job:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    if source_job["status"] not in TERMINAL_STATES:
+        raise HTTPException(status_code=409, detail="任务结束后才能重新生成")
+
+    request_data = deepcopy(source_job.get("request", {}))
+    model_variant = request_data.get("model_variant", "fl2va-fp8")
+    execution_mode = request_data.get("execution_mode", "native")
+    comfy_node = request_data.get("comfy_node", "auto")
+    incognito = bool(request_data.get("incognito"))
+    if incognito and not secrets.compare_digest(incognito_code or "", settings.incognito_code):
+        raise HTTPException(status_code=403, detail="无痕模式授权已失效")
+    if not manager.accepts_node(comfy_node):
+        raise HTTPException(status_code=422, detail="原任务指定的推理节点不存在")
+    workflow_profile = manager.workflow_profile(comfy_node)
+    if workflow_profile:
+        request_data.update(workflow_profile)
+        model_variant = workflow_profile["model_variant"]
+        execution_mode = workflow_profile["execution_mode"]
+    validate_execution_mode(execution_mode, model_variant, incognito)
+    validate_generation(
+        request_data.get("width", 832),
+        request_data.get("height", 480),
+        request_data.get("duration", 5),
+        request_data.get("steps", 10),
+        execution_mode,
+    )
+    references = request_data.get("references", [])
+    validate_references(model_variant, [item.get("type") for item in references], execution_mode)
+
+    source_paths = source_job.get("input_paths", [])
+    if len(source_paths) != len(references):
+        raise HTTPException(status_code=410, detail="原任务参考文件不完整")
+    new_job_id = secrets.token_hex(8)
+    upload_dir = settings.uploads_dir / new_job_id
+    cloned_paths: list[str] = []
+    try:
+        if source_paths:
+            upload_dir.mkdir(parents=True)
+        source_root = (settings.uploads_dir / job_id).resolve()
+        for source_path in source_paths:
+            source = Path(source_path).resolve()
+            try:
+                source.relative_to(source_root)
+            except ValueError as exc:
+                raise HTTPException(status_code=410, detail="原任务参考文件路径无效") from exc
+            if not source.is_file():
+                raise HTTPException(status_code=410, detail="原任务参考文件已不存在")
+            destination = upload_dir / source.name
+            shutil.copy2(source, destination)
+            cloned_paths.append(str(destination))
+    except Exception:
+        shutil.rmtree(upload_dir, ignore_errors=True)
+        raise
+
+    for reference in references:
+        reference.pop("url", None)
+    request_data["num_frames"] = align_frames(request_data.get("duration", 5))
+    created_at = utc_now()
+    regenerated_job = {
+        "id": new_job_id,
+        "title": source_job.get("title") or request_data.get("prompt", "")[:120],
+        "status": "queued",
+        "stage": "等待推理节点执行",
+        "progress": 0,
+        "created_at": created_at,
+        "updated_at": created_at,
+        "cancel_requested": False,
+        "request": request_data,
+        "input_paths": cloned_paths,
+    }
+    store.create(regenerated_job)
+    manager.submit(new_job_id)
+    response = store.public(new_job_id, manager.queue_position(new_job_id))
+    response["status_url"] = f"/api/v1/generations/{new_job_id}"
+    return response
 
 
 @app.delete("/api/v1/generations/{job_id}", dependencies=[Depends(authorize)])

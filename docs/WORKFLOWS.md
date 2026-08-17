@@ -58,7 +58,7 @@ Ref2VA 视频参考由 API 动态创建 `VHS_LoadVideo` 节点，因此需要 [C
 
 数字人工作流需要附件中的 `comfyui-vrgamedevgirl`，核心节点为 `VRGDG_MiniMaxH3AudioDrive`。附件中的 `ComfyUI-SoundFlow` 已纳入云端 ComfyUI 插件环境；服务端通过 `ffprobe` 读取驱动音频时长，API 工作流不依赖 `SoundFlow_GetLength`。
 
-Music3 使用 ComfyUI 原生节点 `MiniMaxMusic3TextEncode`、`EmptyMiniMaxMusic3LatentAudio`，以及 ComfyUI-MultiGPU 的 `CLIPLoaderMultiGPU`。文本编码器固定使用当前 ComfyUI 进程的 CUDA 设备。工作流固定 30 步、Euler 采样器、`simple` 调度器和分块音频解码，输出 FLAC。
+Music3 使用 ComfyUI 原生节点 `MiniMaxMusic3TextEncode`、`EmptyMiniMaxMusic3LatentAudio`，以及 ComfyUI-MultiGPU 的 `CLIPLoaderMultiGPU`。文本编码器固定使用当前 ComfyUI 进程的 CUDA 设备。API 任务启用强制时长模式，在目标时长前屏蔽 `<|audio_end|>`，工作流固定 30 步、Euler 采样器、`simple` 调度器和分块音频解码，输出 FLAC。
 
 ## 参数限制
 
