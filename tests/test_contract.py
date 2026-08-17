@@ -15,6 +15,9 @@ from app.engine import (
     ComfyUIH3Engine,
     RunningHubH3Engine,
     create_engine,
+    probe_node,
+    runninghub_account_profile,
+    runninghub_billing_delta,
     runninghub_workflow_profile,
 )
 from app.jobs import JobManager, JobStore
@@ -37,7 +40,7 @@ class ContractTests(unittest.TestCase):
             styles,
             r"\.conversation-column \{[^}]*height: 100%;[^}]*overflow: hidden;",
         )
-        self.assertIn('/assets/styles.css?v=36', index)
+        self.assertIn('/assets/styles.css?v=37', index)
 
     def test_settings_popover_is_outside_horizontal_scroll_container(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -251,6 +254,10 @@ class ContractTests(unittest.TestCase):
                 health_probe=lambda config: {
                     "workflow_variant": "ref2va-fp8",
                     "workflow_execution_mode": "turbo-lora",
+                    "account_balance_coins": 1200,
+                    "account_balance_money": 12.5,
+                    "account_currency": "CNY",
+                    "account_current_tasks": 1,
                 },
             )
             manager.refresh_node_health()
@@ -265,6 +272,56 @@ class ContractTests(unittest.TestCase):
             public = manager.nodes_public()[0]
             self.assertEqual(public["workflow_name"], "H3 Ref2VA 8 Step")
             self.assertEqual(public["workflow_id"], "workflow-1")
+            self.assertEqual(public["account_balance_coins"], 1200)
+            self.assertEqual(public["account_balance_money"], 12.5)
+            self.assertEqual(public["account_currency"], "CNY")
+            manager.health_probe = MagicMock(side_effect=RuntimeError("balance unavailable"))
+            manager.refresh_node_health()
+            public = manager.nodes_public()[0]
+            self.assertTrue(public["healthy"])
+            self.assertEqual(public["account_balance_coins"], 1200)
+            self.assertIn("balance unavailable", public["error"])
+
+    def test_runninghub_account_balance_and_call_cost_are_parsed(self):
+        before = runninghub_account_profile(
+            {
+                "data": {
+                    "remainCoins": "99999",
+                    "currentTaskCounts": "1",
+                    "remainMoney": "999.5",
+                    "currency": "cny",
+                }
+            }
+        )
+        after = runninghub_account_profile(
+            {
+                "data": {
+                    "remainCoins": "99849",
+                    "currentTaskCounts": "0",
+                    "remainMoney": "998",
+                    "currency": "CNY",
+                }
+            }
+        )
+        billing = runninghub_billing_delta(before, after)
+        self.assertEqual(before["account_current_tasks"], 1)
+        self.assertEqual(billing["consumed_coins"], 150)
+        self.assertEqual(billing["consumed_money"], 1.5)
+        self.assertEqual(billing["account_currency"], "CNY")
+
+    def test_runninghub_probe_result_is_forwarded_to_scheduler(self):
+        node = ComfyNodeConfig(
+            "rh",
+            "RunningHub",
+            "https://www.runninghub.ai",
+            "runninghub",
+            "secret",
+            "workflow",
+            1,
+        )
+        expected = {"account_balance_coins": 500}
+        with patch("app.engine.probe_runninghub_node", return_value=expected):
+            self.assertEqual(probe_node(node), expected)
 
     def test_prompt_optimizers_require_simplified_chinese(self):
         self.assertIn("必须使用简体中文", FL2VA_SYSTEM_PROMPT)
@@ -359,6 +416,10 @@ class ContractTests(unittest.TestCase):
         self.assertIn('function selectedRunningHubNode()', app_js)
         self.assertIn('el("modelControl").hidden = Boolean(runningHubNode);', app_js)
         self.assertIn('if (!runningHubNode) {', app_js)
+        self.assertIn('function runningHubBalanceLabel(node)', app_js)
+        self.assertIn('function runningHubCostLabel(node)', app_js)
+        self.assertIn('node-accounting', app_js)
+        self.assertIn('account_balance_money', main + app_js)
         self.assertIn('request_data.update(workflow_profile)', main)
         self.assertIn('function applyJobUpsert(job)', app_js)
         self.assertIn('request.headers.get("last-event-id"', main)
@@ -669,7 +730,7 @@ class ContractTests(unittest.TestCase):
         environment = (project_root / ".env.example").read_text(encoding="utf-8")
 
         self.assertIn('option value="digital-human">数字人 · 音频驱动', index)
-        self.assertIn('/assets/app.js?v=40', index)
+        self.assertIn('/assets/app.js?v=41', index)
         self.assertIn('return { image: 1, video: 0, audio: 1 };', app_js)
         self.assertIn('el("duration").disabled = digitalHuman;', app_js)
         self.assertIn('durationControl.classList.toggle("digital-human", digitalHuman);', app_js)
@@ -875,8 +936,8 @@ class ContractTests(unittest.TestCase):
         self.assertIn("function isAnonymousQueueJob(job)", app_js)
         self.assertIn('"有任务正在运行中"', app_js)
         self.assertIn('const progress = item.progress == null ? ""', app_js)
-        self.assertIn('/assets/app.js?v=40', index)
-        self.assertIn('/assets/styles.css?v=36', index)
+        self.assertIn('/assets/app.js?v=41', index)
+        self.assertIn('/assets/styles.css?v=37', index)
         self.assertIn('id="steps" name="steps" type="number"', index)
         self.assertIn('min="4" max="50" step="1" value="10"', index)
         self.assertNotIn('<select id="steps"', index)

@@ -477,6 +477,14 @@ class JobManager:
                 "workflow_id": workflow_id,
                 "workflow_variant": None,
                 "workflow_execution_mode": None,
+                "account_balance_coins": None,
+                "account_balance_money": None,
+                "account_currency": "",
+                "account_current_tasks": None,
+                "last_call_consumed_coins": None,
+                "last_call_consumed_money": None,
+                "last_call_cost_at": None,
+                "last_call_job_id": None,
                 "capacity": 1 if provider == "comfyui" else max(1, capacity),
                 "config": item,
                 "healthy": health_probe is None,
@@ -600,6 +608,18 @@ class JobManager:
                         "workflow_execution_mode": node.get(
                             "workflow_execution_mode"
                         ),
+                        "account_balance_coins": node.get("account_balance_coins"),
+                        "account_balance_money": node.get("account_balance_money"),
+                        "account_currency": node.get("account_currency") or "",
+                        "account_current_tasks": node.get("account_current_tasks"),
+                        "last_call_consumed_coins": node.get(
+                            "last_call_consumed_coins"
+                        ),
+                        "last_call_consumed_money": node.get(
+                            "last_call_consumed_money"
+                        ),
+                        "last_call_cost_at": node.get("last_call_cost_at"),
+                        "last_call_job_id": node.get("last_call_job_id"),
                         "healthy": node["healthy"],
                         "last_checked": node["last_checked"],
                         "error": node["error"],
@@ -641,16 +661,22 @@ class JobManager:
                     if isinstance(probe_result, dict):
                         profile = probe_result
                 except Exception as exc:
-                    healthy = False
+                    healthy = node["provider"] == "runninghub"
                     error = str(exc)[:240]
             with self._condition:
                 node["healthy"] = healthy
                 node["error"] = error
                 node["last_checked"] = utc_now()
-                node["workflow_variant"] = profile.get("workflow_variant")
-                node["workflow_execution_mode"] = profile.get(
-                    "workflow_execution_mode"
-                )
+                for field in (
+                    "workflow_variant",
+                    "workflow_execution_mode",
+                    "account_balance_coins",
+                    "account_balance_money",
+                    "account_currency",
+                    "account_current_tasks",
+                ):
+                    if field in profile:
+                        node[field] = profile[field]
                 self._revision += 1
                 self._condition.notify_all()
 
@@ -712,6 +738,14 @@ class JobManager:
                             last_checked=None,
                             workflow_variant=None,
                             workflow_execution_mode=None,
+                            account_balance_coins=None,
+                            account_balance_money=None,
+                            account_currency="",
+                            account_current_tasks=None,
+                            last_call_consumed_coins=None,
+                            last_call_consumed_money=None,
+                            last_call_cost_at=None,
+                            last_call_job_id=None,
                         )
                         for slot_key in [key for key in self._engines if key[0] == node_id]:
                             self._engines.pop(slot_key, None)
@@ -724,6 +758,14 @@ class JobManager:
                         "workflow_id": workflow_id,
                         "workflow_variant": None,
                         "workflow_execution_mode": None,
+                        "account_balance_coins": None,
+                        "account_balance_money": None,
+                        "account_currency": "",
+                        "account_current_tasks": None,
+                        "last_call_consumed_coins": None,
+                        "last_call_consumed_money": None,
+                        "last_call_cost_at": None,
+                        "last_call_job_id": None,
                         "capacity": capacity,
                         "config": item,
                         "healthy": self.health_probe is None,
@@ -920,6 +962,7 @@ class JobManager:
                 assigned_node=assigned_node,
                 event_message=f"任务已分配至 {node['name']}",
             )
+            engine = None
             try:
                 if slot_key not in self._engines:
                     self._engines[slot_key] = (
@@ -963,6 +1006,28 @@ class JobManager:
                 )
                 self._set_incognito_expiry(job_id)
             finally:
+                billing = getattr(engine, "last_billing", None)
+                if isinstance(billing, dict):
+                    self.store.update(job_id, runninghub_billing=billing)
+                    with self._condition:
+                        node["account_balance_coins"] = billing.get(
+                            "account_balance_coins"
+                        )
+                        node["account_balance_money"] = billing.get(
+                            "account_balance_money"
+                        )
+                        node["account_currency"] = billing.get("account_currency") or ""
+                        node["account_current_tasks"] = billing.get(
+                            "account_current_tasks"
+                        )
+                        node["last_call_consumed_coins"] = billing.get(
+                            "consumed_coins"
+                        )
+                        node["last_call_consumed_money"] = billing.get(
+                            "consumed_money"
+                        )
+                        node["last_call_cost_at"] = billing.get("measured_at")
+                        node["last_call_job_id"] = job_id
                 with self._condition:
                     self._running_job_ids.pop(slot_key, None)
                     self._revision += 1

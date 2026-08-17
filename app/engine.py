@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import time
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit
@@ -24,6 +25,45 @@ logger = logging.getLogger(__name__)
 
 class RunningHubTransientResponseError(RuntimeError):
     pass
+
+
+def _runninghub_number(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def runninghub_account_profile(payload: dict[str, Any]) -> dict[str, Any]:
+    data = payload.get("data") or {}
+    if not isinstance(data, dict):
+        raise RuntimeError("RunningHub 账户状态响应缺少 data")
+    current_tasks = _runninghub_number(data.get("currentTaskCounts"))
+    return {
+        "account_balance_coins": _runninghub_number(data.get("remainCoins")),
+        "account_balance_money": _runninghub_number(data.get("remainMoney")),
+        "account_currency": str(data.get("currency") or "").upper(),
+        "account_current_tasks": int(current_tasks) if current_tasks is not None else None,
+    }
+
+
+def runninghub_billing_delta(
+    before: dict[str, Any], after: dict[str, Any]
+) -> dict[str, Any]:
+    def consumed(field: str) -> float | None:
+        previous = _runninghub_number(before.get(field))
+        current = _runninghub_number(after.get(field))
+        if previous is None or current is None or current > previous:
+            return None
+        return round(previous - current, 6)
+
+    return {
+        **after,
+        "consumed_coins": consumed("account_balance_coins"),
+        "consumed_money": consumed("account_balance_money"),
+        "measured_at": datetime.now(UTC).isoformat(),
+    }
 
 
 def runninghub_workflow_profile(workflow: dict[str, Any]) -> dict[str, str]:
@@ -758,6 +798,7 @@ class RunningHubH3Engine:
         self.headers = {"Authorization": f"Bearer {node.api_key}"}
         self.workflow_builder = ComfyUIH3Engine(settings)
         self._remote_workflow: dict[str, Any] | None = None
+        self.last_billing: dict[str, Any] | None = None
 
     @staticmethod
     def _json_response(response, action: str) -> dict[str, Any]:
@@ -867,6 +908,16 @@ class RunningHubH3Engine:
                         ) from last_error
                     time.sleep(2**attempt)
         return uploaded
+
+    def _account_status(self, client) -> dict[str, Any]:
+        payload = self._request_json(
+            client,
+            "POST",
+            "/uc/openapi/accountStatus",
+            json_data={"apikey": self.node.api_key},
+            action="读取账户余额",
+        )
+        return runninghub_account_profile(payload)
 
     def _get_remote_workflow(self, client) -> dict[str, Any]:
         if self._remote_workflow is not None:
@@ -1025,6 +1076,7 @@ class RunningHubH3Engine:
         import httpx
 
         progress(2, "准备 RunningHub 工作流")
+        self.last_billing = None
         timeout = httpx.Timeout(60, connect=10)
         with httpx.Client(
             base_url=self.base_url,
@@ -1033,31 +1085,49 @@ class RunningHubH3Engine:
             follow_redirects=True,
             trust_env=False,
         ) as client:
-            input_names = self._upload_inputs(client, job)
-            remote_workflow = self._get_remote_workflow(client)
-            node_info_list = self._node_info_list(job, input_names, remote_workflow)
-            payload = self._request_json(
-                client,
-                "POST",
-                "/task/openapi/create",
-                json_data={
-                    "apiKey": self.node.api_key,
-                    "workflowId": self.node.workflow_id,
-                    "nodeInfoList": node_info_list,
-                },
-                action="提交任务",
-            )
-            data = payload.get("data") or {}
-            task_id = str(data.get("taskId") or payload.get("taskId") or "")
-            if not task_id:
-                raise RuntimeError("RunningHub 提交响应缺少 taskId")
-            if str(data.get("taskStatus") or "").upper() == "FAILED":
-                raise RuntimeError(
-                    "RunningHub 工作流校验失败："
-                    + str(data.get("promptTips") or payload.get("msg") or "未知错误")[:500]
+            balance_before: dict[str, Any] | None = None
+            task_id = ""
+            try:
+                try:
+                    balance_before = self._account_status(client)
+                except Exception:
+                    logger.exception("RunningHub 调用前账户余额读取失败")
+                input_names = self._upload_inputs(client, job)
+                remote_workflow = self._get_remote_workflow(client)
+                node_info_list = self._node_info_list(job, input_names, remote_workflow)
+                payload = self._request_json(
+                    client,
+                    "POST",
+                    "/task/openapi/create",
+                    json_data={
+                        "apiKey": self.node.api_key,
+                        "workflowId": self.node.workflow_id,
+                        "nodeInfoList": node_info_list,
+                    },
+                    action="提交任务",
                 )
-            progress(4, f"已提交 RunningHub 任务 {task_id[:8]}")
-            results = self._poll(client, task_id, progress, cancelled)
+                data = payload.get("data") or {}
+                task_id = str(data.get("taskId") or payload.get("taskId") or "")
+                if not task_id:
+                    raise RuntimeError("RunningHub 提交响应缺少 taskId")
+                if str(data.get("taskStatus") or "").upper() == "FAILED":
+                    raise RuntimeError(
+                        "RunningHub 工作流校验失败："
+                        + str(data.get("promptTips") or payload.get("msg") or "未知错误")[:500]
+                    )
+                progress(4, f"已提交 RunningHub 任务 {task_id[:8]}")
+                results = self._poll(client, task_id, progress, cancelled)
+            finally:
+                if task_id and balance_before:
+                    try:
+                        balance_after = self._account_status(client)
+                        self.last_billing = runninghub_billing_delta(
+                            balance_before, balance_after
+                        )
+                    except Exception:
+                        logger.exception(
+                            "RunningHub 调用后账户余额读取失败，task_id=%s", task_id
+                        )
         progress(98, "下载 RunningHub 生成产物")
         output = self._download_result(job, results)
         progress(99, "整理交付文件")
@@ -1202,7 +1272,7 @@ def probe_comfy_node(node: ComfyNodeConfig) -> None:
         response.raise_for_status()
 
 
-def probe_runninghub_node(node: ComfyNodeConfig) -> dict[str, str]:
+def probe_runninghub_node(node: ComfyNodeConfig) -> dict[str, Any]:
     import httpx
 
     with httpx.Client(
@@ -1220,7 +1290,8 @@ def probe_runninghub_node(node: ComfyNodeConfig) -> dict[str, str]:
         payload = response.json()
         if not isinstance(payload, dict) or payload.get("code") not in {0, "0"}:
             message = payload.get("msg") if isinstance(payload, dict) else None
-            raise RuntimeError(f"RunningHub 健康检查失败：{message or '响应无效'}")
+            raise RuntimeError(f"RunningHub 账户余额读取失败：{message or '响应无效'}")
+        account_profile = runninghub_account_profile(payload)
         response = client.post(
             "/api/openapi/getJsonApiFormat",
             json={"apiKey": node.api_key, "workflowId": node.workflow_id},
@@ -1235,14 +1306,14 @@ def probe_runninghub_node(node: ComfyNodeConfig) -> dict[str, str]:
                 raise RuntimeError("RunningHub 工作流 JSON 无法解析") from exc
         if not isinstance(prompt, dict):
             raise RuntimeError("RunningHub 工作流响应缺少 prompt")
-        return runninghub_workflow_profile(prompt)
+        return {**runninghub_workflow_profile(prompt), **account_profile}
 
 
-def probe_node(node: ComfyNodeConfig) -> None:
+def probe_node(node: ComfyNodeConfig) -> dict[str, Any] | None:
     if node.provider == "runninghub":
-        probe_runninghub_node(node)
-        return
+        return probe_runninghub_node(node)
     probe_comfy_node(node)
+    return None
 
 
 def create_engine(settings: Settings, node: ComfyNodeConfig | None = None):

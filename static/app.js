@@ -48,7 +48,8 @@ const COPY = {
   "zh-CN": {
     assetLibrary: "素材库", assetSearch: "搜索素材", allStatuses: "全部状态", queued: "排队中", running: "生成中", completed: "已完成", failed: "失败", cancelled: "已取消",
     conversation: "H3 对话", switchLanguage: "Switch to English", apiDocs: "API 文档", newGeneration: "新建生成", close: "关闭", assets: "素材库",
-    connectEngine: "连接推理节点", offline: "服务离线", autoSchedule: "自动调度", nodePending: "节点待分配", online: "在线", nodeOffline: "离线", disabled: "已停用", busy: "执行中",
+    connectEngine: "连接推理节点", offline: "服务离线", autoSchedule: "自动调度", nodePending: "节点待分配", online: "在线", available: "可用", nodeOffline: "离线", disabled: "已停用", busy: "执行中",
+    balance: "余额", credits: "点数", recentCost: "最近调用消耗", accountUnavailable: "账户信息不可用", balancePending: "余额读取中", accountTasks: "账户任务", balanceUpdated: "余额更新", balanceFailed: "余额读取失败",
     noAssets: "暂无素材", loading: "加载中", allLoaded: "已加载全部", loadFailed: "加载失败", startCreating: "开始创作", you: "你",
     native: "普通流 · 原生 H3", turbo: "8-step LoRA · 强度 1.0", digitalHuman: "数字人 · 音频驱动", music3: "Music3 · 30 步", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache（已停用）",
     reuse: "回填到发送区", regenerate: "重新生成", edit: "修改", cancel: "取消", delete: "删除", deleteRecord: "删除记录", downloadVideo: "下载 MP4", downloadAudio: "下载 FLAC", videoReady: "视频已生成", musicReady: "音乐已生成",
@@ -59,7 +60,8 @@ const COPY = {
   en: {
     assetLibrary: "Assets", assetSearch: "Search assets", allStatuses: "All statuses", queued: "Queued", running: "Running", completed: "Completed", failed: "Failed", cancelled: "Cancelled",
     conversation: "H3 Chat", switchLanguage: "切换为中文", apiDocs: "API documentation", newGeneration: "New generation", close: "Close", assets: "Assets",
-    connectEngine: "Connecting to inference nodes", offline: "Service offline", autoSchedule: "Auto", nodePending: "Awaiting node", online: "Online", nodeOffline: "Offline", disabled: "Disabled", busy: "Running",
+    connectEngine: "Connecting to inference nodes", offline: "Service offline", autoSchedule: "Auto", nodePending: "Awaiting node", online: "Online", available: "available", nodeOffline: "Offline", disabled: "Disabled", busy: "Running",
+    balance: "Balance", credits: "credits", recentCost: "Recent call cost", accountUnavailable: "Account unavailable", balancePending: "Loading balance", accountTasks: "Account tasks", balanceUpdated: "balance updated", balanceFailed: "balance read failed",
     noAssets: "No assets", loading: "Loading", allLoaded: "All assets loaded", loadFailed: "Load failed", startCreating: "Start creating", you: "You",
     native: "Native H3", turbo: "8-step LoRA · 1.0", digitalHuman: "Digital human · audio driven", music3: "Music3 · 30 steps", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache (disabled)",
     reuse: "Fill composer", regenerate: "Regenerate", edit: "Edit", cancel: "Cancel", delete: "Delete", deleteRecord: "Delete record", downloadVideo: "Download MP4", downloadAudio: "Download FLAC", videoReady: "Video generated", musicReady: "Music generated",
@@ -150,7 +152,7 @@ function applyStaticLocale() {
   setText(".log-section .quiet", "Waiting for events");
   setText("#nodeDialogTitle", "Inference nodes");
   setText(".node-dialog-header p", "ComfyUI and RunningHub configuration");
-  setText('label[for="nodeHealthInterval"]', "Health check interval");
+  setText('label[for="nodeHealthInterval"]', "Node status refresh interval");
   setText(".node-settings-row span", "sec");
   setText("#saveNodeSettings", "Save");
   setText("#addNodeButton span", "Add node");
@@ -307,24 +309,71 @@ function nodeLabel(job) {
   return state.nodes.find((node) => node.id === requested)?.name || requested;
 }
 
+function formatAccountNumber(value) {
+  if (value == null || value === "" || !Number.isFinite(Number(value))) return "";
+  return new Intl.NumberFormat(state.locale, { maximumFractionDigits: 4 }).format(Number(value));
+}
+
+function formatAccountMoney(value, currency) {
+  if (value == null || value === "" || !Number.isFinite(Number(value))) return "";
+  const code = String(currency || "").toUpperCase();
+  if (/^[A-Z]{3}$/.test(code)) {
+    try {
+      return new Intl.NumberFormat(state.locale, {
+        style: "currency",
+        currency: code,
+        maximumFractionDigits: 4,
+      }).format(Number(value));
+    } catch {
+      return `${code} ${formatAccountNumber(value)}`;
+    }
+  }
+  return formatAccountNumber(value);
+}
+
+function runningHubBalanceLabel(node) {
+  const parts = [];
+  const money = formatAccountMoney(node.account_balance_money, node.account_currency);
+  if (money) parts.push(money);
+  const coins = formatAccountNumber(node.account_balance_coins);
+  if (coins) parts.push(`${coins} ${t("credits")}`);
+  if (parts.length) return `${t("balance")} ${parts.join(" / ")}`;
+  return node.error ? t("accountUnavailable") : t("balancePending");
+}
+
+function runningHubCostLabel(node) {
+  const parts = [];
+  if (Number(node.last_call_consumed_money) > 0) {
+    parts.push(formatAccountMoney(node.last_call_consumed_money, node.account_currency));
+  }
+  if (Number(node.last_call_consumed_coins) > 0) {
+    parts.push(`${formatAccountNumber(node.last_call_consumed_coins)} ${t("credits")}`);
+  }
+  const measured = node.last_call_consumed_money != null || node.last_call_consumed_coins != null;
+  if (!parts.length && measured) parts.push("0");
+  return parts.length ? `${t("recentCost")} ${parts.join(" / ")}` : "";
+}
+
 function renderNodeOptions(nodes = state.nodes) {
   state.nodes = Array.isArray(nodes) ? nodes : [];
   const select = el("comfyNode");
   const current = select.value || "auto";
   const online = state.nodes.filter((node) => node.healthy).length;
-  const options = [`<option value="auto">${t("autoSchedule")} · ${online}/${state.nodes.length} ${t("online")}</option>`];
+  const options = [`<option value="auto">${t("autoSchedule")} · ${online}/${state.nodes.length} ${t("available")}</option>`];
   state.nodes.forEach((node) => {
     const running = Number(node.running_count || 0);
     const capacity = Number(node.capacity || 1);
-    const stateLabel = !node.healthy
-      ? t("nodeOffline")
-      : running
-        ? `${t("busy")} ${running}/${capacity}`
-        : `${t("online")} 0/${capacity}`;
+    const stateLabel = node.provider === "runninghub"
+      ? `${running ? `${t("busy")} ${running}/${capacity} · ` : ""}${runningHubBalanceLabel(node)}`
+      : !node.healthy
+        ? t("nodeOffline")
+        : running
+          ? `${t("busy")} ${running}/${capacity}`
+          : `${t("online")} 0/${capacity}`;
     const label = node.provider === "runninghub"
       ? `${escapeHtml(node.workflow_name || node.name)} · ID ${escapeHtml(node.workflow_id || "-")}`
       : escapeHtml(node.name);
-    options.push(`<option value="${escapeHtml(node.id)}"${node.healthy ? "" : " disabled"}>${label} · ${stateLabel}</option>`);
+    options.push(`<option value="${escapeHtml(node.id)}"${node.healthy ? "" : " disabled"}>${label} · ${escapeHtml(stateLabel)}</option>`);
   });
   const markup = options.join("");
   if (select.innerHTML !== markup) select.innerHTML = markup;
@@ -339,8 +388,8 @@ function renderHealthState(nodes = state.nodes, queueDepth = state.queue.length)
     .filter((node) => node.healthy)
     .reduce((total, node) => total + Number(node.capacity || 1), 0);
   const message = state.locale === "en"
-    ? `${online}/${state.nodes.length} nodes online · capacity ${capacity} · queue ${queueDepth}`
-    : `${online}/${state.nodes.length} 节点在线 · 并发 ${capacity} · 队列 ${queueDepth}`;
+    ? `${online}/${state.nodes.length} nodes available · capacity ${capacity} · queue ${queueDepth}`
+    : `${online}/${state.nodes.length} 节点可用 · 并发 ${capacity} · 队列 ${queueDepth}`;
   el("healthDot").className = `status-dot ${online > 0 ? "online" : "offline"}`;
   el("healthText").textContent = message;
   el("healthText").dataset.snapshot = message;
@@ -348,6 +397,13 @@ function renderHealthState(nodes = state.nodes, queueDepth = state.queue.length)
 
 function nodeStatus(node) {
   if (!node.enabled) return { label: t("disabled"), className: "disabled" };
+  if (node.provider === "runninghub") {
+    if (node.busy) return { label: t("busy"), className: "busy" };
+    return {
+      label: runningHubBalanceLabel(node),
+      className: node.error ? "disabled" : "online",
+    };
+  }
   if (!node.healthy) return { label: t("nodeOffline"), className: "offline" };
   if (node.busy) return { label: t("busy"), className: "busy" };
   return { label: t("online"), className: "online" };
@@ -390,9 +446,23 @@ function renderManagedNodes() {
     const provider = node.provider === "runninghub" ? "RunningHub API" : "ComfyUI API";
     const workflow = node.provider === "runninghub" ? ` · Workflow ${escapeHtml(node.workflow_id || "-")}` : "";
     const keyState = node.has_api_key ? ` · ${localized("API Key 已保存", "API Key saved")}` : "";
+    const accountTasks = node.provider === "runninghub" && node.account_current_tasks != null
+      ? ` · ${t("accountTasks")} ${escapeHtml(String(node.account_current_tasks))}`
+      : "";
+    const recentCost = node.provider === "runninghub" ? runningHubCostLabel(node) : "";
+    const accountingTitle = [
+      localized("按调用前后余额差值计算；同一 API Key 并发使用时可能包含同期扣费", "Calculated from the balance difference before and after a call; concurrent use of the same API key can include other charges"),
+      node.error || "",
+    ].filter(Boolean).join(" · ");
+    const accounting = node.provider === "runninghub"
+      ? `<small class="node-accounting" title="${escapeHtml(accountingTitle)}">${escapeHtml(runningHubBalanceLabel(node))}${accountTasks}${recentCost ? ` · ${escapeHtml(recentCost)}` : ""}</small>`
+      : "";
+    const checkedLabel = node.provider === "runninghub"
+      ? node.error ? t("balanceFailed") : t("balanceUpdated")
+      : localized("检测", "checked");
     return `<div class="node-row" data-node-id="${escapeHtml(node.id)}">
       <span class="node-state ${status.className}" aria-hidden="true"></span>
-      <div class="node-row-copy"><div><strong>${escapeHtml(node.name)}</strong><span>${status.label}${activity}</span></div><code title="${escapeHtml(node.url)}">${escapeHtml(node.url)}</code><small>${provider}${workflow}${keyState} · ID ${escapeHtml(node.id)}${node.last_checked ? ` · ${formatTime(node.last_checked, true)} ${localized("检测", "checked")}` : ""}</small></div>
+      <div class="node-row-copy"><div><strong>${escapeHtml(node.name)}</strong><span>${escapeHtml(status.label)}${activity}</span></div><code title="${escapeHtml(node.url)}">${escapeHtml(node.url)}</code>${accounting}<small>${provider}${workflow}${keyState} · ID ${escapeHtml(node.id)}${node.last_checked ? ` · ${formatTime(node.last_checked, true)} ${checkedLabel}` : ""}</small></div>
       <div class="node-row-actions"><button type="button" data-node-action="edit" title="编辑节点" aria-label="编辑 ${escapeHtml(node.name)}">${icon("pencil")}</button><button type="button" data-node-action="delete" title="删除节点" aria-label="删除 ${escapeHtml(node.name)}">${icon("trash-2")}</button></div>
     </div>`;
   }).join("") : `<p class="quiet">${state.locale === "en" ? "No nodes" : "暂无节点"}</p>`;
@@ -408,7 +478,11 @@ function syncManagedNodeStatuses(nodes) {
 
 async function loadManagedNodes() {
   const payload = await api("/api/v1/comfy/nodes");
-  state.managedNodes = payload.data || [];
+  const statuses = new Map(state.nodes.map((node) => [node.id, node]));
+  state.managedNodes = (payload.data || []).map((node) => ({
+    ...node,
+    ...(statuses.get(node.id) || {}),
+  }));
   el("nodeHealthInterval").value = String(payload.health_interval_seconds || 60);
   renderManagedNodes();
 }

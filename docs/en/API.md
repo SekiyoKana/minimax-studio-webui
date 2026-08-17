@@ -61,7 +61,9 @@ Node fields:
 
 API keys are written only to SQLite. Node query responses include `has_api_key` and omit the secret value. Leaving `api_key` empty while editing the same provider preserves the saved key. Changing providers requires a key valid for the new provider.
 
-RunningHub health checks read the target workflow JSON and return `workflow_variant` and `workflow_execution_mode`. When a task targets a RunningHub node, the service overrides the requested model and execution mode with this profile, and the interface displays only the workflow name and ID. With multiple RunningHub workflows in automatic scheduling, jobs are assigned only to compatible nodes.
+RunningHub node-status refreshes call the official `accountStatus` endpoint and return `account_balance_coins`, `account_balance_money`, `account_currency`, and `account_current_tasks`. Account-query failures preserve the latest data and populate `error` without marking the RunningHub node offline. The service reads the balance before and after each task. Job records include `runninghub_billing`, while node status includes the most recent balance difference. Concurrent calls using the same API key can cause this difference to include other charges from the same period.
+
+Status refreshes also read the target workflow JSON and return `workflow_variant` and `workflow_execution_mode`. When a task targets a RunningHub node, the service overrides the requested model and execution mode with this profile, and the interface displays only the workflow name and ID. With multiple RunningHub workflows in automatic scheduling, jobs are assigned only to compatible nodes.
 
 Delete a node with `DELETE /api/v1/comfy/nodes/{node_id}`. The service rejects disabling or deleting a node that is running a job, has manually targeted queued jobs, or is the final enabled node.
 
