@@ -159,6 +159,24 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
 
 Music3 最大时长为 300 秒。API 任务启用强制时长模式，在请求时长达到前屏蔽模型结束标记，产物长度按请求时长生成。产物格式为 32 kHz、16-bit、立体声 FLAC。
 
+## 创建 H3 TTS 人物语音任务
+
+TTS 模式输入人物年龄、性格、说话方式和完整对白，可上传 0 至 3 段音频作为说话者音色参考。未上传音频时，声音根据提示词中的人物特征生成。多说话者对白应在提示词中明确 `(S1)`、`(S2)`；存在音频参考时再标注对应的 `<Audio N>`。服务固定工作流尺寸为 32×32，仅输出 FLAC 音频。
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations \
+  -F 'prompt=(S1) 成年女性，语速平稳，语气克制。<d>[中文] 你好，今天我们开始录音。</d>' \
+  -F 'reference_manifest=[{"type":"audio"},{"type":"audio"}]' \
+  -F 'references=@speaker-1.wav;type=audio/wav' \
+  -F 'references=@speaker-2.wav;type=audio/wav' \
+  -F 'model_variant=ref2va-fp8' \
+  -F 'execution_mode=tts' \
+  -F 'duration=5' \
+  -F 'steps=20'
+```
+
+`width` 和 `height` 即使在请求中提供也会被服务改为 32。TTS 时长范围为 1 至 15 秒，采样步数范围为 4 至 50。提示词优化接口传入 `execution_mode=tts` 时，返回六段式英文 H3 TTS 提示词，对白保持原始语言和原文。
+
 ## 查询任务
 
 ```bash
@@ -222,6 +240,14 @@ curl -N http://127.0.0.1:8193/api/v1/events
 
 `/api/v1/music/assist` 使用配置的 OpenAI Chat Completions 兼容服务。`arrangement` 严格遵循 MiniMax Music3 官方 `music-caption-rewriter` Skill，返回包含 `### Global Metadata`、`### Vocal Details` 和 `### Arrangement` 的英文 Structured Caption。歌词正文仅用于情绪和段落指令分析，不会被复述。`lyrics` 返回带 `[Verse]`、`[Chorus]` 等标签的原创歌词，结果可直接放入 Music3 任务的 `lyrics` 字段。
 
+AI 服务配置写入本机 `data/config.db`：
+
+```bash
+curl -X PATCH http://127.0.0.1:8193/api/v1/settings/ai \
+  -H 'Content-Type: application/json' \
+  -d '{"enabled":true,"base_url":"https://api.openai.com/v1","model":"gpt-4.1-mini","api_key":"YOUR_OPENAI_API_KEY"}'
+```
+
 ```bash
 curl -N -X POST http://127.0.0.1:8193/api/v1/music/assist \
   -H 'Content-Type: application/json' \
@@ -231,12 +257,11 @@ curl -N -X POST http://127.0.0.1:8193/api/v1/music/assist \
     "lyrics":"[Verse]\n雨落在玻璃上\n\n[Chorus]\n和我走进天亮",
     "duration":120,
     "base_url":"https://api.openai.com/v1",
-    "api_key":"YOUR_OPENAI_API_KEY",
     "model":"gpt-4.1-mini"
   }'
 ```
 
-将请求中的 `task` 改为 `lyrics` 可生成原创分段歌词。API Key 仅用于本次请求，不会写入任务文件。
+将请求中的 `task` 改为 `lyrics` 可生成原创分段歌词。提示词接口读取本机 SQLite 中已保存的 API Key。
 
 ## OpenAI 兼容提示词优化
 
@@ -246,7 +271,6 @@ curl -X POST http://127.0.0.1:8193/api/v1/prompts/optimize \
   -d '{
     "prompt":"角色走进房间并说话",
     "base_url":"https://api.openai.com/v1",
-    "api_key":"YOUR_OPENAI_API_KEY",
     "model":"gpt-4.1-mini",
     "duration":5,
     "model_variant":"fl2va-fp8",
@@ -254,4 +278,18 @@ curl -X POST http://127.0.0.1:8193/api/v1/prompts/optimize \
   }'
 ```
 
-AI 服务配置保存在浏览器 `sessionStorage`，API Key 不写入服务端任务文件。
+AI 服务配置和 API Key 保存在本机 `data/config.db`，网页端不使用 `localStorage` 或 `sessionStorage` 保存密钥。
+
+## 多端互联
+
+桌面模式提供以下接口：
+
+| 方法 | 路径 | 作用 |
+|---|---|---|
+| `GET` | `/api/v1/peering/status` | 本机名称、互联开关、六位验证码、端口地址和已授权设备 |
+| `PATCH` | `/api/v1/peering/settings` | 修改本机名称或互联开关 |
+| `POST` | `/api/v1/peering/connect` | 使用一次性验证码建立持久授权 |
+| `DELETE` | `/api/v1/peering/peers/{device_id}` | 撤销设备访问授权 |
+| `GET` | `/api/v1/peering/library` | 返回本机和已授权设备的归属方标签素材库 |
+
+互联设备通过 Bearer 令牌访问 `/api/v1/peering/export/*`。令牌只保存在双方本机 SQLite。互联地址仅允许局域网、回环和 Tailscale 地址。

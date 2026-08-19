@@ -185,6 +185,7 @@ if [[ ! -f "$API_ROOT/.env" ]]; then
     echo "H3_COMFY_REF2VA_TURBO_WORKFLOW=$API_ROOT/workflows/minimax_h3_ref2va_fp8_turbo_lora_api.json"
     echo "H3_COMFY_NSFW_WORKFLOW=$API_ROOT/workflows/minimax_h3_ref2va_fp8_nsfw_lora_api.json"
     echo "H3_COMFY_DIGITAL_HUMAN_WORKFLOW=$API_ROOT/workflows/minimax_h3_ref2va_fp8_digital_human_api.json"
+    echo "H3_COMFY_TTS_WORKFLOW=$API_ROOT/workflows/minimax_h3_ref2va_fp8_tts_api.json"
     echo "H3_COMFY_MUSIC3_WORKFLOW=$API_ROOT/workflows/minimax_music3_int8_api.json"
     echo "H3_COMFY_POLL_SECONDS=2"
     printf 'H3_GPU_LABEL="MiniMax H3 FP8 / GPU %s / 24 GB"\n' "$GPU_ID"

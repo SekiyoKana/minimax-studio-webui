@@ -1,0 +1,98 @@
+{
+  "92": {
+    "class_type": "SaveAudio",
+    "inputs": {
+      "audio": ["121", 0],
+      "filename_prefix": "minimax-h3-api/tts"
+    },
+    "_meta": {"title": "Save H3 TTS Audio"}
+  },
+  "119": {
+    "class_type": "VAELoader",
+    "inputs": {"vae_name": "minimax_h3_video_vae_fp16.safetensors"},
+    "_meta": {"title": "Load Video VAE for H3 Latent"}
+  },
+  "120": {
+    "class_type": "VAELoader",
+    "inputs": {"vae_name": "minimax_h3_audio_vae_fp32.safetensors"},
+    "_meta": {"title": "Load Audio VAE"}
+  },
+  "121": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": ["125", 0],
+      "vae": ["120", 0]
+    },
+    "_meta": {"title": "Decode H3 TTS Audio"}
+  },
+  "123": {
+    "class_type": "KSamplerSelect",
+    "inputs": {"sampler_name": "res_multistep"},
+    "_meta": {"title": "Sampler"}
+  },
+  "124": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "model": ["127", 0],
+      "scheduler": "simple",
+      "steps": 20,
+      "denoise": 1.0
+    },
+    "_meta": {"title": "TTS Scheduler"}
+  },
+  "125": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": ["129", 0],
+      "guider": ["126", 0],
+      "sampler": ["123", 0],
+      "sigmas": ["124", 0],
+      "latent_image": ["136", 1]
+    },
+    "_meta": {"title": "Sample H3 TTS Audio Latent"}
+  },
+  "126": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": ["127", 0],
+      "conditioning": ["136", 0]
+    },
+    "_meta": {"title": "TTS Guider"}
+  },
+  "127": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_ref2va_pruned_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {"title": "Load MiniMax H3 Ref2VA FP8 Scaled"}
+  },
+  "128": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    },
+    "_meta": {"title": "Load Qwen3-VL MiniMax H3 Text Encoder"}
+  },
+  "129": {
+    "class_type": "RandomNoise",
+    "inputs": {"noise_seed": 107094416},
+    "_meta": {"title": "TTS Seed"}
+  },
+  "136": {
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "inputs": {
+      "clip": ["128", 0],
+      "vae": ["119", 0],
+      "audio_vae": ["120", 0],
+      "prompt": "subject_definitions:\n<Audio 1> is the voice reference for the target speaker.\n\nsummary:\n[audio generation + audio reference] Generate the requested speech with the target speaker's voice characteristics.\n\nretention_analysis:\n<Audio 1>: reference - preserve voice timbre, delivery, and speech characteristics without copying the source dialogue.\n\ndetailed_description:\nThe visual latent is intentionally minimized to a neutral 32x32 field and will be discarded after audio decoding. Generate only the requested speech audio.\n\noverall_soundscape:\nClean speech recording with natural breaths and pauses.\n\nnon_diegetic_music:\nN/A",
+      "width": 32,
+      "height": 32,
+      "length": 124,
+      "ref_image_size": "match"
+    },
+    "_meta": {"title": "MiniMax H3 TTS Conditioning"}
+  }
+}

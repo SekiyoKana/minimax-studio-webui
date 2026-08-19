@@ -7,6 +7,8 @@ __pycache__/
 *.log
 .pytest_cache/
 .mypy_cache/
+build/
+dist/
 
 data/
 models/

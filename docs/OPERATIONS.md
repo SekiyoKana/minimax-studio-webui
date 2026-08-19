@@ -34,6 +34,16 @@ curl -fsS http://127.0.0.1:8188/queue
 curl -fsS http://127.0.0.1:8193/api/v1/logs
 ```
 
+ComfyUI 返回 `prompt_id` 或 RunningHub 返回 `taskId` 后，API 会将远端任务 checkpoint 持久化到 `data/jobs/<job_id>.json`。仅重启 `minimax-h3-api.service` 时，活动任务会保留原进度并固定连接原节点，不会重新上传素材或提交任务。查询暂时失败时，API 会在 `H3_REMOTE_RECONNECT_SECONDS` 配置的窗口内继续连接。
+
+以下情况无法恢复：
+
+- 重启了实际执行任务的 ComfyUI 服务，且对应任务已从队列和历史记录中移除。
+- RunningHub 已删除或失效了对应 `taskId`。
+- 任务在本功能部署前已经提交，任务文件中没有 `remote_checkpoint`。
+
+首次部署本功能前，应等待现有活动任务结束。后续仅重启 API 服务时无需等待 ComfyUI 或 RunningHub 任务结束。
+
 ## 实时日志
 
 ```bash

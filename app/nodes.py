@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import threading
@@ -67,6 +68,9 @@ class NodeRegistry:
 
     def __init__(self, database_path: Path):
         self.database_path = database_path
+        self.default_url = os.getenv("H3_DEFAULT_COMFY_URL", "http://127.0.0.1:8188").strip().rstrip("/")
+        self.default_name = os.getenv("H3_DEFAULT_COMFY_NAME", "Local ComfyUI").strip() or "Local ComfyUI"
+        self.default_api_key = os.getenv("H3_DEFAULT_COMFY_API_KEY", "").strip()
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._initialize()
@@ -208,17 +212,32 @@ class NodeRegistry:
                     """
                 )
             count = connection.execute("SELECT COUNT(*) FROM comfy_nodes").fetchone()[0]
-            if count == 0:
+            initialized = connection.execute(
+                "SELECT value FROM service_settings WHERE key = ?",
+                ("comfy_nodes_initialized",),
+            ).fetchone()
+            if count == 0 and initialized is None:
                 now = utc_now()
                 connection.execute(
                     "INSERT INTO comfy_nodes "
                     "(id, name, url, provider, api_key, workflow_id, workflow_url, "
                     "runninghub_resource_type, workflow_name, runninghub_schema, "
                     "runninghub_schema_updated_at, max_concurrency, enabled, created_at, "
-                    "updated_at) VALUES (?, ?, ?, 'comfyui', '', '', '', 'workflow', "
+                    "updated_at) VALUES (?, ?, ?, 'comfyui', ?, '', '', 'workflow', "
                     "'', '', '', 1, 1, ?, ?)",
-                    ("local", "Local ComfyUI", "http://127.0.0.1:8188", now, now),
+                    (
+                        "local",
+                        self.default_name,
+                        self.default_url,
+                        self.default_api_key,
+                        now,
+                        now,
+                    ),
                 )
+            connection.execute(
+                "INSERT OR IGNORE INTO service_settings (key, value, updated_at) VALUES (?, ?, ?)",
+                ("comfy_nodes_initialized", "1", utc_now()),
+            )
             connection.execute(
                 "INSERT OR IGNORE INTO service_settings (key, value, updated_at) VALUES (?, ?, ?)",
                 (self.HEALTH_KEY, "60", utc_now()),

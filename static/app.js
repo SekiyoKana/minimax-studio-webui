@@ -1,6 +1,7 @@
 const state = {
   references: [],
   assets: [],
+  sharedAssets: [],
   assetPage: 0,
   assetPages: 1,
   assetPageSize: 16,
@@ -9,14 +10,34 @@ const state = {
   assetLoading: false,
   assetHasMore: true,
   assetLoadError: "",
+  sharedAssetErrors: [],
   assetDetailJob: null,
+  localAssets: [],
+  localAssetPage: 0,
+  localAssetPages: 1,
+  localAssetTotal: 0,
+  localAssetLoading: false,
+  localAssetSelected: new Set(),
+  localAssetChanged: false,
+  unlockOwnerDeviceId: "",
+  aiConfig: { enabled: false, base_url: "", model: "", has_api_key: false },
+  aiSaveTimer: null,
+  peeringRevision: 0,
+  peeringTimer: null,
+  peeringPollTimer: null,
+  peeringPolling: false,
+  peering: null,
   conversations: [],
   conversationPage: 1,
   conversationPages: 1,
   conversationPageSize: 10,
   conversationRevision: 0,
+  conversationRevisionSignature: "",
+  conversationDeviceIds: new Set(),
+  conversationFilterOpen: false,
   conversationLoading: false,
   conversationRefreshPending: false,
+  conversationRefreshResetPending: false,
   conversationReady: false,
   conversationScrollTop: 0,
   editingJobId: null,
@@ -33,11 +54,17 @@ const state = {
   runningHubParameters: {},
   pendingRunningHubMediaField: "",
   logs: [],
+  runtimeRevision: "",
+  localRuntime: { logs: [], queue: [], nodes: [] },
+  peerRuntime: {},
+  generalSettings: { show_runtime_logs: true, show_peering: true, backup_outputs: false, remote_disconnect_policy: "encrypt" },
+  conversationDevices: [],
   stream: null,
   incognito: false,
   incognitoCode: "",
   brandClicks: [],
   opsPosition: { x: 0, y: 0 },
+  opsPositionInitialized: false,
   mentionIndex: -1,
   locale: localStorage.getItem("h3-locale") === "en" ? "en" : "zh-CN",
 };
@@ -57,9 +84,10 @@ const COPY = {
     connectEngine: "连接推理节点", offline: "服务离线", autoSchedule: "自动调度", nodePending: "节点待分配", online: "在线", available: "可用", nodeOffline: "离线", disabled: "已停用", busy: "执行中",
     balance: "余额", credits: "点数", recentCost: "最近调用消耗", accountUnavailable: "账户信息不可用", workflowUnavailable: "工作流信息不可用", balancePending: "余额读取中", accountTasks: "账户任务", balanceUpdated: "余额更新", balanceFailed: "余额读取失败",
     noAssets: "暂无素材", loading: "加载中", allLoaded: "已加载全部", loadFailed: "加载失败", startCreating: "开始创作", you: "你",
-    native: "普通流 · 原生 H3", turbo: "8-step LoRA · 强度 1.0", digitalHuman: "数字人 · 音频驱动", music3: "Music3 · 30 步", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache（已停用）",
-    reuse: "回填到发送区", regenerate: "重新生成", edit: "修改", cancel: "取消", delete: "删除", deleteRecord: "删除记录", downloadVideo: "下载视频", downloadAudio: "下载音频", downloadImage: "下载图片", downloadFile: "下载文件", videoReady: "视频已生成", musicReady: "音频已生成", imageReady: "图片已生成", fileReady: "文件已生成",
-    assetDetail: "素材详情", prompt: "关键词与提示词", lyrics: "歌词", sourceFiles: "使用的文件", parameters: "生成参数", noSourceFiles: "未使用参考文件", outputUnavailable: "当前没有可预览的生成产物",
+    native: "普通流 · 原生 H3", turbo: "8-step LoRA · 强度 1.0", digitalHuman: "数字人 · 音频驱动", tts: "H3 TTS · 人物语音", music3: "Music3 · 30 步", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache（已停用）",
+    reuse: "回填到发送区", useAsInput: "作为输入", regenerate: "重新生成", edit: "修改", cancel: "取消", delete: "删除", deleteRecord: "删除记录", downloadVideo: "下载视频", downloadAudio: "下载音频", downloadImage: "下载图片", downloadFile: "下载文件", videoReady: "视频已生成", musicReady: "音频已生成", imageReady: "图片已生成", fileReady: "文件已生成", peering: "多端互联", peerConnected: "已连接设备", peerRevoked: "已撤销设备访问", peerConnectNotice: "设备已完成互联", localPeerKey: "本机互联密钥",
+    aiKeySaved: "API Key 已保存到本机数据库", aiKeyEmpty: "尚未保存 API Key", aiKeyReplace: "输入新值可覆盖已保存密钥", noPeers: "暂无已连接设备", revokeAccess: "撤销访问", owner: "归属方", pairingRefresh: "秒后刷新", connectPeer: "建立互联",
+    assetDetail: "素材详情", prompt: "关键词与提示词", lyrics: "歌词", sourceFiles: "使用的文件", parameters: "生成参数", noSourceFiles: "未使用参考文件", outputUnavailable: "当前没有可预览的生成产物", assetDeleted: "该资产已删除", deviceFilter: "设备筛选",
     deleteConfirm: "删除后将同时清理任务记录、上传素材和生成产物，确认继续？", regenerateConfirm: "将使用本条任务的参数和参考文件创建新的生成任务，确认继续？", fillLoading: "正在读取原始文件", fillDone: "已回填到发送区", fileUnavailable: "参考文件已不存在，无法完整回填",
     overallTime: "总体耗时", steps: "步", seed: "seed", seconds: "秒", queuePosition: "队列位置", incognito: "无痕", destroy: "销毁",
   },
@@ -69,9 +97,10 @@ const COPY = {
     connectEngine: "Connecting to inference nodes", offline: "Service offline", autoSchedule: "Auto", nodePending: "Awaiting node", online: "Online", available: "available", nodeOffline: "Offline", disabled: "Disabled", busy: "Running",
     balance: "Balance", credits: "credits", recentCost: "Recent call cost", accountUnavailable: "Account unavailable", workflowUnavailable: "Workflow information unavailable", balancePending: "Loading balance", accountTasks: "Account tasks", balanceUpdated: "balance updated", balanceFailed: "balance read failed",
     noAssets: "No assets", loading: "Loading", allLoaded: "All assets loaded", loadFailed: "Load failed", startCreating: "Start creating", you: "You",
-    native: "Native H3", turbo: "8-step LoRA · 1.0", digitalHuman: "Digital human · audio driven", music3: "Music3 · 30 steps", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache (disabled)",
-    reuse: "Fill composer", regenerate: "Regenerate", edit: "Edit", cancel: "Cancel", delete: "Delete", deleteRecord: "Delete record", downloadVideo: "Download video", downloadAudio: "Download audio", downloadImage: "Download image", downloadFile: "Download file", videoReady: "Video generated", musicReady: "Audio generated", imageReady: "Image generated", fileReady: "File generated",
-    assetDetail: "Asset details", prompt: "Keywords and prompt", lyrics: "Lyrics", sourceFiles: "Source files", parameters: "Parameters", noSourceFiles: "No reference files", outputUnavailable: "No generated output is available for preview",
+    native: "Native H3", turbo: "8-step LoRA · 1.0", digitalHuman: "Digital human · audio driven", tts: "H3 TTS · Character voice", music3: "Music3 · 30 steps", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache (disabled)",
+    reuse: "Fill composer", useAsInput: "Use as input", regenerate: "Regenerate", edit: "Edit", cancel: "Cancel", delete: "Delete", deleteRecord: "Delete record", downloadVideo: "Download video", downloadAudio: "Download audio", downloadImage: "Download image", downloadFile: "Download file", videoReady: "Video generated", musicReady: "Audio generated", imageReady: "Image generated", fileReady: "File generated", peering: "Device sharing", peerConnected: "Connected device", peerRevoked: "Device access revoked", peerConnectNotice: "Device pairing completed", localPeerKey: "Local pairing key",
+    aiKeySaved: "API Key saved in the local database", aiKeyEmpty: "No API Key saved", aiKeyReplace: "Enter a new value to replace the saved key", noPeers: "No connected devices", revokeAccess: "Revoke access", owner: "Owner", pairingRefresh: "s until refresh", connectPeer: "Connect",
+    assetDetail: "Asset details", prompt: "Keywords and prompt", lyrics: "Lyrics", sourceFiles: "Source files", parameters: "Parameters", noSourceFiles: "No reference files", outputUnavailable: "No generated output is available for preview", assetDeleted: "This asset has been deleted", deviceFilter: "Device filter",
     deleteConfirm: "This removes the record, uploaded files, and generated output. Continue?", regenerateConfirm: "Create a new generation with this task's parameters and reference files?", fillLoading: "Loading source files", fillDone: "Filled into the composer", fileUnavailable: "A source file is unavailable and cannot be restored",
     overallTime: "Elapsed", steps: "steps", seed: "seed", seconds: "s", queuePosition: "Queue position", incognito: "Incognito", destroy: "expires",
   },
@@ -126,10 +155,12 @@ function applyStaticLocale() {
   setTitle("#newTaskButton", t("newGeneration"));
   setTitle("#openAssets", t("assets"));
   setTitle("#languageToggle", t("switchLanguage"));
+  setTitle("#openPeering", t("peering"));
   setTitle("#apiDocsLink", t("apiDocs"));
   setTitle("#closeAssetDetail", t("close"));
   setText("#assetDetailTitle", t("assetDetail"));
   setText("#deleteAssetDetail span", t("deleteRecord"));
+  setText("#reuseOutputAssetDetail span", t("useAsInput"));
   setText("#regenerateAssetDetail span", t("regenerate"));
   setText("#reuseAssetDetail span", t("reuse"));
   el("apiDocsLink").title = t("apiDocs");
@@ -141,6 +172,7 @@ function applyStaticLocale() {
   setText("#exitEdit", "Stop editing");
   setText('#executionMode option[value="native"]', "Native H3");
   setText('#executionMode option[value="digital-human"]', "Digital human · audio driven");
+  setText('#executionMode option[value="tts"]', "H3 TTS · character voice");
   setText("#music3ExecutionOption", "Music3 · 30 steps");
   setText("#durationHint", "Video length follows the driving audio");
   setText("#mentionQuickLabel", "Quick actions");
@@ -174,6 +206,19 @@ function applyStaticLocale() {
   setText(".secret-dialog h2", "Incognito access");
   setText('label[for="secretCode"]', "Access code");
   setText(".secret-submit", "Enter incognito mode");
+  setText("#peeringTitle", "Device sharing");
+  setText("#peeringSubtitle", "Share this device's asset library on the local network");
+  setLeadingText("#machineName", "Device name");
+  setText(".peering-settings .switch-row > span:first-child", "Enable sharing");
+  setText(".peering-panel:first-child h3", "Local pairing key");
+  setText(".peering-panel:first-child p", "Provide this address and code to the other device");
+  setLeadingText("#peerAddress", "Local address");
+  setText("#peerConnectForm h3", "Connect another device");
+  setText("#peerConnectForm p", "Enter the address and current six-digit code from the other device");
+  setLeadingText("#peerConnectAddress", "Remote address");
+  setLeadingText("#peerConnectCode", "Remote code");
+  setText("#peerConnectForm button span", "Connect");
+  setText(".peering-connected h3", "Connected devices");
   setLeadingText("#seed", "Random seed");
   setLeadingText("#aiBaseUrl", "OpenAI Base URL");
   setLeadingText("#aiModel", "Model");
@@ -185,6 +230,7 @@ function applyStaticLocale() {
   setTitle("#mentionTrigger", "Insert image or use a quick action");
   setTitle("#optimizePrompt", "Optimize prompt");
   setTitle("#writeLyrics", "Optimize lyrics");
+  setTitle("#reuseOutputAssetDetail", "Use generated output as input");
   setTitle("#generateButton", "Generate");
   setTitle("#closeAssets", "Close assets");
   setTitle("#assetSearch", "Search assets");
@@ -230,6 +276,17 @@ function icon(name) {
 
 function refreshIcons() {
   if (window.lucide) window.lucide.createIcons();
+}
+
+function togglePasswordField(inputId, buttonId) {
+  const input = el(inputId);
+  const button = el(buttonId);
+  const visible = input.type === "text";
+  input.type = visible ? "password" : "text";
+  button.innerHTML = icon(visible ? "eye" : "eye-off");
+  button.title = visible ? "显示密钥" : "隐藏密钥";
+  button.setAttribute("aria-label", button.title);
+  refreshIcons();
 }
 
 function escapeHtml(value) {
@@ -286,6 +343,7 @@ function executionModeLabel(job) {
   if (job.request?.provider === "runninghub" || job.assigned_node?.provider === "runninghub") return "RunningHub";
   if (job.request?.execution_mode === "music3") return t("music3");
   if (job.request?.execution_mode === "digital-human") return t("digitalHuman");
+  if (job.request?.execution_mode === "tts") return t("tts");
   if (job.request?.execution_mode === "h3-nsfw") return t("nsfw");
   if (job.request?.execution_mode === "turbo-lora") return t("turbo");
   if (job.request?.execution_mode === "speed-cache") return t("speedCache");
@@ -295,6 +353,7 @@ function executionModeLabel(job) {
 function executionModeClass(job) {
   if (job.request?.execution_mode === "music3") return "music3";
   if (job.request?.execution_mode === "digital-human") return "digital-human";
+  if (job.request?.execution_mode === "tts") return "tts";
   if (job.request?.execution_mode === "h3-nsfw") return "nsfw";
   if (job.request?.execution_mode === "turbo-lora") return "turbo";
   if (job.request?.execution_mode === "speed-cache") return "speed";
@@ -322,13 +381,17 @@ function shortTitle(job) {
 }
 
 function nodeLabel(job) {
-  if (job.assigned_node?.name) return job.assigned_node.name;
+  const owner = job.assigned_node?.owner_name || job.owner_name;
+  if (job.assigned_node?.name) return owner ? `${job.assigned_node.name} · ${t("owner")} ${owner}` : job.assigned_node.name;
   const requested = job.request?.comfy_node || "auto";
   if (requested === "auto") return job.status === "queued" ? t("autoSchedule") : t("nodePending");
   if (requested.startsWith(RUNNINGHUB_TARGET_PREFIX)) {
     return job.request?.runninghub_workflow_name || "RunningHub";
   }
-  return state.nodes.find((node) => node.id === requested)?.name || requested;
+  const selectedNode = state.nodes.find((node) => node.id === requested);
+  const label = selectedNode?.name || requested;
+  const selectedOwner = selectedNode?.owner_name || owner;
+  return selectedOwner ? `${label} · ${t("owner")} ${selectedOwner}` : label;
 }
 
 function formatAccountNumber(value) {
@@ -420,7 +483,8 @@ function renderNodeOptions(nodes = state.nodes) {
     const label = node.provider === "runninghub"
       ? `${escapeHtml(node.workflow_name || node.name)} · ${node.runninghub_resource_type === "ai-app" ? "AI App" : "Workflow"}`
       : escapeHtml(node.name);
-    options.push(`<option value="${escapeHtml(node.id)}"${node.healthy ? "" : " disabled"}>${label} · ${escapeHtml(stateLabel)}</option>`);
+    const ownerLabel = node.owner_name ? ` · ${escapeHtml(t("owner"))} ${escapeHtml(node.owner_name)}` : "";
+    options.push(`<option value="${escapeHtml(node.id)}"${node.healthy ? "" : " disabled"}>${label}${ownerLabel} · ${escapeHtml(stateLabel)}</option>`);
   });
   const markup = options.join("");
   if (select.innerHTML !== markup) select.innerHTML = markup;
@@ -484,7 +548,11 @@ function syncNodeProviderFields() {
 }
 
 function renderManagedNodes() {
-  el("nodeManagerSummary").textContent = state.locale === "en" ? `${state.managedNodes.length} nodes` : `${state.managedNodes.length} 个节点`;
+  const remoteCount = state.managedNodes.filter((node) => node.remote_proxy).length;
+  const localCount = state.managedNodes.length - remoteCount;
+  el("nodeManagerSummary").textContent = state.locale === "en"
+    ? `${state.managedNodes.length} nodes · ${localCount} local · ${remoteCount} remote`
+    : `${state.managedNodes.length} 个节点 · 本机 ${localCount} · 远程 ${remoteCount}`;
   el("nodeList").innerHTML = state.managedNodes.length ? state.managedNodes.map((node) => {
     const status = nodeStatus(node);
     const running = Number(node.running_count || 0);
@@ -492,6 +560,14 @@ function renderManagedNodes() {
     const activity = node.busy
       ? ` · ${localized("并发", "capacity")} ${running}/${capacity}`
       : node.queue_depth ? ` · 排队 ${node.queue_depth}` : "";
+    if (node.remote_proxy) {
+      const owner = node.owner_name || node.source?.name || "远程设备";
+      return `<div class="node-row remote-node" data-node-id="${escapeHtml(node.id)}">
+        <span class="node-state ${status.className}" aria-hidden="true"></span>
+        <div class="node-row-copy"><div><strong>${escapeHtml(node.name || "远程推理节点")}</strong><span>${escapeHtml(status.label)}${activity}</span></div><small>${escapeHtml(localized("远程代理节点", "Remote proxy node"))} · ${escapeHtml(t("owner"))} ${escapeHtml(owner)}</small></div>
+        <div class="node-row-actions" aria-hidden="true"></div>
+      </div>`;
+    }
     const provider = node.provider === "runninghub" ? "RunningHub API" : "ComfyUI API";
     const workflowType = node.runninghub_resource_type === "ai-app" ? "AI App" : "Workflow";
     const workflow = node.provider === "runninghub" ? ` · ${workflowType} ${escapeHtml(node.workflow_url || "-")}` : "";
@@ -524,20 +600,31 @@ function renderManagedNodes() {
 }
 
 function syncManagedNodeStatuses(nodes) {
-  if (!state.managedNodes.length) return;
   const statuses = new Map(nodes.map((node) => [node.id, node]));
-  state.managedNodes = state.managedNodes.map((node) => ({ ...node, ...(statuses.get(node.id) || {}) }));
+  const localNodes = state.managedNodes
+    .filter((node) => !node.remote_proxy)
+    .map((node) => ({ ...node, ...(statuses.get(node.id) || {}) }));
+  const localIds = new Set(localNodes.map((node) => node.id));
+  const remoteNodes = nodes
+    .filter((node) => node.remote_proxy && !localIds.has(node.id))
+    .map((node) => ({ ...node, enabled: true, managed_remote: true }));
+  state.managedNodes = [...localNodes, ...remoteNodes];
   if (!el("nodeModal").hidden) renderManagedNodes();
 }
 
 async function loadManagedNodes() {
   const payload = await api("/api/v1/comfy/nodes");
   const statuses = new Map(state.nodes.map((node) => [node.id, node]));
-  state.managedNodes = (payload.data || []).map((node) => ({
+  const localNodes = (payload.data || []).map((node) => ({
     ...node,
     ...(statuses.get(node.id) || {}),
   }));
-  el("nodeHealthInterval").value = String(payload.health_interval_seconds || 60);
+  const localIds = new Set(localNodes.map((node) => node.id));
+  const remoteNodes = state.nodes
+    .filter((node) => node.remote_proxy && !localIds.has(node.id))
+    .map((node) => ({ ...node, enabled: true, managed_remote: true }));
+  state.managedNodes = [...localNodes, ...remoteNodes];
+  if (el("nodeHealthInterval")) el("nodeHealthInterval").value = String(payload.health_interval_seconds || 60);
   renderManagedNodes();
 }
 
@@ -581,7 +668,7 @@ async function openNodeManager() {
 function closeNodeManager() {
   closeNodeEditor();
   el("nodeModal").hidden = true;
-  document.body.classList.remove("modal-open");
+  if (el("peeringModal").hidden && el("assetDetailModal").hidden) document.body.classList.remove("modal-open");
   el("openNodeManager").focus();
 }
 
@@ -843,6 +930,10 @@ function isDigitalHuman(executionMode = selectedExecutionMode()) {
   return executionMode === "digital-human";
 }
 
+function isTTS(executionMode = selectedExecutionMode()) {
+  return executionMode === "tts";
+}
+
 function isMusic3(variant = selectedVariant()) {
   return variant === "music3-int8";
 }
@@ -856,6 +947,7 @@ function referenceLimits(variant = selectedVariant()) {
   }
   if (isMusic3(variant)) return { image: 0, video: 0, audio: 0 };
   if (isDigitalHuman()) return { image: 1, video: 0, audio: 1 };
+  if (isTTS()) return { image: 0, video: 0, audio: 3 };
   return isRef2VA(variant)
     ? { image: 9, video: 3, audio: 3 }
     : { image: 2, video: 0, audio: 0 };
@@ -907,6 +999,13 @@ function validateReferenceSet(references = state.references, variant = selectedV
     return missing ? localized(`请填写 ${runningHubFieldLabel(missing)}`, `Provide ${runningHubFieldLabel(missing)}`) : "";
   }
   if (isMusic3(variant)) return references.length ? localized("Music3 不使用参考素材", "Music3 does not use reference files") : "";
+  if (isTTS()) {
+    const audioCount = references.filter((item) => (item.kind || item.type) === "audio").length;
+    if (audioCount !== references.length || references.length > 3) {
+      return localized("H3 TTS 支持 0 至 3 段人物音频参考", "H3 TTS supports zero to three character voice references");
+    }
+    return "";
+  }
   if (!references.length) return localized("请至少添加一份参考素材", "Add at least one reference file");
   const limits = referenceLimits(variant);
   const counts = { image: 0, video: 0, audio: 0, file: 0 };
@@ -982,9 +1081,11 @@ function updateModelUi() {
   el("executionMode").disabled = music3;
   const nsfw = selectedExecutionMode() === "h3-nsfw";
   const digitalHuman = isDigitalHuman();
+  const tts = isTTS();
   const fl2vaOption = el("modelVariant").querySelector('option[value="fl2va-fp8"]');
-  fl2vaOption.disabled = nsfw || digitalHuman;
-  if (nsfw || digitalHuman) el("modelVariant").value = "ref2va-fp8";
+  fl2vaOption.disabled = nsfw || digitalHuman || tts;
+  if (nsfw || digitalHuman || tts) el("modelVariant").value = "ref2va-fp8";
+  el("modelVariant").disabled = digitalHuman || tts;
   const ref2va = isRef2VA();
   const accelerated = selectedExecutionMode() === "turbo-lora";
   const stepsMode = el("steps").dataset.mode;
@@ -1011,21 +1112,21 @@ function updateModelUi() {
   const runningHubKinds = new Set(runningHubMediaFields().map((field) => field.media_kind));
   referenceInput.accept = runningHub
     ? [...runningHubKinds].map((kind) => kind === "file" ? "*/*" : `${kind}/*`).join(",")
-    : music3 ? "" : digitalHuman ? "image/*,audio/*" : ref2va ? "image/*,video/*,audio/*" : "image/*";
+    : music3 ? "" : tts ? "audio/*" : digitalHuman ? "image/*,audio/*" : ref2va ? "image/*,video/*,audio/*" : "image/*";
   el("addReference").title = state.locale === "en"
-    ? runningHub ? "Add a workflow input file" : digitalHuman ? "Add portrait and driving audio" : ref2va ? "Add image, video, or audio references" : "Add first or last frame"
-    : runningHub ? "添加工作流输入文件" : digitalHuman ? "添加人物图片和驱动音频" : ref2va ? "添加图片、视频或音频参考" : "添加首帧或尾帧";
+    ? runningHub ? "Add a workflow input file" : tts ? "Add up to three character voice references" : digitalHuman ? "Add portrait and driving audio" : ref2va ? "Add image, video, or audio references" : "Add first or last frame"
+    : runningHub ? "添加工作流输入文件" : tts ? "添加最多 3 段人物音频参考" : digitalHuman ? "添加人物图片和驱动音频" : ref2va ? "添加图片、视频或音频参考" : "添加首帧或尾帧";
   el("addReference").setAttribute("aria-label", el("addReference").title);
   el("addReference").hidden = music3 || (runningHub && runningHubKinds.size === 0);
-  el("aspectControl").hidden = music3 || runningHub;
-  el("resolutionControl").hidden = music3 || runningHub;
+  el("aspectControl").hidden = music3 || tts || runningHub;
+  el("resolutionControl").hidden = music3 || tts || runningHub;
   el("duration").closest(".duration-control").hidden = runningHub;
   el("stepsControl").hidden = runningHub;
   el("lyrics").hidden = !music3;
   el("globalSeedControl").hidden = runningHub;
   el("stepsControl").title = state.locale === "en" ? music3 ? "Music3 uses 30 steps" : "Sampling steps" : music3 ? "Music3 固定使用 30 步" : "采样步数";
   el("optimizePrompt").hidden = runningHub;
-  el("optimizePrompt").title = state.locale === "en" ? music3 ? "Optimize style" : "Optimize prompt" : music3 ? "优化曲风" : "优化提示词";
+  el("optimizePrompt").title = state.locale === "en" ? music3 ? "Optimize style" : tts ? "Optimize TTS dialogue prompt" : "Optimize prompt" : music3 ? "优化曲风" : tts ? "优化 TTS 对话提示词" : "优化提示词";
   el("optimizePrompt").setAttribute("aria-label", el("optimizePrompt").title);
   el("optimizePromptLabel").textContent = el("optimizePrompt").title;
   el("writeLyrics").hidden = !music3;
@@ -1038,8 +1139,9 @@ function updateModelUi() {
       ? runningHubFieldLabel(primaryText)
       : localized("该工作流没有主文本输入，可留空", "This workflow has no primary text input; this field may be empty")
     : state.locale === "en"
-      ? music3 ? "Describe genre, mood, tempo, key, instruments, vocals, and arrangement..." : "Describe the scene, characters, action, camera, and sound..."
-      : music3 ? "描述曲风、情绪、速度、调式、乐器、人声与编曲…" : "输入自然语言，描述场景、人物、动作、镜头与声音…";
+      ? music3 ? "Describe genre, mood, tempo, key, instruments, vocals, and arrangement..." : tts ? "Describe each speaker's age, personality, delivery, and exact dialogue..." : "Describe the scene, characters, action, camera, and sound..."
+      : music3 ? "描述曲风、情绪、速度、调式、乐器、人声与编曲…" : tts ? "描述人物年龄、性格、说话方式和需要生成的完整对白…" : "输入自然语言，描述场景、人物、动作、镜头与声音…";
+  el("dropZone").title = localized("可拖入本地文件或素材库生成产物", "Drop local files or generated assets from the library");
   renderReferences();
   const error = validateReferenceSet(state.references);
   showError(state.references.length ? error : "");
@@ -1048,7 +1150,7 @@ function updateModelUi() {
 function addFiles(files, forcedFieldKey = "") {
   if (state.editingJobId) {
     showError(localized("修改排队任务时不能更换参考素材", "Reference files cannot be changed while editing a queued task"));
-    return;
+    return false;
   }
   let error = "";
   const runningHubSchema = selectedRunningHubSchema();
@@ -1098,13 +1200,17 @@ function addFiles(files, forcedFieldKey = "") {
     const limits = referenceLimits();
     const current = state.references.filter((item) => (item.kind || item.type) === kind).length;
     if (!limits[kind]) {
-      error = isDigitalHuman()
+      error = isTTS()
+        ? localized(`H3 TTS 仅支持音频参考：${file.name}`, `H3 TTS accepts audio references only: ${file.name}`)
+        : isDigitalHuman()
         ? localized(`数字人模式仅支持人物图片和驱动音频：${file.name}`, `Digital human mode only accepts a portrait and driving audio: ${file.name}`)
         : localized(`FL2VA 仅支持图片：${file.name}`, `FL2VA only accepts images: ${file.name}`);
       return;
     }
     if (current >= limits[kind]) {
-      error = isRef2VA()
+      error = isTTS()
+        ? localized("H3 TTS 最多添加 3 段人物音频参考", "H3 TTS accepts up to three character voice references")
+        : isRef2VA()
         ? localized(`${{ image: "图片", video: "视频", audio: "音频" }[kind]}最多添加 ${limits[kind]} 份`, `Up to ${limits[kind]} ${kind} files are allowed`)
         : localized("最多添加首帧和尾帧两张图片", "Up to two images are allowed for the first and last frames");
       return;
@@ -1120,6 +1226,7 @@ function addFiles(files, forcedFieldKey = "") {
   state.pendingRunningHubMediaField = "";
   showError(error);
   renderReferences();
+  return !error;
 }
 
 function renderReferences() {
@@ -1359,8 +1466,10 @@ async function loadAssets({ reset = false } = {}) {
   }
   renderAssets();
   try {
-    const payload = await api(`/api/v1/generations?${params}`);
+    const endpoint = state.incognito ? "/api/v1/generations" : "/api/v1/peering/library";
+    const payload = await api(`${endpoint}?${params}`);
     state.assets = reset ? payload.data : dedupeJobs([...state.assets, ...payload.data]);
+    state.sharedAssetErrors = payload.peer_errors || [];
     state.assetRevision = payload.store_revision || state.assetRevision;
     state.assetPages = payload.pages;
     state.assetTotal = payload.total;
@@ -1378,30 +1487,44 @@ async function loadAssets({ reset = false } = {}) {
 }
 
 function assetAction(job) {
+  const jobId = escapeHtml(job.id);
+  if (job.peer_asset) {
+    const inputAction = job.status === "completed" && job.result_url
+      ? `<button type="button" data-asset-input="${jobId}" title="${t("useAsInput")}" aria-label="${t("useAsInput")}">${icon("file-input")}</button>`
+      : "";
+    return inputAction ? `<span class="asset-actions">${inputAction}</span>` : "";
+  }
   if (job.status === "queued") {
-    return `<span class="asset-actions"><button type="button" data-job-action="edit" data-job-id="${job.id}" title="修改" aria-label="修改">${icon("pencil")}</button><button type="button" data-job-action="cancel" data-job-id="${job.id}" title="取消" aria-label="取消">${icon("square")}</button></span>`;
+    return `<span class="asset-actions"><button type="button" data-job-action="edit" data-job-id="${jobId}" title="修改" aria-label="修改">${icon("pencil")}</button><button type="button" data-job-action="cancel" data-job-id="${jobId}" title="取消" aria-label="取消">${icon("square")}</button></span>`;
   }
   if (job.status === "running") {
-    return `<span class="asset-actions"><button type="button" data-job-action="cancel" data-job-id="${job.id}" title="取消" aria-label="取消">${icon("square")}</button></span>`;
+    return `<span class="asset-actions"><button type="button" data-job-action="cancel" data-job-id="${jobId}" title="取消" aria-label="取消">${icon("square")}</button></span>`;
   }
-  return `<span class="asset-actions"><button type="button" data-job-action="delete" data-job-id="${job.id}" title="删除" aria-label="删除">${icon("trash-2")}</button></span>`;
+  const inputAction = job.status === "completed" && job.result_url
+    ? `<button type="button" data-asset-input="${jobId}" title="${t("useAsInput")}" aria-label="${t("useAsInput")}">${icon("file-input")}</button>`
+    : "";
+  return `<span class="asset-actions">${inputAction}<button type="button" data-job-action="delete" data-job-id="${jobId}" title="删除" aria-label="删除">${icon("trash-2")}</button></span>`;
 }
 
 function renderAssetCard(job) {
   const mediaType = jobMediaType(job);
   const audio = mediaType === "audio";
-  const preview = job.status === "completed" && job.result_url
+  const preview = job.asset_deleted
+    ? `<span class="asset-placeholder deleted">${icon("file-x-2")}<b>${t("assetDeleted")}</b></span>`
+    : job.status === "completed" && job.result_url
     ? audio
       ? `<span class="asset-audio-icon" aria-hidden="true">${icon("audio-lines")}</span>`
       : mediaType === "image"
         ? `<img src="${escapeHtml(job.result_url)}" alt="${escapeHtml(modelLabel(job))}" loading="lazy">`
         : mediaType === "file"
           ? `<span class="asset-audio-icon" aria-hidden="true">${icon("file")}</span>`
-          : `<video src="${job.result_url}" muted playsinline preload="metadata" aria-label="${modelLabel(job)} 生成视频"></video><span class="asset-play">${icon("play")}</span>`
+          : `<video src="${escapeHtml(job.result_url)}" muted playsinline preload="metadata" aria-label="${escapeHtml(modelLabel(job))} 生成视频"></video><span class="asset-play">${icon("play")}</span>`
     : `<span class="asset-placeholder ${job.status}">${icon(job.status === "running" ? "loader-circle" : job.status === "queued" ? "clock-3" : job.status === "failed" ? "triangle-alert" : "circle-slash-2")}${job.status === "running" ? `<b>${job.progress || 0}%</b>` : ""}</span>`;
-  return `<article class="asset-card" data-asset-job="${job.id}" tabindex="0" aria-label="${executionModeLabel(job)}, ${modelLabel(job)}, ${statusLabel(job.status)}">
+  const draggable = job.status === "completed" && job.result_url ? "true" : "false";
+  const owner = job.owner_name ? `<span class="asset-owner" title="${t("owner")}: ${escapeHtml(job.owner_name)}">${icon("tag")}<span>${escapeHtml(job.owner_name)}</span></span>` : "";
+  return `<article class="asset-card" data-asset-job="${escapeHtml(job.id)}" data-asset-output="${draggable}" draggable="${draggable}" tabindex="0" aria-label="${escapeHtml(executionModeLabel(job))}, ${escapeHtml(modelLabel(job))}, ${escapeHtml(statusLabel(job.status))}">
     <div class="asset-preview${audio || mediaType === "file" ? " music" : ""}">${preview}${assetAction(job)}</div>
-    <div class="asset-meta"><span class="task-status ${job.status}"></span><strong>${modelLabel(job)}</strong><small class="asset-plan ${executionModeClass(job)}">${executionModeLabel(job)}</small><time>${escapeHtml(nodeLabel(job))}</time><time>${t("overallTime")} ${formatElapsed(job.elapsed_seconds)}</time></div>
+    <div class="asset-meta"><span class="task-status ${job.status}"></span><strong>${escapeHtml(modelLabel(job))}</strong><small class="asset-plan ${executionModeClass(job)}">${escapeHtml(executionModeLabel(job))}</small>${owner}<time>${escapeHtml(nodeLabel(job))}</time><time>${t("overallTime")} ${formatElapsed(job.elapsed_seconds)}</time></div>
   </article>`;
 }
 
@@ -1433,27 +1556,49 @@ function dedupeJobs(jobs) {
   });
 }
 
+function selectedConversationDeviceIds() {
+  return Array.from(state.conversationDeviceIds).sort();
+}
+
+function conversationDeviceFilterSignature() {
+  return selectedConversationDeviceIds().join(",");
+}
+
 async function refreshConversation(initial = false) {
   if (state.conversationLoading) {
     state.conversationRefreshPending = true;
+    state.conversationRefreshResetPending ||= initial;
     return;
   }
   state.conversationLoading = true;
   try {
     const pageCount = initial ? 1 : Math.max(1, state.conversationPage);
+    const selectedDevices = selectedConversationDeviceIds();
+    const deviceFilterSignature = selectedDevices.join(",");
     const requests = Array.from({ length: pageCount }, (_, index) => {
       const params = new URLSearchParams({
         page: String(index + 1),
         page_size: String(state.conversationPageSize),
         scope: jobScope(),
       });
-      return api(`/api/v1/generations?${params}`);
+      if (selectedDevices.length && !state.incognito) params.set("device_ids", selectedDevices.join(","));
+      const endpoint = state.incognito ? "/api/v1/generations" : "/api/v1/peering/conversations";
+      return api(`${endpoint}?${params}`);
     });
     const payloads = await Promise.all(requests);
+    if (deviceFilterSignature !== conversationDeviceFilterSignature()) {
+      state.conversationRefreshPending = true;
+      state.conversationRefreshResetPending = true;
+      return;
+    }
+    const revisionSignature = `${payloads.map((payload) => payload.conversation_revision || payload.store_revision || 0).join("|")}|pages:${pageCount}|devices:${deviceFilterSignature}`;
+    if (!initial && state.conversationRevisionSignature === revisionSignature) return;
     const revisions = payloads.map((payload) => payload.store_revision || 0).filter((revision) => revision > 0);
+    state.conversationRevisionSignature = revisionSignature;
     state.conversationRevision = revisions.length ? Math.min(...revisions) : state.conversationRevision;
     state.storeRevision = Math.max(state.storeRevision, ...revisions, 0);
     state.conversationPages = payloads[0]?.pages || 1;
+    updateConversationDevices(state.incognito ? [] : payloads[0]?.devices || []);
     state.conversationPage = Math.min(pageCount, state.conversationPages);
     state.conversations = dedupeJobs(payloads.flatMap((payload) => payload.data));
     renderConversationFeed(initial ? "bottom" : "preserve");
@@ -1464,8 +1609,10 @@ async function refreshConversation(initial = false) {
   } finally {
     state.conversationLoading = false;
     if (state.conversationRefreshPending) {
+      const reset = state.conversationRefreshResetPending;
       state.conversationRefreshPending = false;
-      queueMicrotask(() => refreshConversation());
+      state.conversationRefreshResetPending = false;
+      queueMicrotask(() => refreshConversation(reset));
     }
   }
 }
@@ -1490,6 +1637,10 @@ function assetMatchesCurrentView(job) {
 }
 
 function upsertAsset(job) {
+  if (!job.peer_asset && state.peering) {
+    job.owner_name = state.peering.machine_name;
+    job.owner_device_id = state.peering.device_id;
+  }
   const index = state.assets.findIndex((item) => item.id === job.id);
   const matches = assetMatchesCurrentView(job);
   const card = jobElement(el("assetGrid"), "data-asset-job", job.id);
@@ -1517,13 +1668,16 @@ function upsertAsset(job) {
 }
 
 function upsertConversation(job) {
-  if (Boolean(job.request?.incognito) !== state.incognito) return;
   const index = state.conversations.findIndex((item) => item.id === job.id);
   const current = jobElement(el("conversationFeed"), "data-job-id", job.id);
-  if (index >= 0) {
+  const matches = conversationMatchesCurrentView(job);
+  if (index >= 0 && !matches) {
+    state.conversations.splice(index, 1);
+    current?.remove();
+  } else if (index >= 0) {
     state.conversations[index] = job;
     current?.replaceWith(elementFromHtml(renderJobExchange(job)));
-  } else {
+  } else if (matches) {
     const newestTime = state.conversations[0] ? new Date(state.conversations[0].created_at).getTime() : 0;
     const jobTime = new Date(job.created_at).getTime();
     if (state.conversations.length && jobTime < newestTime) return;
@@ -1532,7 +1686,15 @@ function upsertConversation(job) {
     el("conversationFeed").append(elementFromHtml(renderJobExchange(job)));
     el("conversationFeed").scrollTop = el("conversationFeed").scrollHeight;
   }
+  if (!state.conversations.length) el("conversationFeed").innerHTML = `<div class="chat-empty"><span>H3</span><h2>${t("startCreating")}</h2></div>`;
   refreshIcons();
+}
+
+function conversationMatchesCurrentView(job) {
+  if (Boolean(job.request?.incognito) !== state.incognito) return false;
+  if (state.incognito || state.conversationDeviceIds.size === 0) return true;
+  const ownerDeviceId = String(job.owner_device_id || job.source?.device_id || "");
+  return state.conversationDeviceIds.has(ownerDeviceId);
 }
 
 function applyJobUpsert(job) {
@@ -1561,12 +1723,21 @@ async function loadOlderMessages() {
   state.conversationLoading = true;
   try {
     const nextPage = state.conversationPage + 1;
+    const deviceFilterSignature = conversationDeviceFilterSignature();
     const params = new URLSearchParams({
       page: String(nextPage),
       page_size: String(state.conversationPageSize),
       scope: jobScope(),
     });
-    const payload = await api(`/api/v1/generations?${params}`);
+    const selectedDevices = selectedConversationDeviceIds();
+    if (selectedDevices.length && !state.incognito) params.set("device_ids", selectedDevices.join(","));
+    const endpoint = state.incognito ? "/api/v1/generations" : "/api/v1/peering/conversations";
+    const payload = await api(`${endpoint}?${params}`);
+    if (deviceFilterSignature !== conversationDeviceFilterSignature()) {
+      state.conversationRefreshPending = true;
+      state.conversationRefreshResetPending = true;
+      return;
+    }
     state.storeRevision = Math.max(state.storeRevision, payload.store_revision || 0);
     state.conversationPage = nextPage;
     state.conversationPages = payload.pages;
@@ -1576,7 +1747,73 @@ async function loadOlderMessages() {
     showError(error.message);
   } finally {
     state.conversationLoading = false;
+    if (state.conversationRefreshPending) {
+      const reset = state.conversationRefreshResetPending;
+      state.conversationRefreshPending = false;
+      state.conversationRefreshResetPending = false;
+      queueMicrotask(() => refreshConversation(reset));
+    }
   }
+}
+
+function updateConversationDevices(devices) {
+  state.conversationDevices = devices;
+  const select = el("conversationDeviceFilter");
+  if (!select) return;
+  select.innerHTML = devices.map((device) => `<option value="${escapeHtml(device.device_id)}">${escapeHtml(device.name)}${device.local ? " · 本机" : ""}</option>`).join("");
+  Array.from(select.options).forEach((option) => { option.selected = state.conversationDeviceIds.has(option.value); });
+  el("conversationFilters").hidden = devices.length < 2;
+  if (devices.length < 2) {
+    state.conversationFilterOpen = false;
+    el("conversationFilterPanel").hidden = true;
+    el("conversationFilterToggle").setAttribute("aria-expanded", "false");
+  }
+  updateConversationFilterChrome();
+}
+
+function updateConversationFilterChrome() {
+  const select = el("conversationDeviceFilter");
+  const count = el("conversationFilterCount");
+  if (!select || !count) return;
+  const selected = Array.from(select.selectedOptions);
+  count.textContent = selected.length === 0
+    ? "全部"
+    : selected.length === 1
+      ? selected[0].textContent
+      : `${selected.length} 个设备`;
+}
+
+async function refreshSharedRuntime() {
+  try {
+    const payload = await api("/api/v1/peering/runtime");
+    const localNodes = (payload.nodes || []).filter((node) => !node.remote_proxy);
+    state.localRuntime = {
+      nodes: localNodes,
+      queue: payload.queue || [],
+      logs: (payload.logs || []).filter((item) => !item.remote),
+    };
+    state.peerRuntime = {};
+    (payload.logs || []).filter((item) => item.remote && item.owner_device_id).forEach((item) => {
+      const runtime = state.peerRuntime[item.owner_device_id] || { nodes: [], queue: [], logs: [] };
+      runtime.logs.push(item);
+      state.peerRuntime[item.owner_device_id] = runtime;
+    });
+    (payload.nodes || []).filter((node) => node.remote_proxy && node.owner_device_id).forEach((node) => {
+      const runtime = state.peerRuntime[node.owner_device_id] || { nodes: [], queue: [], logs: [] };
+      runtime.nodes.push(node);
+      state.peerRuntime[node.owner_device_id] = runtime;
+    });
+    renderCombinedRuntime();
+    state.runtimeRevision = payload.revision || state.runtimeRevision;
+  } catch (error) {
+    if (!el("peeringModal").hidden) el("peeringError").textContent = error.message;
+  }
+}
+
+async function refreshProxyJobs() {
+  const active = state.conversations.filter((job) => job.request?.remote_proxy && isActive(job));
+  const results = await Promise.allSettled(active.map((job) => api(`/api/v1/generations/${encodeURIComponent(job.id)}`)));
+  results.forEach((result) => { if (result.status === "fulfilled") applyJobUpsert(result.value); });
 }
 
 function referenceSummary(job) {
@@ -1605,7 +1842,25 @@ function referenceSummary(job) {
 }
 
 function messageActions(job) {
+  if (job.peer_asset) return job.status === "completed" && job.result_url
+    ? `<div class="message-actions"><button type="button" data-job-action="input" data-job-id="${job.id}">${icon("file-input")}<span>${t("useAsInput")}</span></button></div>`
+    : "";
+  if (job.request?.remote_proxy) {
+    const buttons = [];
+    if (job.status === "completed" && job.result_url) {
+      buttons.push(`<button type="button" data-job-action="input" data-job-id="${job.id}">${icon("file-input")}<span>${t("useAsInput")}</span></button>`);
+    }
+    if (isActive(job)) {
+      buttons.push(`<button type="button" class="cancel" data-job-action="cancel" data-job-id="${job.id}">${icon("square")}<span>${t("cancel")}</span></button>`);
+    } else {
+      buttons.push(`<button type="button" class="danger" data-job-action="delete" data-job-id="${job.id}">${icon("trash-2")}<span>${t("delete")}</span></button>`);
+    }
+    return `<div class="message-actions">${buttons.join("")}</div>`;
+  }
   const buttons = [`<button type="button" data-job-action="reuse" data-job-id="${job.id}">${icon("corner-down-left")}<span>${t("reuse")}</span></button>`];
+  if (job.status === "completed" && job.result_url) {
+    buttons.push(`<button type="button" data-job-action="input" data-job-id="${job.id}">${icon("file-input")}<span>${t("useAsInput")}</span></button>`);
+  }
   if (job.status === "queued") {
     buttons.push(`<button type="button" data-job-action="edit" data-job-id="${job.id}">${icon("pencil")}<span>${t("edit")}</span></button>`);
   }
@@ -1625,6 +1880,7 @@ function renderJobExchange(job) {
   const runningHub = request.provider === "runninghub";
   const active = isActive(job);
   const detail = job.error || (job.queue_position ? `${t("queuePosition")} ${job.queue_position}` : job.stage);
+  const sourceLabel = job.owner_name ? `<span class="message-source">${icon("tag")} ${escapeHtml(job.owner_name)}</span>` : "";
   const incognito = request.incognito
     ? `<span class="message-mode">${icon("scan-eye")} ${t("incognito")}${job.expires_at ? ` · ${formatTime(job.expires_at, true)} ${t("destroy")}` : ""}</span>`
     : "";
@@ -1637,6 +1893,8 @@ function renderJobExchange(job) {
       <div class="progress-track"><span style="width:${Math.max(0, Math.min(100, job.progress || 0))}%"></span></div>
       <small>${escapeHtml(detail || statusLabel(job.status))}</small>
     </div>`;
+  } else if (job.asset_deleted) {
+    assistantBody = `<p class="terminal-state completed">${t("assetDeleted")}</p>`;
   } else if (job.status === "completed") {
     const result = audio
       ? `<div class="audio-result"><audio controls preload="metadata" src="${job.result_url}"></audio><a href="${job.result_url}" download>${icon("download")}<span>${mediaDownloadLabel(mediaType)}</span></a></div>`
@@ -1652,7 +1910,7 @@ function renderJobExchange(job) {
   return `<section class="exchange" id="job-${job.id}" data-job-id="${job.id}">
     <article class="message user-message">
       <div class="message-avatar user-avatar">${t("you")}</div>
-      <div class="message-body">${referenceSummary(job)}<div class="message-text">${escapeHtml(request.prompt || request.runninghub_workflow_name || "")}${audio && request.lyrics ? `\n\n${escapeHtml(request.lyrics)}` : ""}</div><div class="message-meta">${executionMode}<span>${modelLabel(job)}</span><span>${escapeHtml(nodeLabel(job))}</span>${runningHub || audio ? "" : `<span>${request.width} × ${request.height}</span>`}${runningHub ? "" : `<span>${request.duration}${t("seconds")}</span><span>${request.steps} ${t("steps")}</span><span>${t("seed")} ${request.seed}</span>`}${elapsed}${incognito}</div></div>
+      <div class="message-body">${referenceSummary(job)}<div class="message-text">${escapeHtml(request.prompt || request.runninghub_workflow_name || "")}${audio && request.lyrics ? `\n\n${escapeHtml(request.lyrics)}` : ""}</div><div class="message-meta">${sourceLabel}${executionMode}<span>${modelLabel(job)}</span><span>${escapeHtml(nodeLabel(job))}</span>${runningHub || audio ? "" : `<span>${request.width} × ${request.height}</span>`}${runningHub ? "" : `<span>${request.duration}${t("seconds")}</span><span>${request.steps} ${t("steps")}</span><span>${t("seed")} ${request.seed}</span>`}${elapsed}${incognito}</div></div>
     </article>
     <article class="message assistant-message">
       <div class="message-avatar assistant-avatar">H3</div>
@@ -1724,13 +1982,17 @@ function runningHubParameterFacts(request) {
 
 function renderAssetDetail(job) {
   const request = job.request || {};
+  const peerAsset = Boolean(job.peer_asset);
+  const localAsset = Boolean(job.local_asset);
   const mediaType = jobMediaType(job);
   const audio = mediaType === "audio";
   const runningHub = request.provider === "runninghub";
   const download = el("downloadAssetDetail");
   const downloadable = job.status === "completed" && Boolean(job.result_url);
   const references = request.references || [];
-  const preview = job.status === "completed" && job.result_url
+  const preview = job.asset_deleted
+    ? `<div class="asset-detail-placeholder">${icon("file-x-2")}<span>${t("assetDeleted")}</span></div>`
+    : job.status === "completed" && job.result_url
     ? audio
       ? `<audio controls preload="metadata" src="${escapeHtml(job.result_url)}"></audio>`
       : mediaType === "image"
@@ -1742,30 +2004,38 @@ function renderAssetDetail(job) {
   const files = references.length
     ? `<div class="asset-detail-files">${references.map((item, index) => assetDetailFile(item, index, job)).join("")}</div>`
     : `<p class="quiet">${t("noSourceFiles")}</p>`;
-  const facts = [
-    executionModeLabel(job), modelLabel(job), nodeLabel(job),
-    runningHub || audio ? null : `${request.width} × ${request.height}`,
-    runningHub ? null : `${request.duration}${t("seconds")}`,
-    runningHub ? null : `${request.steps} ${t("steps")}`,
-    runningHub ? null : `${t("seed")} ${request.seed}`,
-    ...runningHubParameterFacts(request),
-    `${t("overallTime")} ${formatElapsed(job.elapsed_seconds)}`,
-  ].filter(Boolean).map((value) => `<span>${escapeHtml(value)}</span>`).join("");
+  const facts = (localAsset
+    ? [localAssetTypeLabel(mediaType), job.owner_name ? `${t("owner")} ${job.owner_name}` : null]
+    : [
+      executionModeLabel(job), modelLabel(job), nodeLabel(job),
+      runningHub || audio ? null : `${request.width} × ${request.height}`,
+      runningHub ? null : `${request.duration}${t("seconds")}`,
+      runningHub ? null : `${request.steps} ${t("steps")}`,
+      runningHub ? null : `${t("seed")} ${request.seed}`,
+      ...runningHubParameterFacts(request),
+      `${t("overallTime")} ${formatElapsed(job.elapsed_seconds)}`,
+    ]).filter(Boolean).map((value) => `<span>${escapeHtml(value)}</span>`).join("");
   el("assetDetailTitle").textContent = shortTitle(job);
-  el("assetDetailMeta").textContent = `${statusLabel(job.status)} · ${formatTime(job.created_at, true)} · ${job.id}`;
+  const ownerMeta = job.owner_name ? ` · ${t("owner")} ${job.owner_name}` : "";
+  el("assetDetailMeta").textContent = `${statusLabel(job.status)} · ${formatTime(job.created_at, true)}${ownerMeta} · ${job.source_job_id || job.id}`;
   el("assetDetailBody").innerHTML = `<div class="asset-detail-preview">${preview}</div><div class="asset-detail-info">
     <section class="asset-detail-section"><h3>${t("prompt")}</h3><pre>${escapeHtml(request.prompt || "")}</pre></section>
     ${request.lyrics ? `<section class="asset-detail-section"><h3>${t("lyrics")}</h3><pre>${escapeHtml(request.lyrics)}</pre></section>` : ""}
     <section class="asset-detail-section"><h3>${t("sourceFiles")}</h3>${files}</section>
     <section class="asset-detail-section"><h3>${t("parameters")}</h3><div class="asset-detail-facts">${facts}</div></section>
   </div>`;
-  el("deleteAssetDetail").disabled = isActive(job);
+  el("deleteAssetDetail").hidden = peerAsset || localAsset;
+  el("deleteAssetDetail").disabled = peerAsset || localAsset || isActive(job);
   download.hidden = !downloadable;
   download.href = downloadable ? job.result_url : "#";
-  download.download = job.id;
+  download.download = job.source_job_id || job.id;
   download.querySelector("span").textContent = mediaDownloadLabel(mediaType);
-  el("regenerateAssetDetail").disabled = isActive(job);
-  el("reuseAssetDetail").disabled = false;
+  el("regenerateAssetDetail").hidden = peerAsset || localAsset;
+  el("regenerateAssetDetail").disabled = peerAsset || localAsset || isActive(job);
+  el("reuseAssetDetail").hidden = peerAsset || localAsset;
+  el("reuseAssetDetail").disabled = peerAsset || localAsset;
+  el("reuseOutputAssetDetail").hidden = localAsset;
+  el("reuseOutputAssetDetail").disabled = localAsset || !downloadable;
   refreshIcons();
 }
 
@@ -1775,11 +2045,16 @@ async function openAssetDetail(jobId) {
   el("assetDetailError").textContent = "";
   el("downloadAssetDetail").hidden = true;
   el("downloadAssetDetail").href = "#";
+  el("deleteAssetDetail").hidden = false;
+  el("regenerateAssetDetail").hidden = false;
+  el("reuseAssetDetail").hidden = false;
+  el("reuseOutputAssetDetail").hidden = false;
   el("regenerateAssetDetail").disabled = true;
+  el("reuseOutputAssetDetail").disabled = true;
   el("assetDetailBody").innerHTML = `<div class="feed-loading"><span></span><span></span><span></span></div>`;
   refreshIcons();
   try {
-    const job = await api(`/api/v1/generations/${encodeURIComponent(jobId)}`);
+    const job = await fetchAssetDetail(jobId);
     state.assetDetailJob = job;
     renderAssetDetail(job);
   } catch (error) {
@@ -1793,7 +2068,18 @@ function closeAssetDetail() {
   state.assetDetailJob = null;
   el("assetDetailModal").hidden = true;
   el("assetDetailError").textContent = "";
-  if (el("nodeModal").hidden) document.body.classList.remove("modal-open");
+  if (el("nodeModal").hidden && el("peeringModal").hidden && el("localAssetsModal").hidden && el("localAssetPreviewModal").hidden) document.body.classList.remove("modal-open");
+}
+
+function assetFromLibrary(jobId) {
+  return state.assets.find((job) => job.id === jobId) || null;
+}
+
+async function fetchAssetDetail(jobId) {
+  if (state.assetDetailJob?.id === jobId) return state.assetDetailJob;
+  const known = assetFromLibrary(jobId);
+  const url = known?.detail_url || `/api/v1/generations/${encodeURIComponent(jobId)}`;
+  return api(url);
 }
 
 async function restoredReferences(job) {
@@ -1814,6 +2100,31 @@ async function restoredReferences(job) {
     restored.forEach((item) => URL.revokeObjectURL(item.url));
     throw error;
   }
+}
+
+async function useGeneratedOutputAsInput(jobId) {
+  const detailOpen = !el("assetDetailModal").hidden;
+  const target = detailOpen ? el("assetDetailError") : el("formError");
+  const job = await fetchAssetDetail(jobId);
+  if (job.status !== "completed" || !job.result_url) {
+    throw new Error(t("outputUnavailable"));
+  }
+  target.textContent = t("fillLoading");
+  const response = await fetch(job.result_url, { cache: "no-store" });
+  if (!response.ok) throw new Error(t("outputUnavailable"));
+  const blob = await response.blob();
+  const mediaType = jobMediaType(job);
+  const extension = { audio: "flac", video: "mp4", image: "png", file: "bin" }[mediaType] || "bin";
+  const basename = String(job.title || job.id).replace(/[^\w\u4e00-\u9fff.-]+/g, "_").slice(0, 64) || job.id;
+  const file = new File([blob], `${basename}.${extension}`, {
+    type: blob.type || ({ audio: "audio/flac", video: "video/mp4", image: "image/png" }[mediaType] || "application/octet-stream"),
+  });
+  if (!addFiles([file])) {
+    throw new Error(el("formError").textContent || t("outputUnavailable"));
+  }
+  updateModelUi();
+  target.textContent = "";
+  if (detailOpen) closeAssetDetail();
 }
 
 function composerNodeForJob(job) {
@@ -1837,7 +2148,8 @@ async function backfillJob(jobId) {
   if (detailOpen) el("assetDetailError").textContent = t("fillLoading");
   reuseButton.disabled = true;
   try {
-    const job = state.assetDetailJob?.id === jobId ? state.assetDetailJob : await api(`/api/v1/generations/${encodeURIComponent(jobId)}`);
+    const job = await fetchAssetDetail(jobId);
+    if (job.peer_asset) throw new Error(localized("远端素材仅支持下载或作为输入", "Remote assets support download or use as input"));
     const references = await restoredReferences(job);
     resetComposer();
     promptInput.value = job.request?.prompt || "";
@@ -1974,6 +2286,7 @@ async function regenerateJob(jobId) {
 
 async function handleJobAction(action, jobId) {
   if (action === "reuse") return backfillJob(jobId);
+  if (action === "input") return useGeneratedOutputAsInput(jobId).catch((error) => showError(error.message));
   if (action === "regenerate") return regenerateJob(jobId);
   if (action === "edit") return startEdit(jobId);
   if (action === "cancel") return cancelJob(jobId);
@@ -1990,7 +2303,7 @@ form.addEventListener("submit", async (event) => {
   if (!runningHub && prompt.length < minimumPromptLength) return showError(localized(`请填写至少 ${minimumPromptLength} 个字符的提示词`, `Enter a prompt with at least ${minimumPromptLength} characters`));
   const steps = isMusic3() ? 30 : selectedExecutionMode() === "turbo-lora" ? 8 : isDigitalHuman() ? 20 : Number(el("steps").value);
   if (!runningHub && (!Number.isInteger(steps) || steps < 4 || steps > 50)) return showError(localized("采样步数请输入 4–50 的整数", "Sampling steps must be an integer from 4 to 50"));
-  const [width, height] = getDimensions();
+  const [width, height] = isTTS() ? [32, 32] : getDimensions();
   const button = el("generateButton");
   button.disabled = true;
   try {
@@ -2100,13 +2413,35 @@ function renderLogs(logs) {
       ? `<button type="button" data-scroll-job="${item.job_id}">${item.job_id.slice(0, 6)}</button>`
       : "<span></span>";
     const progress = item.progress == null ? "" : ` <b>${item.progress}%</b>`;
+    const source = item.owner_name ? `<span class="log-source">${escapeHtml(item.owner_name)}</span>` : "";
+    const node = item.node_name ? `<span class="log-node">${escapeHtml(item.node_name)}</span>` : "";
     return `<div class="log-row ${item.level === "error" ? "error" : ""}">
       <time>${formatTime(item.timestamp)}</time>
       ${jobLink}
-      <p>${escapeHtml(item.message)}${progress}</p>
+      <p>${source}${node}${escapeHtml(item.message)}${progress}</p>
     </div>`;
   }).join("") : `<p class="quiet">${state.locale === "en" ? "Waiting for events" : "等待事件"}</p>`;
   container.scrollTop = container.scrollHeight;
+}
+
+function renderCombinedRuntime() {
+  const remote = Object.values(state.peerRuntime);
+  const nodes = [
+    ...(state.localRuntime.nodes || []),
+    ...remote.flatMap((payload) => payload.nodes || []),
+  ];
+  const queue = [
+    ...(state.localRuntime.queue || []),
+    ...remote.flatMap((payload) => payload.queue || []),
+  ];
+  const logs = [
+    ...(state.localRuntime.logs || []),
+    ...remote.flatMap((payload) => payload.logs || []),
+  ].sort((left, right) => String(left.timestamp || "").localeCompare(String(right.timestamp || "")));
+  renderHealthState(nodes, queue.filter((job) => job.status === "queued").length);
+  syncManagedNodeStatuses(nodes);
+  renderQueue(queue);
+  renderLogs(logs.slice(-100));
 }
 
 function connectEventStream() {
@@ -2116,11 +2451,13 @@ function connectEventStream() {
   state.stream = new EventSource(`/api/v1/events?since=${encodeURIComponent(since)}`);
   state.stream.addEventListener("snapshot", async (event) => {
     const payload = JSON.parse(event.data);
-    const nodes = payload.nodes || state.nodes;
-    renderHealthState(nodes, (payload.queue || []).filter((job) => job.status === "queued").length);
-    syncManagedNodeStatuses(nodes);
-    renderQueue(payload.queue || []);
-    renderLogs(payload.logs || []);
+    state.localRuntime = {
+      nodes: payload.nodes || [],
+      queue: payload.queue || [],
+      logs: payload.logs || [],
+    };
+    renderCombinedRuntime();
+    if (payload.peering_status) applyPeeringStatus(payload.peering_status, Boolean(state.peering));
     if (payload.reset_required) {
       await Promise.all([loadAssets({ reset: true }), refreshConversation()]);
     } else if (!state.incognito) {
@@ -2131,6 +2468,28 @@ function connectEventStream() {
     }
     state.storeRevision = Math.max(state.storeRevision, payload.store_revision || 0);
     state.lastRevision = payload.revision;
+  });
+  state.stream.addEventListener("peer_snapshot", async (event) => {
+    const payload = JSON.parse(event.data);
+    if (!payload.peer_device_id) return;
+    state.peerRuntime[payload.peer_device_id] = {
+      nodes: payload.nodes || [],
+      queue: payload.queue || [],
+      logs: payload.logs || [],
+    };
+    renderCombinedRuntime();
+    if (payload.reset_required) {
+      await refreshConversation();
+      return;
+    }
+    (payload.jobs || []).forEach(applyJobUpsert);
+    (payload.deleted_job_ids || []).forEach(applyJobDelete);
+  });
+  state.stream.addEventListener("peer_removed", (event) => {
+    const payload = JSON.parse(event.data);
+    if (!payload.peer_device_id) return;
+    delete state.peerRuntime[payload.peer_device_id];
+    renderCombinedRuntime();
   });
   state.stream.onopen = () => {
     const snapshot = el("healthText").dataset.snapshot;
@@ -2150,18 +2509,293 @@ async function refreshActiveIncognitoJobs() {
   });
 }
 
-function loadAiConfig() {
-  el("aiEnabled").checked = localStorage.getItem("h3-ai-enabled") === "1";
-  el("aiBaseUrl").value = localStorage.getItem("h3-ai-base-url") || "";
-  el("aiModel").value = localStorage.getItem("h3-ai-model") || "";
-  el("aiApiKey").value = sessionStorage.getItem("h3-ai-api-key") || "";
+function renderAiConfig(config) {
+  state.aiConfig = config;
+  el("aiEnabled").checked = Boolean(config.enabled);
+  el("aiBaseUrl").value = config.base_url || "";
+  el("aiModel").value = config.model || "";
+  el("aiApiKey").value = "";
+  el("aiApiKey").placeholder = config.has_api_key ? t("aiKeyReplace") : "sk-…";
+  el("aiApiKeyStatus").textContent = config.has_api_key ? t("aiKeySaved") : t("aiKeyEmpty");
 }
 
-function saveAiConfig() {
-  localStorage.setItem("h3-ai-enabled", el("aiEnabled").checked ? "1" : "0");
-  localStorage.setItem("h3-ai-base-url", el("aiBaseUrl").value.trim());
-  localStorage.setItem("h3-ai-model", el("aiModel").value.trim());
-  sessionStorage.setItem("h3-ai-api-key", el("aiApiKey").value);
+async function loadAiConfig() {
+  renderAiConfig(await api("/api/v1/settings/ai"));
+}
+
+async function saveAiConfig() {
+  clearTimeout(state.aiSaveTimer);
+  const apiKey = el("aiApiKey").value.trim();
+  const payload = {
+    enabled: el("aiEnabled").checked,
+    base_url: el("aiBaseUrl").value.trim(),
+    model: el("aiModel").value.trim(),
+  };
+  if (apiKey) payload.api_key = apiKey;
+  const config = await api("/api/v1/settings/ai", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  renderAiConfig(config);
+  return config;
+}
+
+async function loadGeneralSettings() {
+  const payload = await api("/api/v1/settings/general");
+  state.generalSettings = payload;
+  el("globalHealthInterval").value = String(payload.health_interval_seconds || 60);
+  el("showRuntimeLogs").checked = payload.show_runtime_logs !== false;
+  el("showPeering").checked = payload.show_peering !== false;
+  el("backupOutputs").checked = Boolean(payload.backup_outputs);
+  el("remoteDisconnectPolicy").value = payload.remote_disconnect_policy || "encrypt";
+  el("remoteRecordsKey").value = payload.remote_records_key || "";
+  el("opsLauncher").hidden = payload.show_runtime_logs === false;
+  el("openPeering").hidden = payload.show_peering === false;
+  if (payload.show_runtime_logs === false) closeOpsWindow();
+}
+
+async function saveGeneralSettings(event) {
+  event.preventDefault();
+  const errorBox = el("globalSettingsError");
+  errorBox.textContent = "";
+  const seconds = Number(el("globalHealthInterval").value);
+  const key = el("remoteRecordsKey").value;
+  if (!Number.isInteger(seconds) || seconds < 5 || seconds > 3600) {
+    errorBox.textContent = "节点状态查询周期必须为 5 至 3600 秒";
+    return;
+  }
+  const keyLength = Array.from(key).length;
+  if (keyLength < 8 || keyLength > 256) {
+    errorBox.textContent = "远程记录密钥长度必须为 8 至 256 个字符";
+    return;
+  }
+  try {
+    const payload = await api("/api/v1/settings/general", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        show_runtime_logs: el("showRuntimeLogs").checked,
+        show_peering: el("showPeering").checked,
+        backup_outputs: el("backupOutputs").checked,
+        remote_disconnect_policy: el("remoteDisconnectPolicy").value,
+        remote_records_key: key,
+      }),
+    });
+    await api("/api/v1/comfy/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ health_interval_seconds: seconds }),
+    });
+    state.generalSettings = payload;
+    el("opsLauncher").hidden = !el("showRuntimeLogs").checked;
+    el("openPeering").hidden = !el("showPeering").checked;
+    if (!el("showRuntimeLogs").checked) closeOpsWindow();
+    el("globalSettingsModal").hidden = true;
+    document.body.classList.remove("modal-open");
+    showToast("设置已保存");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  }
+}
+
+function openGlobalSettings() {
+  el("globalSettingsModal").hidden = false;
+  document.body.classList.add("modal-open");
+  loadGeneralSettings().catch((error) => { el("globalSettingsError").textContent = error.message; });
+  refreshIcons();
+}
+
+function closeGlobalSettings() {
+  el("globalSettingsModal").hidden = true;
+  if (el("peeringModal").hidden && el("nodeModal").hidden && el("assetDetailModal").hidden && el("localAssetsModal").hidden) document.body.classList.remove("modal-open");
+}
+
+function localAssetTypeLabel(mediaType) {
+  return { video: "视频", audio: "音频", image: "图片", file: "文件" }[mediaType] || "文件";
+}
+
+function localAssetPreviewMarkup(asset) {
+  if (asset.locked) {
+    return `<button class="local-asset-locked" type="button" data-unlock-owner="${escapeHtml(asset.owner_device_id)}" data-unlock-name="${escapeHtml(asset.owner_name)}" title="输入所属设备密钥">${icon("lock-keyhole")}<b>文件被加密</b></button>`;
+  }
+  if (asset.asset_deleted) {
+    return `<span class="asset-placeholder deleted">${icon("file-x-2")}<b>${t("assetDeleted")}</b></span>`;
+  }
+  if (asset.preview_url && asset.media_type === "image") {
+    return `<img src="${escapeHtml(asset.preview_url)}" alt="${escapeHtml(asset.name)}" loading="lazy">`;
+  }
+  if (asset.preview_url && asset.media_type === "video") {
+    return `<video src="${escapeHtml(asset.preview_url)}" muted playsinline preload="metadata" aria-label="${escapeHtml(asset.name)}"></video><span class="asset-play">${icon("play")}</span>`;
+  }
+  if (asset.media_type === "audio") {
+    return `<span class="asset-audio-icon" aria-hidden="true">${icon("audio-lines")}</span>`;
+  }
+  return `<span class="asset-audio-icon" aria-hidden="true">${icon("file")}</span>`;
+}
+
+function openLocalAssetPreview(asset) {
+  if (!asset.preview_url || asset.asset_deleted || asset.locked) return;
+  const url = escapeHtml(asset.preview_url);
+  const name = escapeHtml(asset.name || asset.file_name || "本地素材");
+  const mediaType = asset.media_type || "file";
+  const preview = mediaType === "image"
+    ? `<img src="${url}" alt="${name}">`
+    : mediaType === "video"
+      ? `<video src="${url}" controls playsinline autoplay preload="metadata" aria-label="${name}"></video>`
+      : mediaType === "audio"
+        ? `<audio src="${url}" controls autoplay preload="metadata" aria-label="${name}"></audio>`
+        : `<div class="local-asset-preview-unsupported">${icon("file")}<span>该文件无法直接预览</span></div>`;
+  el("localAssetPreviewBody").innerHTML = preview;
+  el("localAssetPreviewModal").hidden = false;
+  document.body.classList.add("modal-open");
+  refreshIcons();
+}
+
+function closeLocalAssetPreview() {
+  const body = el("localAssetPreviewBody");
+  body.querySelectorAll("video, audio").forEach((media) => {
+    media.pause();
+    media.removeAttribute("src");
+    media.load();
+  });
+  body.innerHTML = "";
+  el("localAssetPreviewModal").hidden = true;
+  if (el("localAssetsModal").hidden && el("globalSettingsModal").hidden && el("peeringModal").hidden && el("nodeModal").hidden && el("assetDetailModal").hidden && el("unlockAssetsModal").hidden) document.body.classList.remove("modal-open");
+}
+
+function syncLocalAssetSelectAll() {
+  const selectable = state.localAssets.filter((asset) => !asset.asset_deleted);
+  const selectedCount = selectable.filter((asset) => state.localAssetSelected.has(asset.id)).length;
+  el("localAssetsSelectAll").checked = selectable.length > 0 && selectedCount === selectable.length;
+  el("localAssetsSelectAll").indeterminate = selectedCount > 0 && selectedCount < selectable.length;
+}
+
+function renderLocalAssetManager() {
+  const list = el("localAssetsList");
+  const cards = state.localAssets.map((asset) => {
+    const encryptedMessage = asset.locked
+      ? `文件被加密，所属设备：${asset.owner_name}`
+      : asset.asset_deleted
+        ? t("assetDeleted")
+        : asset.file_name || formatTime(asset.created_at, true);
+    const mediaType = asset.media_type || "file";
+    const audioOrFile = mediaType === "audio" || mediaType === "file";
+    return `<article class="asset-card local-asset-card" data-local-asset-id="${escapeHtml(asset.id)}" tabindex="0" aria-label="${escapeHtml(asset.name)}">
+      <div class="asset-preview${audioOrFile ? " music" : ""}">
+        <label class="local-asset-select" data-local-asset-select>
+          <input type="checkbox" value="${escapeHtml(asset.id)}" aria-label="选择 ${escapeHtml(asset.name)}" ${state.localAssetSelected.has(asset.id) ? "checked" : ""} ${asset.asset_deleted ? "disabled" : ""}>
+        </label>
+        ${localAssetPreviewMarkup(asset)}
+      </div>
+      <div class="asset-meta"><span class="task-status completed"></span><strong title="${escapeHtml(asset.name)}">${escapeHtml(asset.name)}</strong><small class="asset-plan">${escapeHtml(localAssetTypeLabel(mediaType))}</small><span class="asset-owner" title="来源：${escapeHtml(asset.owner_name)}">${icon("tag")}<span>${escapeHtml(asset.owner_name)}</span></span><time title="${escapeHtml(encryptedMessage)}">${escapeHtml(encryptedMessage)}</time></div>
+    </article>`;
+  }).join("");
+  const loading = state.localAssetLoading
+    ? `<p class="local-assets-loading">${t("loading")}</p>`
+    : state.localAssetPage >= state.localAssetPages && state.localAssets.length
+      ? `<p class="local-assets-loading">${t("allLoaded")}</p>`
+      : "";
+  list.innerHTML = (cards || state.localAssetLoading) ? `${cards}${loading}` : `<p class="quiet">${t("noAssets")}</p>`;
+  el("localAssetsCount").textContent = `${state.localAssetTotal} 项`;
+  syncLocalAssetSelectAll();
+  refreshIcons();
+}
+
+async function loadLocalAssets({ reset = false } = {}) {
+  if (state.localAssetLoading) return;
+  if (!reset && state.localAssetPage >= state.localAssetPages) return;
+  if (reset) {
+    state.localAssets = [];
+    state.localAssetPage = 0;
+    state.localAssetPages = 1;
+    state.localAssetTotal = 0;
+    state.localAssetSelected.clear();
+  }
+  state.localAssetLoading = true;
+  renderLocalAssetManager();
+  try {
+    const page = state.localAssetPage + 1;
+    const payload = await api(`/api/v1/assets/local?page=${page}&page_size=24`);
+    state.localAssets.push(...(payload.data || []));
+    state.localAssetPage = Number(payload.page || page);
+    state.localAssetPages = Number(payload.pages || 1);
+    state.localAssetTotal = Number(payload.total || state.localAssets.length);
+    el("localAssetsError").textContent = "";
+  } catch (error) {
+    el("localAssetsError").textContent = error.message;
+  } finally {
+    state.localAssetLoading = false;
+    renderLocalAssetManager();
+  }
+}
+
+async function openLocalAssets() {
+  el("localAssetsModal").hidden = false;
+  el("localAssetsError").textContent = "";
+  document.body.classList.add("modal-open");
+  await loadLocalAssets({ reset: true });
+}
+
+function closeLocalAssets() {
+  el("localAssetsModal").hidden = true;
+  if (el("globalSettingsModal").hidden && el("peeringModal").hidden && el("nodeModal").hidden && el("assetDetailModal").hidden && el("unlockAssetsModal").hidden) document.body.classList.remove("modal-open");
+}
+
+async function deleteLocalArtifacts() {
+  const ids = Array.from(state.localAssetSelected);
+  if (!ids.length) return;
+  if (!window.confirm(`确认删除选中的 ${ids.length} 项本地产物？任务与工作流记录会保留。`)) return;
+  try {
+    const result = await api("/api/v1/assets/local/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset_ids: ids }) });
+    state.localAssetChanged = Boolean(result.deleted?.length);
+    state.localAssetSelected.clear();
+    await loadLocalAssets({ reset: true });
+    if (state.localAssetChanged) await refreshSharedData();
+    if (result.rejected?.length) el("localAssetsError").textContent = `${result.rejected.length} 项未能删除`;
+  } catch (error) {
+    el("localAssetsError").textContent = error.message;
+  }
+}
+
+function openUnlockAssets(ownerDeviceId, ownerName) {
+  state.unlockOwnerDeviceId = ownerDeviceId;
+  el("unlockAssetsOwner").textContent = `所属设备：${ownerName || ownerDeviceId}`;
+  el("unlockAssetsKey").value = "";
+  el("unlockAssetsKey").type = "password";
+  el("unlockAssetsError").textContent = "";
+  el("unlockAssetsModal").hidden = false;
+  document.body.classList.add("modal-open");
+  refreshIcons();
+  el("unlockAssetsKey").focus();
+}
+
+function closeUnlockAssets() {
+  el("unlockAssetsModal").hidden = true;
+  state.unlockOwnerDeviceId = "";
+  if (el("localAssetsModal").hidden && el("globalSettingsModal").hidden && el("peeringModal").hidden && el("nodeModal").hidden && el("assetDetailModal").hidden) document.body.classList.remove("modal-open");
+}
+
+async function unlockLocalAssets(event) {
+  event.preventDefault();
+  const recordsKey = el("unlockAssetsKey").value;
+  const keyLength = Array.from(recordsKey).length;
+  if (keyLength < 8 || keyLength > 256) {
+    el("unlockAssetsError").textContent = "密钥长度必须为 8 至 256 个字符";
+    return;
+  }
+  try {
+    await api("/api/v1/assets/local/unlock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ owner_device_id: state.unlockOwnerDeviceId, records_key: recordsKey }),
+    });
+    closeUnlockAssets();
+    await loadLocalAssets({ reset: true });
+    showToast("该设备的本地加密素材已解锁");
+  } catch (error) {
+    el("unlockAssetsError").textContent = error.message;
+  }
 }
 
 async function parseSseResponse(response, onEvent) {
@@ -2192,7 +2826,11 @@ async function parseSseResponse(response, onEvent) {
 
 async function assistMusic(task) {
   showError("");
-  saveAiConfig();
+  try {
+    await saveAiConfig();
+  } catch (error) {
+    return showError(error.message);
+  }
   const source = promptInput.value.trim();
   if (source.length < 2) return showError("请先输入歌曲主题、曲风或创作要求");
   if (!el("aiEnabled").checked) {
@@ -2219,7 +2857,6 @@ async function assistMusic(task) {
         lyrics: el("lyrics").value.trim(),
         duration: Number(el("duration").value),
         base_url: baseUrl,
-        api_key: el("aiApiKey").value,
         model,
       }),
     });
@@ -2241,7 +2878,11 @@ async function assistMusic(task) {
 async function optimizePrompt() {
   if (isMusic3()) return assistMusic("arrangement");
   showError("");
-  saveAiConfig();
+  try {
+    await saveAiConfig();
+  } catch (error) {
+    return showError(error.message);
+  }
   const source = promptInput.value.trim();
   if (source.length < 2) return showError("请先输入需要优化的自然语言描述");
   if (!el("aiEnabled").checked) {
@@ -2266,10 +2907,10 @@ async function optimizePrompt() {
       body: JSON.stringify({
         prompt: source,
         base_url: baseUrl,
-        api_key: el("aiApiKey").value,
         model,
         duration: Number(el("duration").value),
         model_variant: selectedVariant(),
+        execution_mode: isTTS() ? "tts" : "native",
         references: state.references.map((ref) => ({ type: ref.kind || ref.type, name: ref.name || ref.file?.name || "reference" })),
       }),
     });
@@ -2374,7 +3015,12 @@ function applyOpsPosition() {
 
 function openOpsWindow() {
   el("opsWindow").hidden = false;
-  resetOpsPosition();
+  if (!state.opsPositionInitialized) {
+    resetOpsPosition();
+    state.opsPositionInitialized = true;
+  } else {
+    applyOpsPosition();
+  }
   refreshIcons();
 }
 
@@ -2390,6 +3036,171 @@ function openAssetDrawer() {
 function closeAssetDrawer() {
   el("assetSidebar").classList.remove("mobile-open");
   el("mobileScrim").hidden = true;
+}
+
+function showToast(message, type = "") {
+  if (!message) return;
+  const toast = document.createElement("div");
+  toast.className = `toast${type ? ` ${type}` : ""}`;
+  toast.textContent = message;
+  el("toastRegion").append(toast);
+  setTimeout(() => toast.remove(), 4500);
+}
+
+function peeringExpiresIn() {
+  if (!state.peering) return 30;
+  const elapsed = Math.floor((Date.now() - state.peering.received_at) / 1000);
+  return Math.max(0, Number(state.peering.pairing_expires_in || 30) - elapsed);
+}
+
+function renderPeerList(peers) {
+  el("peerList").innerHTML = peers.length
+    ? peers.map((peer) => `<div class="peer-row">
+        <span class="peer-row-copy"><strong>${escapeHtml(peer.name)}</strong><small>${escapeHtml(peer.base_url)}</small></span>
+        <button type="button" data-revoke-peer="${escapeHtml(peer.device_id)}">${t("revokeAccess")}</button>
+      </div>`).join("")
+    : `<p class="quiet">${t("noPeers")}</p>`;
+}
+
+function renderPeeringStatus() {
+  const status = state.peering;
+  if (!status) return;
+  const enabled = Boolean(status.sharing_enabled);
+  if (document.activeElement !== el("machineName")) el("machineName").value = status.machine_name || "";
+  el("peeringEnabled").checked = enabled;
+  el("pairingCode").textContent = enabled ? status.pairing_code : "------";
+  el("pairingExpiry").textContent = enabled ? `${peeringExpiresIn()} ${t("pairingRefresh")}` : localized("互联已关闭", "Sharing disabled");
+  el("peerAddress").value = status.address || "";
+  el("peerConnectAddress").disabled = !enabled;
+  el("peerConnectCode").disabled = !enabled;
+  el("peerConnectForm").querySelector("button[type=submit]").disabled = !enabled;
+  renderPeerList(status.peers || []);
+}
+
+function applyPeeringStatus(payload, notifyEvents = false) {
+  const previousRevision = state.peeringRevision;
+  const events = (payload.events || []).filter((event) => Number(event.revision || 0) > previousRevision);
+  state.peeringRevision = Number(payload.revision || previousRevision);
+  state.peering = { ...payload, received_at: Date.now() };
+  renderPeeringStatus();
+  if (!notifyEvents || !events.length) return;
+  let libraryChanged = false;
+  events.forEach((event) => {
+    if (event.type === "peer_connected") {
+      showToast(`${event.peer_name || t("peerConnected")}：${t("peerConnectNotice")}`);
+      libraryChanged = true;
+    }
+    if (event.type === "peer_revoked") {
+      showToast(`${event.peer_name || t("peerConnected")}：${t("peerRevoked")}`);
+      libraryChanged = true;
+    }
+  });
+  if (libraryChanged && !state.incognito) refreshSharedData();
+}
+
+async function refreshSharedData() {
+  if (state.incognito) return;
+  await Promise.all([
+    loadAssets({ reset: true }),
+    refreshConversation(true),
+    refreshSharedRuntime(),
+  ]);
+}
+
+async function refreshPeeringStatus({ notifyEvents = true } = {}) {
+  if (state.peeringPolling) return;
+  state.peeringPolling = true;
+  try {
+    const since = state.peering ? state.peeringRevision : 0;
+    const payload = await api(`/api/v1/peering/status?since=${since}`);
+    applyPeeringStatus(payload, notifyEvents && Boolean(state.peering));
+    el("peeringError").textContent = "";
+  } catch (error) {
+    if (!el("peeringModal").hidden) el("peeringError").textContent = error.message;
+  } finally {
+    state.peeringPolling = false;
+  }
+}
+
+function startPeeringPolling() {
+  clearInterval(state.peeringTimer);
+  clearInterval(state.peeringPollTimer);
+  state.peeringTimer = setInterval(() => {
+    renderPeeringStatus();
+  }, 1000);
+}
+
+async function openPeeringDialog() {
+  el("peeringModal").hidden = false;
+  document.body.classList.add("modal-open");
+  el("peeringError").textContent = "";
+  refreshIcons();
+  await refreshPeeringStatus({ notifyEvents: false });
+}
+
+function closePeeringDialog() {
+  el("peeringModal").hidden = true;
+  el("peeringError").textContent = "";
+  if (el("nodeModal").hidden && el("assetDetailModal").hidden) document.body.classList.remove("modal-open");
+  el("openPeering").focus();
+}
+
+async function updatePeeringSettings(values) {
+  try {
+    const payload = await api("/api/v1/peering/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+    applyPeeringStatus(payload, true);
+    el("peeringError").textContent = "";
+    if (Object.prototype.hasOwnProperty.call(values, "enabled") && !state.incognito) await refreshSharedData();
+  } catch (error) {
+    el("peeringError").textContent = error.message;
+    await refreshPeeringStatus({ notifyEvents: false });
+  }
+}
+
+async function connectPeer(event) {
+  event.preventDefault();
+  const address = el("peerConnectAddress").value.trim();
+  const code = el("peerConnectCode").value.trim();
+  if (!/^\d{6}$/.test(code)) {
+    el("peeringError").textContent = localized("请输入 6 位数字验证码", "Enter a six-digit code");
+    return;
+  }
+  const button = el("peerConnectForm").querySelector("button[type=submit]");
+  button.disabled = true;
+  el("peeringError").textContent = "";
+  try {
+    const result = await api("/api/v1/peering/connect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address, code }),
+    });
+    applyPeeringStatus(result.status, false);
+    el("peerConnectAddress").value = "";
+    el("peerConnectCode").value = "";
+    showToast(`${result.peer?.name || t("peerConnected")}：${t("peerConnectNotice")}`);
+    if (!state.incognito) await refreshSharedData();
+  } catch (error) {
+    el("peeringError").textContent = error.message;
+  } finally {
+    button.disabled = !state.peering?.sharing_enabled;
+  }
+}
+
+async function revokePeer(deviceId) {
+  if (!window.confirm(localized("确认撤销该设备的素材库访问授权？", "Revoke this device's library access?"))) return;
+  try {
+    const result = await api(`/api/v1/peering/peers/${encodeURIComponent(deviceId)}`, { method: "DELETE" });
+    const peer = state.peering?.peers?.find((item) => item.device_id === deviceId);
+    applyPeeringStatus(result.status, false);
+    showToast(`${peer?.name || t("peerConnected")}：${t("peerRevoked")}`);
+    if (!state.incognito) await refreshSharedData();
+  } catch (error) {
+    el("peeringError").textContent = error.message;
+  }
 }
 
 el("referenceList").addEventListener("click", (event) => {
@@ -2433,7 +3244,15 @@ const composerBox = el("dropZone");
   event.preventDefault();
   composerBox.classList.remove("dragging");
 }));
-composerBox.addEventListener("drop", (event) => addFiles(event.dataTransfer.files));
+composerBox.addEventListener("drop", async (event) => {
+  const jobId = event.dataTransfer.getData("application/x-h3-asset-job");
+  if (!jobId) return addFiles(event.dataTransfer.files);
+  try {
+    await useGeneratedOutputAsInput(jobId);
+  } catch (error) {
+    showError(error.message);
+  }
+});
 
 promptInput.addEventListener("keydown", (event) => {
   if (handleMentionKeydown(event)) return;
@@ -2448,6 +3267,12 @@ promptInput.addEventListener("click", () => {
 promptInput.addEventListener("scroll", positionMentionMenu, { passive: true });
 
 el("assetGrid").addEventListener("click", (event) => {
+  const inputAction = event.target.closest("[data-asset-input]");
+  if (inputAction) {
+    event.stopPropagation();
+    useGeneratedOutputAsInput(inputAction.dataset.assetInput).catch((error) => showError(error.message));
+    return;
+  }
   const action = event.target.closest("[data-job-action]");
   if (action) {
     event.stopPropagation();
@@ -2456,6 +3281,17 @@ el("assetGrid").addEventListener("click", (event) => {
   }
   const card = event.target.closest("[data-asset-job]");
   if (card) openAssetDetail(card.dataset.assetJob);
+});
+el("assetGrid").addEventListener("dragstart", (event) => {
+  const card = event.target.closest('[data-asset-output="true"]');
+  if (!card) return;
+  event.dataTransfer.effectAllowed = "copy";
+  event.dataTransfer.setData("application/x-h3-asset-job", card.dataset.assetJob);
+  event.dataTransfer.setData("text/plain", card.dataset.assetJob);
+  card.classList.add("dragging");
+});
+el("assetGrid").addEventListener("dragend", (event) => {
+  event.target.closest(".asset-card")?.classList.remove("dragging");
 });
 el("assetGrid").addEventListener("keydown", (event) => {
   if (["Enter", " "].includes(event.key) && event.target.matches("[data-asset-job]")) {
@@ -2493,6 +3329,7 @@ el("logList").addEventListener("click", (event) => {
 el("newTaskButton").addEventListener("click", newTask);
 el("exitEdit").addEventListener("click", resetComposer);
 el("assetStatusFilter").addEventListener("change", () => loadAssets({ reset: true }));
+el("refreshAssets").addEventListener("click", () => refreshSharedData());
 let assetSearchTimer = null;
 el("assetSearch").addEventListener("input", () => {
   clearTimeout(assetSearchTimer);
@@ -2505,6 +3342,12 @@ el("assetDetailModal").addEventListener("click", (event) => {
 });
 el("reuseAssetDetail").addEventListener("click", () => {
   if (state.assetDetailJob) backfillJob(state.assetDetailJob.id);
+});
+el("reuseOutputAssetDetail").addEventListener("click", () => {
+  if (!state.assetDetailJob) return;
+  useGeneratedOutputAsInput(state.assetDetailJob.id).catch((error) => {
+    el("assetDetailError").textContent = error.message;
+  });
 });
 el("regenerateAssetDetail").addEventListener("click", () => {
   if (state.assetDetailJob) regenerateJob(state.assetDetailJob.id);
@@ -2520,7 +3363,99 @@ el("languageToggle").addEventListener("click", () => {
   window.location.reload();
 });
 
-["aiEnabled", "aiBaseUrl", "aiModel", "aiApiKey"].forEach((id) => el(id).addEventListener("change", saveAiConfig));
+["aiEnabled", "aiBaseUrl", "aiModel", "aiApiKey"].forEach((id) => el(id).addEventListener("change", () => {
+  saveAiConfig().catch((error) => showError(error.message));
+}));
+el("openPeering").addEventListener("click", openPeeringDialog);
+el("closePeering").addEventListener("click", closePeeringDialog);
+el("peeringModal").addEventListener("click", (event) => {
+  if (event.target === el("peeringModal")) closePeeringDialog();
+});
+el("peeringEnabled").addEventListener("change", () => updatePeeringSettings({ enabled: el("peeringEnabled").checked }));
+el("machineName").addEventListener("change", () => updatePeeringSettings({ machine_name: el("machineName").value.trim() }));
+el("openGlobalSettings").addEventListener("click", openGlobalSettings);
+el("closeGlobalSettings").addEventListener("click", closeGlobalSettings);
+el("globalSettingsModal").addEventListener("click", (event) => { if (event.target === el("globalSettingsModal")) closeGlobalSettings(); });
+el("globalSettingsForm").addEventListener("submit", saveGeneralSettings);
+el("toggleRemoteRecordsKey").addEventListener("click", () => togglePasswordField("remoteRecordsKey", "toggleRemoteRecordsKey"));
+el("manageLocalAssets").addEventListener("click", openLocalAssets);
+el("closeLocalAssets").addEventListener("click", closeLocalAssets);
+el("deleteLocalArtifacts").addEventListener("click", deleteLocalArtifacts);
+el("localAssetsModal").addEventListener("click", (event) => { if (event.target === el("localAssetsModal")) closeLocalAssets(); });
+el("closeLocalAssetPreview").addEventListener("click", closeLocalAssetPreview);
+el("localAssetPreviewModal").addEventListener("click", (event) => { if (event.target === el("localAssetPreviewModal")) closeLocalAssetPreview(); });
+el("localAssetsList").addEventListener("change", (event) => {
+  const checkbox = event.target.closest('input[type="checkbox"]');
+  if (!checkbox) return;
+  if (checkbox.checked) state.localAssetSelected.add(checkbox.value);
+  else state.localAssetSelected.delete(checkbox.value);
+  syncLocalAssetSelectAll();
+});
+el("localAssetsList").addEventListener("click", (event) => {
+  if (event.target.closest("[data-local-asset-select], input[type=checkbox]")) return;
+  const button = event.target.closest("[data-unlock-owner]");
+  if (button) {
+    event.stopPropagation();
+    openUnlockAssets(button.dataset.unlockOwner, button.dataset.unlockName);
+    return;
+  }
+  const card = event.target.closest("[data-local-asset-id]");
+  if (!card) return;
+  const asset = state.localAssets.find((item) => item.id === card.dataset.localAssetId);
+  if (!asset) return;
+  if (asset.locked) openUnlockAssets(asset.owner_device_id, asset.owner_name);
+  else openLocalAssetPreview(asset);
+});
+el("localAssetsList").addEventListener("keydown", (event) => {
+  if (!["Enter", " "].includes(event.key) || !event.target.matches("[data-local-asset-id]")) return;
+  event.preventDefault();
+  const asset = state.localAssets.find((item) => item.id === event.target.dataset.localAssetId);
+  if (!asset) return;
+  if (asset.locked) openUnlockAssets(asset.owner_device_id, asset.owner_name);
+  else openLocalAssetPreview(asset);
+});
+el("localAssetsList").addEventListener("scroll", () => {
+  const list = el("localAssetsList");
+  if (list.scrollHeight - list.scrollTop - list.clientHeight < 120) loadLocalAssets();
+}, { passive: true });
+el("localAssetsSelectAll").addEventListener("change", () => {
+  state.localAssets.filter((asset) => !asset.asset_deleted).forEach((asset) => {
+    if (el("localAssetsSelectAll").checked) state.localAssetSelected.add(asset.id);
+    else state.localAssetSelected.delete(asset.id);
+  });
+  renderLocalAssetManager();
+});
+el("closeUnlockAssets").addEventListener("click", closeUnlockAssets);
+el("unlockAssetsModal").addEventListener("click", (event) => { if (event.target === el("unlockAssetsModal")) closeUnlockAssets(); });
+el("unlockAssetsForm").addEventListener("submit", unlockLocalAssets);
+el("toggleUnlockAssetsKey").addEventListener("click", () => togglePasswordField("unlockAssetsKey", "toggleUnlockAssetsKey"));
+el("conversationFilterToggle").addEventListener("click", (event) => {
+  event.stopPropagation();
+  state.conversationFilterOpen = !state.conversationFilterOpen;
+  el("conversationFilterPanel").hidden = !state.conversationFilterOpen;
+  el("conversationFilterToggle").setAttribute("aria-expanded", String(state.conversationFilterOpen));
+});
+el("conversationFilterPanel").addEventListener("click", (event) => event.stopPropagation());
+el("conversationDeviceFilter").addEventListener("change", () => {
+  state.conversationDeviceIds = new Set(Array.from(el("conversationDeviceFilter").selectedOptions).map((option) => option.value));
+  updateConversationFilterChrome();
+  state.conversationRevisionSignature = "";
+  refreshConversation(true);
+});
+document.addEventListener("click", () => {
+  if (!state.conversationFilterOpen) return;
+  state.conversationFilterOpen = false;
+  el("conversationFilterPanel").hidden = true;
+  el("conversationFilterToggle").setAttribute("aria-expanded", "false");
+});
+el("peerConnectCode").addEventListener("input", () => {
+  el("peerConnectCode").value = el("peerConnectCode").value.replace(/\D/g, "").slice(0, 6);
+});
+el("peerConnectForm").addEventListener("submit", connectPeer);
+el("peerList").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-revoke-peer]");
+  if (button) revokePeer(button.dataset.revokePeer);
+});
 el("mentionTrigger").addEventListener("click", () => {
   if (el("mentionControl").dataset.open === "true") closeMentionMenu();
   else openMentionMenu({ focusPrompt: true });
@@ -2561,7 +3496,7 @@ el("closeNodeManager").addEventListener("click", closeNodeManager);
 el("addNodeButton").addEventListener("click", () => openNodeEditor());
 el("cancelNodeEdit").addEventListener("click", closeNodeEditor);
 el("cancelNodeEditIcon").addEventListener("click", closeNodeEditor);
-el("saveNodeSettings").addEventListener("click", saveNodeSettings);
+if (el("saveNodeSettings")) el("saveNodeSettings").addEventListener("click", saveNodeSettings);
 el("nodeEditor").addEventListener("submit", saveNode);
 el("nodeProvider").addEventListener("change", syncNodeProviderFields);
 el("nodeList").addEventListener("click", (event) => {
@@ -2596,7 +3531,12 @@ el("secretOverlay").addEventListener("click", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeMentionMenu();
+  if (event.key === "Escape" && !el("localAssetPreviewModal").hidden) {
+    closeLocalAssetPreview();
+    return;
+  }
   if (event.key === "Escape" && !el("secretOverlay").hidden) closeSecretDialog();
+  if (event.key === "Escape" && !el("peeringModal").hidden) closePeeringDialog();
   if (event.key === "Escape" && !el("nodeModal").hidden) closeNodeManager();
   if (event.key === "Escape" && !el("assetDetailModal").hidden) closeAssetDetail();
 });
@@ -2621,10 +3561,11 @@ el("opsDragHandle").addEventListener("pointerdown", (event) => {
     originX: state.opsPosition.x,
     originY: state.opsPosition.y,
   };
+  event.preventDefault();
   el("opsDragHandle").setPointerCapture(event.pointerId);
   el("opsWindow").classList.add("dragging");
 });
-el("opsDragHandle").addEventListener("pointermove", (event) => {
+window.addEventListener("pointermove", (event) => {
   if (!dragState || dragState.pointerId !== event.pointerId) return;
   state.opsPosition.x = dragState.originX + event.clientX - dragState.startX;
   state.opsPosition.y = dragState.originY + event.clientY - dragState.startY;
@@ -2632,24 +3573,37 @@ el("opsDragHandle").addEventListener("pointermove", (event) => {
 });
 function stopOpsDrag(event) {
   if (!dragState || dragState.pointerId !== event.pointerId) return;
+  const handle = el("opsDragHandle");
   dragState = null;
   el("opsWindow").classList.remove("dragging");
+  if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
 }
-el("opsDragHandle").addEventListener("pointerup", stopOpsDrag);
-el("opsDragHandle").addEventListener("pointercancel", stopOpsDrag);
+window.addEventListener("pointerup", stopOpsDrag);
+window.addEventListener("pointercancel", stopOpsDrag);
 window.addEventListener("resize", () => { if (!el("opsWindow").hidden) applyOpsPosition(); });
 
 async function initialize() {
   applyStaticLocale();
-  loadAiConfig();
   updateModelUi();
   updateIncognitoUi();
   renderReferences();
-  await Promise.all([checkHealth(), loadAssets({ reset: true }), refreshConversation(true)]);
-  connectEventStream();
   refreshIcons();
+  startPeeringPolling();
+  connectEventStream();
+  await Promise.allSettled([
+    loadAiConfig().catch((error) => showError(error.message)),
+    loadGeneralSettings().catch((error) => showError(error.message)),
+    refreshPeeringStatus({ notifyEvents: false }),
+    checkHealth(),
+    refreshSharedData(),
+  ]);
 }
 
 initialize();
+el("lucideScript")?.addEventListener("load", refreshIcons);
 window.addEventListener("load", refreshIcons);
-window.addEventListener("beforeunload", () => state.stream?.close());
+window.addEventListener("beforeunload", () => {
+  state.stream?.close();
+  clearInterval(state.peeringTimer);
+  clearInterval(state.peeringPollTimer);
+});

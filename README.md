@@ -1,8 +1,10 @@
 <div align="center">
 
-# MiniMax Full Model API / WebUI
+<img src="assets/h3-studio-logo.png" alt="H3 Studio logo" width="128" />
 
-面向 MiniMax H3 视频与 MiniMax Music3 音乐生成的 ComfyUI 与 RunningHub API Web 服务
+# MiniMax H3 Studio
+
+面向 MiniMax H3 视频、人物语音和 MiniMax Music3 音乐生成的 FastAPI、ComfyUI、RunningHub 与桌面应用
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -12,11 +14,11 @@
 
 中文 | [English](README.en.md)
 
-[功能更新](#功能更新) · [生成方案](#生成方案) · [快速部署](#快速部署) · [多节点调度](#多节点调度) · [API](#api) · [文档](#文档)
+[功能更新](#功能更新) · [生成方案](#生成方案) · [快速部署](#快速部署) · [桌面应用](#桌面应用) · [多节点调度](#多节点调度) · [API](#api) · [文档](#文档)
 
 </div>
 
-项目将 ComfyUI 与 RunningHub 工作流封装为响应式网页与 HTTP API，统一处理素材上传、参数校验、任务排队、实时进度、节点调度、产物管理和隐私隔离。当前包含 H3 FL2VA、Ref2VA、8-step LoRA v1.0、数字人音频驱动、Music3 INT8 及可选 H3 NSFW 工作流。
+项目提供服务端和桌面两种运行形态。服务端将 ComfyUI 与 RunningHub 工作流封装为响应式网页与 HTTP API，统一处理素材上传、参数校验、任务排队、实时进度、节点调度、产物管理和隐私隔离。桌面版在本机运行 FastAPI 与 pywebview，仅将推理请求发送到远端 ComfyUI，任务、素材、生成结果、节点配置和 AI 配置保留在本机。当前包含 H3 FL2VA、Ref2VA、8-step LoRA v1.0、数字人音频驱动、H3 TTS、Music3 INT8 及可选 H3 NSFW 工作流。
 
 ![MiniMax Studio 工作台](docs/images/h3-studio-overview.jpg)
 
@@ -24,6 +26,22 @@
 > 模型权重不会提交到 Git。部署前请确认已接受 MiniMax H3、MiniMax Music3、相关 LoRA、ComfyUI 和自定义节点的许可条件。
 
 ## 功能更新
+
+### 2026-08-18
+
+**macOS 与 Windows 桌面应用**
+
+- 桌面端只连接远端 ComfyUI，本机保存任务、素材、生成结果、节点配置和 AI 配置。
+- AI 服务 API Key 由本机 SQLite 保存，网页端不使用 `localStorage` 或 `sessionStorage` 保存密钥。
+- 支持本机名称、局域网一次性验证码配对、持久授权、主动撤销和带归属方标签的共享素材库。
+- 提供 pywebview 运行入口和 PyInstaller 打包脚本，详见[桌面应用文档](docs/DESKTOP.md)。
+
+**H3 TTS 人物语音**
+
+- 新增 H3 TTS 工作流。输入为人物特征、说话方式和对白，可选 0 至 3 段人物音频参考，支持多人对话。
+- 工作流将画面潜变量固定为 32×32，仅解码音频并输出 FLAC，不保留 MP4 视频结果。
+- TTS 提示词优化会按人物定义、音频参考、说话者编号、对白顺序和声音环境生成六段式 H3 提示词。对白保留原始语言和原文。
+- 素材库中的已完成产物可以通过按钮或拖拽加入发送区，音频产物可继续作为 TTS 的人物音频参考。
 
 ### 2026-08-17
 
@@ -99,6 +117,7 @@
 | 8-step Ref2VA | Ref2VA FP8 Scaled 与 FL2VA 8-step LoRA v1.0 | 最多 9 张图片、3 段视频、3 段音频 | 固定 8 步，LoRA 强度 1.0，MP4 |
 | 数字人 | Ref2VA FP8 Scaled，音频驱动 | 1 张人物图片、1 段驱动音频 | 音频决定长度，固定 20 步，MP4 |
 | Music3 | Music3 DiT INT8 与文本编码器 INT8 | 音乐描述、可选分段歌词 | 1 至 300 秒，固定 30 步，FLAC |
+| H3 TTS | Ref2VA FP8 Scaled | 人物特征、对白、0 至 3 段音频参考 | 1 至 15 秒，4 至 50 步，32×32 音频-only，FLAC |
 | H3 NSFW | Ref2VA FP8 Scaled 与 NaughtyTimes LoRA | Ref2VA 参考素材 | 仅限无痕模式，MP4 |
 | RunningHub | 目标 AI 应用或 API 工作流定义的模型 | 工作流定义的文本、数值、枚举、开关及媒体字段 | 参数与输出类型由目标工作流决定 |
 
@@ -119,6 +138,12 @@ Music3 使用 ComfyUI 原生 `MiniMaxMusic3TextEncode`、`EmptyMiniMaxMusic3Late
 
 > [!NOTE]
 > `comfy-kitchen` 需要与服务器驱动支持的 CUDA Runtime 兼容。已验证服务器使用 NVIDIA 驱动 `575.51.03` 和 CUDA 12.9 本地构建。若日志出现 `CUDA driver version is insufficient for CUDA runtime version`，请检查 wheel 的 CUDA 版本和服务器驱动支持范围。
+
+### H3 TTS
+
+TTS 模式使用 Ref2VA FP8 工作流生成角色语音。每段上传的音频按 `<Audio 1>`、`<Audio 2>`、`<Audio 3>` 顺序作为说话者音色参考；提示词中的说话者使用 `(S1)`、`(S2)` 等编号，并在对白前标注原始语言，例如 `<d>[中文] 你好。</d>`。多人对话需要在文本中明确每句对白的说话者。
+
+服务向工作流写入 `width=32`、`height=32`，节点 `121` 使用 `VAEDecodeAudio` 解码音频，节点 `92` 使用 `SaveAudio` 保存 FLAC。工作流不包含视频解码、视频合成或视频保存节点。TTS 时长为 1 至 15 秒，采样步数为 4 至 50。
 
 ### RunningHub 通用工作流
 
@@ -214,6 +239,80 @@ bash scripts/install.sh
 
 完整安装参数、已有模型目录和公网部署要求见[云 GPU 部署文档](docs/DEPLOYMENT.md)。
 
+## 桌面应用
+
+桌面应用适用于 macOS 和 Windows。应用在本机启动 FastAPI 服务和 pywebview 窗口，默认连接远端 ComfyUI：
+
+```text
+http://100.77.224.102:8188
+```
+
+桌面版与云端服务的职责边界如下：
+
+| 组件 | 位置 | 内容 |
+|---|---|---|
+| 桌面应用 | 本机 | Web 界面、任务记录、上传素材、生成结果、节点配置、AI 配置和共享授权 |
+| SQLite | 本机 | ComfyUI 与 RunningHub 节点、AI API Key、本机名称、互联设备和持久授权令牌 |
+| ComfyUI | 远端 | 模型加载、GPU 推理和工作流执行 |
+| RunningHub | 远端 API | 可选的工作流或 AI 应用调用 |
+
+AI API Key 和节点密钥由本机 SQLite 管理，不写入 `localStorage`、`sessionStorage`、任务 JSON 或素材文件。桌面应用的普通 API 仅允许本机回环访问，互联配对与共享素材接口允许局域网和 Tailscale 地址访问。
+
+### 本地运行
+
+```bash
+python3 -m venv .venv-desktop
+. .venv-desktop/bin/activate
+pip install -r requirements-desktop.txt
+python scripts/run_desktop.py
+```
+
+可通过环境变量覆盖远端 ComfyUI 与本机端口：
+
+```bash
+H3_DEFAULT_COMFY_URL=http://192.168.1.20:8188 \
+H3_DEFAULT_COMFY_NAME="远端 ComfyUI" \
+H3_DESKTOP_PORT=38193 \
+python scripts/run_desktop.py
+```
+
+本机数据目录：
+
+| 系统 | 目录 |
+|---|---|
+| macOS | `~/Library/Application Support/MiniMax H3 Studio` |
+| Windows | `%LOCALAPPDATA%\\MiniMax H3 Studio` |
+
+### 打包应用
+
+在目标系统中安装依赖并构建。PyInstaller 需要在目标系统执行，不能将 macOS 构建产物作为 Windows 应用使用。
+
+```bash
+pip install -r requirements-desktop.txt
+python scripts/build_desktop.py
+```
+
+macOS 构建会生成以下文件：
+
+```text
+dist/MiniMaxH3Studio.app
+dist/MiniMaxH3Studio.dmg
+```
+
+DMG 包含 H3 Studio 应用图标和 `Applications` 快捷入口，可以将应用直接拖入该入口完成安装。Windows 输出 `dist/MiniMaxH3Studio/`，入口为 `MiniMaxH3Studio.exe`。完整的桌面运行、打包和互联说明见[桌面应用文档](docs/DESKTOP.md)。
+
+### 多端互联
+
+两个设备在同一局域网或 Tailscale 可达环境下，可以共享已完成的素材。共享素材带有归属方标签，授权令牌保存在双方本机 SQLite 中。
+
+1. 在两个设备中设置本机名称。
+2. 点击右上角密钥图标并开启互联。
+3. 将本机互联密钥中的地址和六位验证码提供给另一台设备。
+4. 另一台设备输入地址和验证码，建立互联授权。
+5. 在共享素材库中查看带归属方标签的素材，并下载或作为输入使用。
+
+验证码每 30 秒刷新一次，仅当前和上一周期有效。成功配对后不需要重复验证，任一设备可以主动撤销授权。
+
 ## 多节点调度
 
 页面标题区域的服务器图标用于管理 ComfyUI 与 RunningHub 推理节点。新增节点时选择节点类型并填写名称，节点 ID 自动生成。创建任务时可以选择 ComfyUI 自动调度、指定节点，或选择某个 RunningHub 工作流的自动调度入口。同一 RunningHub 资源 ID 对应的可用节点共享并发容量。
@@ -273,6 +372,22 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
   -F 'steps=30'
 ```
 
+### 创建 H3 TTS 任务
+
+TTS 支持 0 至 3 段音频参考。0 样本请求省略 `reference_manifest` 和 `references`，声音根据提示词中的人物特征生成：
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations \
+  -F 'prompt=(S1) 成年女性，语速平稳，语气克制。<d>[中文] 你好，今天开始录音。</d>' \
+  -F 'model_variant=ref2va-fp8' \
+  -F 'execution_mode=tts' \
+  -F 'comfy_node=auto' \
+  -F 'duration=5' \
+  -F 'steps=20'
+```
+
+需要参考音频时，设置与上传文件数量一致的 `reference_manifest`，并按说话者顺序提交 `references`。TTS 固定使用 32×32 音频工作流，输出 FLAC。
+
 ### 创建 RunningHub 任务
 
 字段键需要从 `GET /api/v1/comfy/nodes` 返回的 `runninghub_schema` 中读取：
@@ -331,9 +446,12 @@ curl -X PATCH http://127.0.0.1:8193/api/v1/comfy/settings \
 | `H3_API_KEY` | 空 | 可选 Bearer Token |
 | `H3_INCOGNITO_CODE` | 随机值 | 无痕模式授权码 |
 | `H3_MAX_UPLOAD_MB` | `512` | 单个上传文件大小上限 |
+| `H3_REMOTE_RECONNECT_SECONDS` | `120` | ComfyUI 或 RunningHub 查询中断后的单次重连窗口，单位为秒 |
 | `CUDA_VISIBLE_DEVICES` | `GPU_ID` | 安装脚本创建的默认 ComfyUI 节点使用的物理 GPU |
 
 节点地址和健康检查间隔通过页面或 API 修改，配置立即生效，无需重启 API 服务。
+
+ComfyUI 返回 `prompt_id` 或 RunningHub 返回 `taskId` 后，服务会立即将远端任务 checkpoint 写入任务文件。API 服务重启后会保留已有进度，固定使用原节点继续查询远端任务，并在完成后下载产物。升级前已经提交且任务文件中没有 checkpoint 的活动任务需要完成后再重启 API 服务。
 
 ## 验证
 
@@ -354,12 +472,14 @@ curl -fsS http://127.0.0.1:8193/health
 
 ```text
 app/                 FastAPI、任务队列、节点调度、ComfyUI 客户端和提示词规则
+desktop.py           pywebview 桌面入口与本机数据目录设置
+requirements-desktop.txt  桌面运行与 PyInstaller 依赖
 static/              中英文响应式网页
 workflows/           H3 与 Music3 ComfyUI API 工作流
-scripts/             安装、模型下载、校验和生成测试
+scripts/             安装、桌面运行、桌面打包、模型下载、校验和生成测试
 deploy/              systemd 用户服务模板
 docs/                API、部署、模型、工作流和运行维护文档
-tests/               服务契约测试
+tests/               服务契约和桌面功能契约测试
 model-manifest.json  模型来源、大小、SHA-256 和许可元数据
 ```
 

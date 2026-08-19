@@ -34,6 +34,51 @@ class RunningHubTransientResponseError(RuntimeError):
     pass
 
 
+class RemoteTaskUnavailableError(RuntimeError):
+    retry_remote_checkpoint = True
+
+
+class RemoteTaskNotFoundError(RuntimeError):
+    pass
+
+
+def _remote_checkpoint_id(
+    checkpoint: dict[str, Any] | None,
+    provider: str,
+    node_id: str,
+) -> str:
+    if not checkpoint:
+        return ""
+    remote_id = str(checkpoint.get("remote_id") or "")
+    if not remote_id:
+        raise RuntimeError("远端任务 checkpoint 缺少任务标识")
+    if str(checkpoint.get("provider") or "") != provider:
+        raise RuntimeError("远端任务 checkpoint 的服务类型与当前节点不一致")
+    if str(checkpoint.get("node_id") or "") != node_id:
+        raise RuntimeError("远端任务 checkpoint 的节点与当前节点不一致")
+    return remote_id
+
+
+def _write_remote_checkpoint(
+    callback: Callable[[dict[str, Any] | None], None] | None,
+    *,
+    provider: str,
+    node_id: str,
+    remote_id: str,
+    client_id: str = "",
+) -> None:
+    if callback:
+        checkpoint = {
+            "provider": provider,
+            "node_id": node_id,
+            "remote_id": remote_id,
+            "submitted_at": datetime.now(UTC).isoformat(),
+        }
+        if client_id:
+            checkpoint["client_id"] = client_id
+        callback(checkpoint)
+
+
 def _runninghub_number(value: Any) -> float | None:
     try:
         number = float(value)
@@ -95,15 +140,15 @@ class FakeEngine:
 
     def generate(self, job, progress, cancelled):
         progress(50, "测试模式")
-        if job["request"].get("model_variant") == "music3-int8":
+        if job["request"].get("model_variant") == "music3-int8" or job["request"].get("execution_mode") == "tts":
             import wave
 
             output = self.settings.outputs_dir / f"{job['id']}.wav"
             with wave.open(str(output), "wb") as target:
-                target.setnchannels(2)
+                target.setnchannels(1 if job["request"].get("execution_mode") == "tts" else 2)
                 target.setsampwidth(2)
                 target.setframerate(32000)
-                target.writeframes(b"\0\0\0\0" * 3200)
+                target.writeframes(b"\0\0" * 3200)
             return output
         source = Path(job["input_paths"][0])
         output = self.settings.outputs_dir / f"{job['id']}.jpg"
@@ -348,6 +393,7 @@ class ComfyUIH3Engine:
             ("ref2va-fp8", "turbo-lora"): self.settings.comfy_ref2va_turbo_workflow,
             ("ref2va-fp8", "h3-nsfw"): self.settings.comfy_nsfw_workflow,
             ("ref2va-fp8", "digital-human"): self.settings.comfy_digital_human_workflow,
+            ("ref2va-fp8", "tts"): self.settings.comfy_tts_workflow,
             ("music3-int8", "music3"): self.settings.comfy_music3_workflow,
         }
         try:
@@ -372,6 +418,8 @@ class ComfyUIH3Engine:
             required.add("141")
         if execution_mode == "digital-human":
             required.update({"137", "171", "172"})
+        if execution_mode == "tts":
+            required.update({"119", "120", "121", "127", "128"})
         missing = sorted(required.difference(workflow))
         if missing:
             raise ValueError(f"ComfyUI 工作流缺少节点：{', '.join(missing)}")
@@ -380,7 +428,7 @@ class ComfyUIH3Engine:
     def _prepare_inputs(self, job: dict[str, Any]) -> tuple[Path, list[str]]:
         paths = [Path(path) for path in job["input_paths"]]
         manifest = job["request"]["references"]
-        if not paths or len(paths) != len(manifest):
+        if len(paths) != len(manifest):
             raise ValueError("参考素材清单与文件不一致")
         task_dir = self.settings.comfy_input_dir / "minimax-h3-api" / job["id"]
         task_dir.mkdir(parents=True, exist_ok=True)
@@ -395,7 +443,7 @@ class ComfyUIH3Engine:
     def _upload_inputs(self, client, job: dict[str, Any]) -> list[str]:
         paths = [Path(path) for path in job["input_paths"]]
         manifest = job["request"]["references"]
-        if not paths or len(paths) != len(manifest):
+        if len(paths) != len(manifest):
             raise ValueError("参考素材清单与文件不一致")
         subfolder = f"minimax-h3-api/{job['id']}"
         uploaded = []
@@ -451,8 +499,8 @@ class ComfyUIH3Engine:
         conditioning = workflow["136"]["inputs"]
         conditioning.update(
             prompt=request["prompt"],
-            width=request["width"],
-            height=request["height"],
+            width=32 if execution_mode == "tts" else request["width"],
+            height=32 if execution_mode == "tts" else request["height"],
             length=request["num_frames"],
         )
         if execution_mode == "digital-human":
@@ -574,21 +622,84 @@ class ComfyUIH3Engine:
         response.raise_for_status()
         return response.json().get(prompt_id)
 
-    def _poll_until_finished(self, client, prompt_id, progress, cancelled):
+    def _poll_until_finished(
+        self,
+        client,
+        prompt_id,
+        progress,
+        cancelled,
+        audio_only=False,
+        recovering=False,
+    ):
+        import httpx
+
+        unavailable_since: float | None = None
         while True:
             if cancelled():
                 self._cancel_prompt(client, prompt_id)
                 raise InterruptedError("generation cancelled")
-            history = self._history(client, prompt_id)
-            if history:
-                return history
-            queue_data = client.get("/queue").json()
+            try:
+                history = self._history(client, prompt_id)
+                if history:
+                    return history
+                queue_response = client.get("/queue")
+                queue_response.raise_for_status()
+                queue_data = queue_response.json()
+                unavailable_since = None
+            except (httpx.HTTPError, ValueError) as exc:
+                unavailable_since = unavailable_since or time.monotonic()
+                if (
+                    time.monotonic() - unavailable_since
+                    >= max(1.0, self.settings.remote_reconnect_seconds)
+                ):
+                    raise RemoteTaskUnavailableError(
+                        f"ComfyUI 任务 {prompt_id} 暂时无法查询"
+                    ) from exc
+                progress(5, "ComfyUI 连接中断，正在重新连接原任务")
+                time.sleep(max(0.2, self.settings.comfy_poll_seconds))
+                continue
             running = self._prompt_ids(queue_data.get("queue_running", []))
-            stage = "ComfyUI FP8 工作流执行中" if prompt_id in running else "等待 ComfyUI 执行"
+            pending = self._prompt_ids(queue_data.get("queue_pending", []))
+            if recovering and prompt_id not in running and prompt_id not in pending:
+                try:
+                    history = self._history(client, prompt_id)
+                except (httpx.HTTPError, ValueError) as exc:
+                    unavailable_since = unavailable_since or time.monotonic()
+                    if (
+                        time.monotonic() - unavailable_since
+                        >= max(1.0, self.settings.remote_reconnect_seconds)
+                    ):
+                        raise RemoteTaskUnavailableError(
+                            f"ComfyUI 任务 {prompt_id} 暂时无法查询"
+                        ) from exc
+                    progress(5, "ComfyUI 连接中断，正在重新连接原任务")
+                    time.sleep(max(0.2, self.settings.comfy_poll_seconds))
+                    continue
+                if history:
+                    return history
+                raise RemoteTaskNotFoundError(
+                    f"ComfyUI 远端任务已失效，prompt_id={prompt_id}"
+                )
+            stage = (
+                "ComfyUI H3 TTS 工作流执行中"
+                if audio_only and prompt_id in running
+                else "ComfyUI FP8 工作流执行中"
+                if prompt_id in running
+                else "等待 ComfyUI 执行"
+            )
             progress(5, stage)
             time.sleep(self.settings.comfy_poll_seconds)
 
-    def _wait_for_finished(self, socket, client, prompt_id, progress, cancelled):
+    def _wait_for_finished(
+        self,
+        socket,
+        client,
+        prompt_id,
+        progress,
+        cancelled,
+        audio_only=False,
+        recovering=False,
+    ):
         while True:
             if cancelled():
                 self._cancel_prompt(client, prompt_id)
@@ -596,12 +707,64 @@ class ComfyUIH3Engine:
             try:
                 raw = socket.recv(timeout=self.settings.comfy_poll_seconds)
             except TimeoutError:
-                history = self._history(client, prompt_id)
+                try:
+                    history = self._history(client, prompt_id)
+                except Exception:
+                    return self._poll_until_finished(
+                        client,
+                        prompt_id,
+                        progress,
+                        cancelled,
+                        audio_only,
+                        recovering=recovering,
+                    )
                 if history:
                     return history
+                if recovering:
+                    try:
+                        queue_response = client.get("/queue")
+                        queue_response.raise_for_status()
+                        queue_data = queue_response.json()
+                    except Exception:
+                        return self._poll_until_finished(
+                            client,
+                            prompt_id,
+                            progress,
+                            cancelled,
+                            audio_only,
+                            recovering=True,
+                        )
+                    active = self._prompt_ids(queue_data.get("queue_running", []))
+                    active.update(
+                        self._prompt_ids(queue_data.get("queue_pending", []))
+                    )
+                    if prompt_id not in active:
+                        try:
+                            history = self._history(client, prompt_id)
+                        except Exception:
+                            return self._poll_until_finished(
+                                client,
+                                prompt_id,
+                                progress,
+                                cancelled,
+                                audio_only,
+                                recovering=True,
+                            )
+                        if history:
+                            return history
+                        raise RemoteTaskNotFoundError(
+                            f"ComfyUI 远端任务已失效，prompt_id={prompt_id}"
+                        )
                 continue
             except Exception:
-                return self._poll_until_finished(client, prompt_id, progress, cancelled)
+                return self._poll_until_finished(
+                    client,
+                    prompt_id,
+                    progress,
+                    cancelled,
+                    audio_only,
+                    recovering=recovering,
+                )
             if isinstance(raw, bytes):
                 continue
             try:
@@ -613,11 +776,13 @@ class ComfyUIH3Engine:
             if data.get("prompt_id") != prompt_id:
                 continue
             if event_type == "execution_start":
-                progress(5, "ComfyUI FP8 工作流开始执行")
+                progress(5, "ComfyUI H3 TTS 工作流开始执行" if audio_only else "ComfyUI FP8 工作流开始执行")
             elif event_type == "executing":
                 node = str(data.get("node"))
                 if node in self.NODE_STAGES:
                     percent, stage = self.NODE_STAGES[node]
+                    if audio_only and node == "92":
+                        stage = "保存音频产物"
                     progress(percent, stage)
                 elif node.isdigit() and int(node) >= 200:
                     progress(10, "加载 Ref2VA 参考素材")
@@ -629,7 +794,7 @@ class ComfyUIH3Engine:
                 value = int(data.get("value") or 0)
                 total = max(1, int(data.get("max") or 1))
                 percent = 15 + round(min(value, total) / total * 73)
-                progress(percent, f"联合音视频采样 {value}/{total}")
+                progress(percent, f"TTS 音频采样 {value}/{total}" if audio_only else f"联合音视频采样 {value}/{total}")
             elif event_type == "progress" and str(data.get("node")) == "9":
                 value = int(data.get("value") or 0)
                 total = max(1, int(data.get("max") or 1))
@@ -658,8 +823,8 @@ class ComfyUIH3Engine:
         for items in output_items.values():
             if isinstance(items, list):
                 candidates.extend(item for item in items if isinstance(item, dict))
-        music3 = self._variant(job) == "music3-int8"
-        expected_suffix = ".flac" if music3 else ".mp4"
+        audio_only = self._variant(job) == "music3-int8" or self._execution_mode(job) == "tts"
+        expected_suffix = ".flac" if audio_only else ".mp4"
         result_item = next(
             (
                 item
@@ -669,7 +834,7 @@ class ComfyUIH3Engine:
             None,
         )
         if not result_item:
-            media_name = "FLAC" if music3 else "MP4"
+            media_name = "FLAC" if audio_only else "MP4"
             raise RuntimeError(f"ComfyUI 历史记录中没有找到节点 92 的 {media_name} 产物")
         output = self.settings.outputs_dir / f"{job['id']}{expected_suffix}"
         if client is None:
@@ -704,18 +869,29 @@ class ComfyUIH3Engine:
         )
         return output
 
-    def generate(self, job, progress, cancelled):
+    def generate(
+        self,
+        job,
+        progress,
+        cancelled,
+        checkpoint=None,
+        checkpoint_callback=None,
+    ):
         import httpx
         from websockets.sync.client import connect
 
-        prompt_id = None
-        client_id = f"minimax-h3-api-{uuid.uuid4().hex}"
+        prompt_id = _remote_checkpoint_id(
+            checkpoint, "comfyui", str(self.node.id)
+        )
+        client_id = str((checkpoint or {}).get("client_id") or "")
+        client_id = client_id or f"minimax-h3-api-{uuid.uuid4().hex}"
         websocket_url = self.comfy_url.replace("http://", "ws://", 1).replace(
             "https://", "wss://", 1
         )
         try:
             music3 = self._variant(job) == "music3-int8"
-            progress(2, "准备 ComfyUI Music3 工作流" if music3 else "准备 ComfyUI FP8 工作流")
+            tts = self._execution_mode(job) == "tts"
+            progress(2, "准备 ComfyUI Music3 工作流" if music3 else "准备 ComfyUI H3 TTS 工作流" if tts else "准备 ComfyUI FP8 工作流")
             timeout = httpx.Timeout(30, connect=10)
             with httpx.Client(
                 base_url=self.comfy_url,
@@ -723,6 +899,49 @@ class ComfyUIH3Engine:
                 timeout=timeout,
                 trust_env=False,
             ) as client:
+                if prompt_id:
+                    progress(5, f"正在重新连接 ComfyUI 任务 {prompt_id[:8]}")
+                    if (checkpoint or {}).get("client_id"):
+                        try:
+                            with connect(
+                                f"{websocket_url}/ws?clientId={client_id}",
+                                additional_headers=self.api_headers or None,
+                                open_timeout=10,
+                                max_size=None,
+                            ) as socket:
+                                history = self._wait_for_finished(
+                                    socket,
+                                    client,
+                                    prompt_id,
+                                    progress,
+                                    cancelled,
+                                    tts,
+                                    recovering=True,
+                                )
+                        except (RemoteTaskNotFoundError, InterruptedError):
+                            raise
+                        except Exception:
+                            history = self._poll_until_finished(
+                                client,
+                                prompt_id,
+                                progress,
+                                cancelled,
+                                tts,
+                                recovering=True,
+                            )
+                    else:
+                        history = self._poll_until_finished(
+                            client,
+                            prompt_id,
+                            progress,
+                            cancelled,
+                            tts,
+                            recovering=True,
+                        )
+                    progress(98, "回传 ComfyUI 生成产物")
+                    output = self._copy_result(job, history, client)
+                    progress(99, "整理交付文件")
+                    return output
                 stats_response = client.get("/system_stats")
                 stats_response.raise_for_status()
                 input_names = [] if music3 else self._upload_inputs(client, job)
@@ -742,9 +961,16 @@ class ComfyUIH3Engine:
                     prompt_id = result.get("prompt_id")
                     if not prompt_id:
                         raise RuntimeError(f"ComfyUI 未返回 prompt_id：{result}")
+                    _write_remote_checkpoint(
+                        checkpoint_callback,
+                        provider="comfyui",
+                        node_id=str(self.node.id),
+                        remote_id=str(prompt_id),
+                        client_id=client_id,
+                    )
                     progress(4, f"已提交 ComfyUI 任务 {prompt_id[:8]}")
                     history = self._wait_for_finished(
-                        socket, client, prompt_id, progress, cancelled
+                        socket, client, prompt_id, progress, cancelled, tts
                     )
                 if cancelled():
                     self._cancel_prompt(client, prompt_id)
@@ -827,7 +1053,9 @@ class RunningHubH3Engine:
                 if attempt == 2:
                     break
                 time.sleep(2**attempt)
-        raise RuntimeError(f"RunningHub {action}请求失败：{last_error}") from last_error
+        raise RunningHubTransientResponseError(
+            f"RunningHub {action}请求失败：{last_error}"
+        ) from last_error
 
     def _upload_inputs(self, client, job: dict[str, Any]) -> list[str]:
         import httpx
@@ -937,17 +1165,46 @@ class RunningHubH3Engine:
     def _poll(self, client, task_id: str, progress, cancelled) -> dict[str, Any]:
         deadline = time.monotonic() + self.MAX_POLL_SECONDS
         last_status = ""
+        unavailable_since: float | None = None
         while time.monotonic() < deadline:
             if cancelled():
                 self._cancel_task(client, task_id)
                 raise InterruptedError("generation cancelled")
-            payload = self._request_json(
-                client,
-                "POST",
-                "/openapi/v2/query",
-                json_data={"taskId": task_id},
-                action="查询任务",
-            )
+            try:
+                payload = self._request_json(
+                    client,
+                    "POST",
+                    "/openapi/v2/query",
+                    json_data={"taskId": task_id},
+                    action="查询任务",
+                )
+                unavailable_since = None
+            except RunningHubTransientResponseError as exc:
+                unavailable_since = unavailable_since or time.monotonic()
+                if (
+                    time.monotonic() - unavailable_since
+                    >= max(1.0, self.settings.remote_reconnect_seconds)
+                ):
+                    raise RemoteTaskUnavailableError(
+                        f"RunningHub 任务 {task_id} 暂时无法查询"
+                    ) from exc
+                progress(5, "RunningHub 连接中断，正在重新连接原任务")
+                time.sleep(max(0.2, self.settings.comfy_poll_seconds))
+                continue
+            except RuntimeError as exc:
+                message = str(exc).casefold()
+                missing_markers = (
+                    "task_not_found",
+                    "task not found",
+                    "task_not_exist",
+                    "task does not exist",
+                    "任务不存在",
+                )
+                if any(marker in message for marker in missing_markers):
+                    raise RemoteTaskNotFoundError(
+                        f"RunningHub 远端任务已失效，taskId={task_id}"
+                    ) from exc
+                raise
             data = payload.get("data")
             if not isinstance(data, dict):
                 data = payload
@@ -975,7 +1232,9 @@ class RunningHubH3Engine:
                 message = data.get("errorMessage") or data.get("promptTips") or status
                 raise RuntimeError(f"RunningHub 任务{status}：{str(message)[:500]}")
             time.sleep(max(2.0, self.settings.comfy_poll_seconds))
-        raise TimeoutError(f"RunningHub 任务轮询超时，taskId={task_id}")
+        raise RemoteTaskUnavailableError(
+            f"RunningHub 任务仍未完成，将继续查询原任务，taskId={task_id}"
+        )
 
     def _download_result(self, job: dict[str, Any], results: list[dict[str, Any]]) -> Path:
         import httpx
@@ -1037,13 +1296,23 @@ class RunningHubH3Engine:
         )
         return output
 
-    def generate(self, job, progress, cancelled):
+    def generate(
+        self,
+        job,
+        progress,
+        cancelled,
+        checkpoint=None,
+        checkpoint_callback=None,
+    ):
         import httpx
 
         progress(2, "准备 RunningHub AI 应用" if self.is_ai_app else "准备 RunningHub 工作流")
         self.last_billing = None
         self.last_output_media_type = output_media_type(
             job.get("request", {}).get("runninghub_schema") or {}
+        )
+        restored_task_id = _remote_checkpoint_id(
+            checkpoint, "runninghub", str(self.node.id)
         )
         timeout = httpx.Timeout(60, connect=10)
         with httpx.Client(
@@ -1054,68 +1323,81 @@ class RunningHubH3Engine:
             trust_env=False,
         ) as client:
             balance_before: dict[str, Any] | None = None
-            task_id = ""
+            task_id = restored_task_id
             usage: dict[str, Any] = {}
             try:
                 try:
                     balance_before = self._account_status(client)
                 except Exception:
                     logger.exception("RunningHub 调用前账户余额读取失败")
-                input_names = self._upload_inputs(client, job)
-                node_info_list = self._node_info_list(job, input_names)
-                schema = (
-                    job.get("request", {}).get("runninghub_schema")
-                    or self.node.runninghub_schema
-                    or {}
-                )
-                if self.is_ai_app:
-                    submit_path = str(
-                        schema.get("submit_path") or "/task/openapi/ai-app/run"
-                    )
-                    if submit_path.startswith("/openapi/v2/run/ai-app/"):
-                        submit_body = {
-                            "nodeInfoList": node_info_list,
-                            "instanceType": "default",
-                            "usePersonalQueue": False,
-                        }
-                    else:
-                        submit_body = {
-                            "apiKey": self.node.api_key,
-                            "webappId": self.node.workflow_id,
-                            "nodeInfoList": node_info_list,
-                            "instanceType": "default",
-                        }
-                    payload = self._request_json(
-                        client,
-                        "POST",
-                        submit_path,
-                        json_data=submit_body,
-                        action="提交 AI 应用任务",
-                    )
+                if task_id:
+                    progress(5, f"正在重新连接 RunningHub 任务 {task_id[:8]}")
                 else:
-                    payload = self._request_json(
-                        client,
-                        "POST",
-                        "/task/openapi/create",
-                        json_data={
-                            "apiKey": self.node.api_key,
-                            "workflowId": self.node.workflow_id,
-                            "nodeInfoList": node_info_list,
-                        },
-                        action="提交任务",
+                    input_names = self._upload_inputs(client, job)
+                    node_info_list = self._node_info_list(job, input_names)
+                    schema = (
+                        job.get("request", {}).get("runninghub_schema")
+                        or self.node.runninghub_schema
+                        or {}
                     )
-                data = payload.get("data")
-                if not isinstance(data, dict):
-                    data = payload
-                task_id = str(data.get("taskId") or payload.get("taskId") or "")
-                if not task_id:
-                    raise RuntimeError("RunningHub 提交响应缺少 taskId")
-                if str(data.get("taskStatus") or "").upper() == "FAILED":
-                    raise RuntimeError(
-                        "RunningHub 工作流校验失败："
-                        + str(data.get("promptTips") or payload.get("msg") or "未知错误")[:500]
+                    if self.is_ai_app:
+                        submit_path = str(
+                            schema.get("submit_path") or "/task/openapi/ai-app/run"
+                        )
+                        if submit_path.startswith("/openapi/v2/run/ai-app/"):
+                            submit_body = {
+                                "nodeInfoList": node_info_list,
+                                "instanceType": "default",
+                                "usePersonalQueue": False,
+                            }
+                        else:
+                            submit_body = {
+                                "apiKey": self.node.api_key,
+                                "webappId": self.node.workflow_id,
+                                "nodeInfoList": node_info_list,
+                                "instanceType": "default",
+                            }
+                        payload = self._request_json(
+                            client,
+                            "POST",
+                            submit_path,
+                            json_data=submit_body,
+                            action="提交 AI 应用任务",
+                        )
+                    else:
+                        payload = self._request_json(
+                            client,
+                            "POST",
+                            "/task/openapi/create",
+                            json_data={
+                                "apiKey": self.node.api_key,
+                                "workflowId": self.node.workflow_id,
+                                "nodeInfoList": node_info_list,
+                            },
+                            action="提交任务",
+                        )
+                    data = payload.get("data")
+                    if not isinstance(data, dict):
+                        data = payload
+                    task_id = str(data.get("taskId") or payload.get("taskId") or "")
+                    if not task_id:
+                        raise RuntimeError("RunningHub 提交响应缺少 taskId")
+                    if str(data.get("taskStatus") or "").upper() == "FAILED":
+                        raise RuntimeError(
+                            "RunningHub 工作流校验失败："
+                            + str(
+                                data.get("promptTips")
+                                or payload.get("msg")
+                                or "未知错误"
+                            )[:500]
+                        )
+                    _write_remote_checkpoint(
+                        checkpoint_callback,
+                        provider="runninghub",
+                        node_id=str(self.node.id),
+                        remote_id=task_id,
                     )
-                progress(4, f"已提交 RunningHub 任务 {task_id[:8]}")
+                    progress(4, f"已提交 RunningHub 任务 {task_id[:8]}")
                 final_result = self._poll(client, task_id, progress, cancelled)
                 results = final_result["results"]
                 usage = (

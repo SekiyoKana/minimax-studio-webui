@@ -13,6 +13,7 @@ from fastapi import HTTPException
 
 from app.engine import (
     ComfyUIH3Engine,
+    RemoteTaskUnavailableError,
     RunningHubH3Engine,
     create_engine,
     probe_node,
@@ -26,6 +27,7 @@ from app.music_prompts import MUSIC3_ARRANGEMENT_SYSTEM_PROMPT, MUSIC3_LYRICS_SY
 from app.nodes import ComfyNodeConfig, NodeRegistry, parse_runninghub_resource_url
 from app.prompts import FL2VA_SYSTEM_PROMPT
 from app.ref2va_prompts import REF2VA_SYSTEM_PROMPT
+from app.tts_prompts import TTS_SYSTEM_PROMPT
 from app.runninghub import assign_media_fields, build_ai_app_schema, build_workflow_schema, normalize_parameters
 from app.settings import Settings
 
@@ -34,6 +36,357 @@ RUNNINGHUB_AI_APP_ID = "2086401261143273474"
 
 
 class ContractTests(unittest.TestCase):
+    def test_active_remote_checkpoint_is_restored_without_progress_reset(self):
+        with TemporaryDirectory() as temp:
+            jobs_dir = Path(temp) / "jobs"
+            jobs_dir.mkdir()
+            checkpoint = {
+                "provider": "comfyui",
+                "node_id": "gpu-2",
+                "remote_id": "prompt-123",
+                "submitted_at": "2026-08-19T00:00:00+00:00",
+            }
+            (jobs_dir / "resume.json").write_text(
+                json.dumps(
+                    {
+                        "id": "resume",
+                        "status": "running",
+                        "stage": "联合音视频采样 4/10",
+                        "progress": 47,
+                        "created_at": "2026-08-19T00:00:00+00:00",
+                        "request": {"comfy_node": "auto"},
+                        "remote_checkpoint": checkpoint,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            restored = JobStore(jobs_dir).get("resume")
+
+            self.assertEqual(restored["status"], "queued")
+            self.assertEqual(restored["progress"], 47)
+            self.assertEqual(restored["remote_checkpoint"], checkpoint)
+            self.assertIn("重新连接远端任务", restored["stage"])
+
+    def test_legacy_active_job_without_checkpoint_keeps_existing_restore_behavior(self):
+        with TemporaryDirectory() as temp:
+            jobs_dir = Path(temp) / "jobs"
+            jobs_dir.mkdir()
+            (jobs_dir / "legacy.json").write_text(
+                json.dumps(
+                    {
+                        "id": "legacy",
+                        "status": "running",
+                        "stage": "旧任务执行中",
+                        "progress": 47,
+                        "created_at": "2026-08-19T00:00:00+00:00",
+                        "request": {"comfy_node": "auto"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            restored = JobStore(jobs_dir).get("legacy")
+
+            self.assertEqual(restored["status"], "queued")
+            self.assertEqual(restored["progress"], 0)
+            self.assertNotIn("remote_checkpoint", restored)
+
+    def test_job_manager_resumes_checkpoint_on_original_node_and_clears_it(self):
+        class ResumeEngine:
+            calls = []
+
+            def __init__(self, node_id, output):
+                self.node_id = node_id
+                self.output = output
+
+            def generate(
+                self,
+                job,
+                progress,
+                cancelled,
+                checkpoint=None,
+                checkpoint_callback=None,
+            ):
+                self.calls.append((self.node_id, checkpoint))
+                progress(75, "恢复查询")
+                return self.output
+
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            jobs_dir = root / "jobs"
+            jobs_dir.mkdir()
+            output = root / "result.mp4"
+            output.write_bytes(b"video")
+            store = JobStore(jobs_dir)
+            checkpoint = {
+                "provider": "comfyui",
+                "node_id": "gpu-b",
+                "remote_id": "prompt-456",
+                "submitted_at": "2026-08-19T00:00:00+00:00",
+            }
+            store.create(
+                {
+                    "id": "resume-node",
+                    "status": "queued",
+                    "stage": "等待恢复",
+                    "progress": 52,
+                    "created_at": "2026-08-19T00:00:00+00:00",
+                    "request": {"comfy_node": "auto"},
+                    "input_paths": [],
+                    "remote_checkpoint": checkpoint,
+                }
+            )
+            nodes = (
+                ComfyNodeConfig("gpu-a", "GPU A", "http://gpu-a:8188"),
+                ComfyNodeConfig("gpu-b", "GPU B", "http://gpu-b:8188"),
+            )
+            ResumeEngine.calls = []
+            manager = JobManager(
+                store,
+                lambda node: ResumeEngine(node.id, output),
+                nodes=nodes,
+            )
+            manager.start()
+            try:
+                for _ in range(100):
+                    if store.get("resume-node")["status"] == "completed":
+                        break
+                    import time
+
+                    time.sleep(0.02)
+                completed = store.get("resume-node")
+                self.assertEqual(completed["status"], "completed")
+                self.assertIsNone(completed["remote_checkpoint"])
+                self.assertEqual(ResumeEngine.calls, [("gpu-b", checkpoint)])
+            finally:
+                manager.stop()
+
+    def test_transient_remote_failure_requeues_existing_checkpoint(self):
+        class RetryEngine:
+            calls = 0
+
+            def __init__(self, output):
+                self.output = output
+
+            def generate(
+                self,
+                job,
+                progress,
+                cancelled,
+                checkpoint=None,
+                checkpoint_callback=None,
+            ):
+                self.__class__.calls += 1
+                if self.calls == 1:
+                    raise RemoteTaskUnavailableError("temporary query failure")
+                return self.output
+
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            jobs_dir = root / "jobs"
+            jobs_dir.mkdir()
+            output = root / "result.mp4"
+            output.write_bytes(b"video")
+            store = JobStore(jobs_dir)
+            checkpoint = {
+                "provider": "comfyui",
+                "node_id": "gpu-a",
+                "remote_id": "prompt-retry",
+            }
+            store.create(
+                {
+                    "id": "retry-remote",
+                    "status": "queued",
+                    "stage": "等待恢复",
+                    "progress": 63,
+                    "created_at": "2026-08-19T00:00:00+00:00",
+                    "request": {"comfy_node": "gpu-a"},
+                    "input_paths": [],
+                    "remote_checkpoint": checkpoint,
+                }
+            )
+            RetryEngine.calls = 0
+            manager = JobManager(
+                store,
+                lambda node: RetryEngine(output),
+                nodes=(
+                    ComfyNodeConfig(
+                        "gpu-a", "GPU A", "http://gpu-a:8188"
+                    ),
+                ),
+            )
+            manager.start()
+            try:
+                for _ in range(100):
+                    if store.get("retry-remote")["status"] == "completed":
+                        break
+                    import time
+
+                    time.sleep(0.02)
+                completed = store.get("retry-remote")
+                self.assertEqual(completed["status"], "completed")
+                self.assertEqual(RetryEngine.calls, 2)
+                self.assertIsNone(completed["remote_checkpoint"])
+            finally:
+                manager.stop()
+
+    @patch("app.engine.ComfyUIH3Engine._release_vram")
+    @patch("websockets.sync.client.connect")
+    @patch("httpx.Client")
+    def test_comfyui_submission_persists_prompt_checkpoint(
+        self, client_class, connect, _release_vram
+    ):
+        settings = Settings()
+        node = ComfyNodeConfig("gpu-1", "GPU 1", "http://gpu-1:8188")
+        engine = ComfyUIH3Engine(settings, node)
+        client = client_class.return_value.__enter__.return_value
+        stats = MagicMock()
+        stats.json.return_value = {"devices": [{"type": "cuda", "index": 0}]}
+        submit = MagicMock()
+        submit.json.return_value = {"prompt_id": "prompt-checkpoint"}
+        client.get.return_value = stats
+        client.post.return_value = submit
+        connect.return_value.__enter__.return_value = MagicMock()
+        checkpoints = []
+        history = {
+            "status": {"completed": True, "status_str": "success"},
+            "outputs": {},
+        }
+        with (
+            patch.object(engine, "_upload_inputs", return_value=["input.png"]),
+            patch.object(engine, "_build_workflow", return_value={"1": {}}),
+            patch.object(engine, "_wait_for_finished", return_value=history),
+            patch.object(engine, "_copy_result", return_value=Path("result.mp4")),
+        ):
+            engine.generate(
+                {"id": "job", "request": {}, "input_paths": []},
+                lambda *_: None,
+                lambda: False,
+                checkpoint_callback=checkpoints.append,
+            )
+
+        self.assertEqual(checkpoints[0]["provider"], "comfyui")
+        self.assertEqual(checkpoints[0]["node_id"], "gpu-1")
+        self.assertEqual(checkpoints[0]["remote_id"], "prompt-checkpoint")
+        self.assertTrue(checkpoints[0]["client_id"].startswith("minimax-h3-api-"))
+
+    @patch("app.engine.ComfyUIH3Engine._release_vram")
+    @patch("httpx.Client")
+    def test_comfyui_recovery_queries_original_prompt_without_submission(
+        self, client_class, _release_vram
+    ):
+        engine = ComfyUIH3Engine(
+            Settings(),
+            ComfyNodeConfig("gpu-1", "GPU 1", "http://gpu-1:8188"),
+        )
+        client = client_class.return_value.__enter__.return_value
+        history = {
+            "status": {"completed": True, "status_str": "success"},
+            "outputs": {},
+        }
+        checkpoint = {
+            "provider": "comfyui",
+            "node_id": "gpu-1",
+            "remote_id": "prompt-existing",
+        }
+        with (
+            patch.object(engine, "_poll_until_finished", return_value=history) as poll,
+            patch.object(engine, "_upload_inputs") as upload,
+            patch.object(engine, "_copy_result", return_value=Path("result.mp4")),
+        ):
+            engine.generate(
+                {"id": "job", "request": {}, "input_paths": []},
+                lambda *_: None,
+                lambda: False,
+                checkpoint=checkpoint,
+            )
+
+        upload.assert_not_called()
+        client.post.assert_not_called()
+        self.assertTrue(poll.call_args.kwargs["recovering"])
+
+    @patch("httpx.Client")
+    def test_runninghub_submission_persists_task_checkpoint(self, client_class):
+        node = ComfyNodeConfig(
+            "rh-1",
+            "RunningHub",
+            "https://www.runninghub.ai",
+            "runninghub",
+            "secret",
+            "workflow-1",
+            1,
+            runninghub_schema={"fields": [], "output_types": ["video"]},
+        )
+        engine = RunningHubH3Engine(Settings(), node)
+        checkpoints = []
+        with (
+            patch.object(engine, "_account_status", return_value={}),
+            patch.object(engine, "_upload_inputs", return_value=[]),
+            patch.object(engine, "_node_info_list", return_value=[]),
+            patch.object(
+                engine,
+                "_request_json",
+                return_value={"data": {"taskId": "task-checkpoint"}},
+            ),
+            patch.object(
+                engine,
+                "_poll",
+                return_value={"results": [{"url": "https://example.com/result.mp4"}]},
+            ),
+            patch.object(engine, "_download_result", return_value=Path("result.mp4")),
+        ):
+            engine.generate(
+                {"id": "job", "request": {"runninghub_schema": {"fields": []}}},
+                lambda *_: None,
+                lambda: False,
+                checkpoint_callback=checkpoints.append,
+            )
+
+        self.assertEqual(checkpoints[0]["provider"], "runninghub")
+        self.assertEqual(checkpoints[0]["node_id"], "rh-1")
+        self.assertEqual(checkpoints[0]["remote_id"], "task-checkpoint")
+
+    @patch("httpx.Client")
+    def test_runninghub_recovery_skips_upload_and_submission(self, client_class):
+        node = ComfyNodeConfig(
+            "rh-1",
+            "RunningHub",
+            "https://www.runninghub.ai",
+            "runninghub",
+            "secret",
+            "workflow-1",
+            1,
+            runninghub_schema={"fields": [], "output_types": ["video"]},
+        )
+        engine = RunningHubH3Engine(Settings(), node)
+        checkpoint = {
+            "provider": "runninghub",
+            "node_id": "rh-1",
+            "remote_id": "task-existing",
+        }
+        with (
+            patch.object(engine, "_account_status", return_value={}),
+            patch.object(engine, "_upload_inputs") as upload,
+            patch.object(engine, "_request_json") as request_json,
+            patch.object(
+                engine,
+                "_poll",
+                return_value={"results": [{"url": "https://example.com/result.mp4"}]},
+            ) as poll,
+            patch.object(engine, "_download_result", return_value=Path("result.mp4")),
+        ):
+            engine.generate(
+                {"id": "job", "request": {"runninghub_schema": {"fields": []}}},
+                lambda *_: None,
+                lambda: False,
+                checkpoint=checkpoint,
+            )
+
+        upload.assert_not_called()
+        request_json.assert_not_called()
+        self.assertEqual(poll.call_args.args[1], "task-existing")
+
     def test_desktop_chat_layout_keeps_composer_inside_viewport(self):
         project_root = Path(__file__).resolve().parents[1]
         styles = (project_root / "static" / "styles.css").read_text(encoding="utf-8")
@@ -44,7 +397,7 @@ class ContractTests(unittest.TestCase):
             styles,
             r"\.conversation-column \{[^}]*height: 100%;[^}]*overflow: hidden;",
         )
-        self.assertIn('/assets/styles.css?v=37', index)
+        self.assertIn('/assets/styles.css?v=42', index)
 
     def test_settings_popover_is_outside_horizontal_scroll_container(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -66,6 +419,23 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(registry.get("gpu-2")["url"], "http://10.0.0.12:8188")
             self.assertEqual(registry.set_health_interval(90), 90)
             self.assertEqual(registry.health_interval(), 90)
+
+    def test_all_inference_nodes_can_be_deleted_without_recreation(self):
+        with TemporaryDirectory() as temp:
+            database = Path(temp) / "config.db"
+            registry = NodeRegistry(database)
+            self.assertTrue(registry.delete("local"))
+            self.assertEqual(registry.configs(), ())
+            reopened = NodeRegistry(database)
+            self.assertEqual(reopened.configs(), ())
+
+            jobs_dir = Path(temp) / "jobs"
+            jobs_dir.mkdir()
+            manager = JobManager(JobStore(jobs_dir), lambda node: None, nodes=())
+            self.assertEqual(manager.node_ids, set())
+            self.assertEqual(manager.nodes_public(), [])
+            manager.reconfigure([], 60)
+            self.assertEqual(manager.node_ids, set())
 
     def test_runninghub_nodes_store_secrets_privately_and_allow_shared_base_urls(self):
         with TemporaryDirectory() as temp:
@@ -494,6 +864,7 @@ class ContractTests(unittest.TestCase):
         self.assertIn('id="nodeMaxConcurrency"', index)
         self.assertIn('id="runningHubWorkflowControl"', index)
         self.assertIn('api("/api/v1/comfy/nodes")', app_js)
+        self.assertIn("当前没有可用推理节点，请添加推理节点", main)
         self.assertIn('node_id = f"node-{secrets.token_hex(4)}"', main)
         self.assertIn('function syncNodeProviderFields()', app_js)
         self.assertIn('running_count', app_js)
@@ -532,7 +903,7 @@ class ContractTests(unittest.TestCase):
         self.assertIn('function openAssetDetail(jobId)', app_js)
         self.assertIn('async function backfillJob(jobId)', app_js)
         self.assertIn('download.href = downloadable ? job.result_url : "#"', app_js)
-        self.assertIn('music3 ? t("downloadAudio") : t("downloadVideo")', app_js)
+        self.assertIn('function mediaDownloadLabel(mediaType)', app_js)
         self.assertIn('data-job-action="regenerate"', app_js)
         self.assertIn('window.confirm(t("regenerateConfirm"))', app_js)
         self.assertIn('async function regenerateJob(jobId)', app_js)
@@ -951,7 +1322,7 @@ class ContractTests(unittest.TestCase):
         environment = (project_root / ".env.example").read_text(encoding="utf-8")
 
         self.assertIn('option value="digital-human">数字人 · 音频驱动', index)
-        self.assertIn('/assets/app.js?v=43', index)
+        self.assertIn('/assets/app.js?v=54', index)
         self.assertIn('return { image: 1, video: 0, audio: 1 };', app_js)
         self.assertIn('el("duration").disabled = digitalHuman;', app_js)
         self.assertIn('durationControl.classList.toggle("digital-human", digitalHuman);', app_js)
@@ -960,6 +1331,75 @@ class ContractTests(unittest.TestCase):
         self.assertIn('el("durationHint").hidden = !digitalHuman;', app_js)
         self.assertIn('music3 || accelerated || digitalHuman', app_js)
         self.assertIn("H3_COMFY_DIGITAL_HUMAN_WORKFLOW", environment)
+
+    def test_tts_frontend_and_prompt_contract(self):
+        project_root = Path(__file__).resolve().parents[1]
+        index = (project_root / "static" / "index.html").read_text(encoding="utf-8")
+        app_js = (project_root / "static" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('option value="tts">H3 TTS · 人物语音', index)
+        self.assertIn('setText(\'#executionMode option[value="tts"]\', "H3 TTS · character voice")', app_js)
+        self.assertIn('const [width, height] = isTTS() ? [32, 32] : getDimensions();', app_js)
+        self.assertIn('return { image: 0, video: 0, audio: 3 };', app_js)
+        self.assertIn('data-asset-input', app_js)
+        self.assertIn('data-job-action="input"', app_js)
+        self.assertIn('application/x-h3-asset-job', app_js)
+        self.assertIn('id="reuseOutputAssetDetail"', index)
+        for heading in (
+            "subject_definitions:",
+            "summary:",
+            "retention_analysis:",
+            "detailed_description:",
+            "overall_soundscape:",
+            "non_diegetic_music:",
+        ):
+            self.assertIn(heading, TTS_SYSTEM_PROMPT)
+        self.assertIn("<Audio N>", TTS_SYSTEM_PROMPT)
+        self.assertIn("<d>[语言]", TTS_SYSTEM_PROMPT)
+
+    def test_tts_workflow_is_audio_only(self):
+        engine = ComfyUIH3Engine(Settings())
+        workflow = engine._load_workflow("ref2va-fp8", "tts")
+        self.assertEqual(workflow["92"]["class_type"], "SaveAudio")
+        self.assertEqual(workflow["92"]["inputs"]["audio"], ["121", 0])
+        self.assertEqual(workflow["121"]["class_type"], "VAEDecodeAudio")
+        self.assertNotIn("122", workflow)
+        self.assertNotIn("130", workflow)
+        job = {
+            "id": "tts-test",
+            "request": {
+                "model_variant": "ref2va-fp8",
+                "execution_mode": "tts",
+                "prompt": "A warm adult voice speaks a short dialogue.",
+                "width": 864,
+                "height": 480,
+                "num_frames": 124,
+                "steps": 20,
+                "seed": 789,
+                "references": [{"type": "audio"}, {"type": "audio"}],
+            },
+        }
+        built = engine._build_workflow(
+            job,
+            [
+                "minimax-h3-api/tts-test/01_audio.wav",
+                "minimax-h3-api/tts-test/02_audio.wav",
+            ],
+        )
+        self.assertEqual(built["136"]["inputs"]["width"], 32)
+        self.assertEqual(built["136"]["inputs"]["height"], 32)
+        self.assertEqual(built["136"]["inputs"]["ref_audios.ref_audio_0"], ["200", 0])
+        self.assertEqual(built["136"]["inputs"]["ref_audios.ref_audio_1"], ["201", 0])
+        zero_sample_job = {
+            "id": "tts-zero-sample-test",
+            "request": {
+                **job["request"],
+                "prompt": "Generate an adult female voice from the described traits.",
+                "references": [],
+            },
+        }
+        zero_sample = engine._build_workflow(zero_sample_job, [])
+        self.assertEqual(zero_sample["136"]["inputs"]["width"], 32)
+        self.assertFalse(any(key.startswith("ref_audios.") for key in zero_sample["136"]["inputs"]))
 
     def test_music3_frontend_contract(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -979,7 +1419,7 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn('await Promise.all([loadAssets(), refreshConversation(), checkHealth()])', app_js)
         self.assertIn('id="writeLyrics"', index)
         self.assertIn('id="optimizePromptLabel"', index)
-        self.assertIn('music3 ? "优化曲风" : "优化提示词"', app_js)
+        self.assertIn('music3 ? "优化曲风" : tts ? "优化 TTS 对话提示词" : "优化提示词"', app_js)
         self.assertIn('id="mentionTrigger"', index)
         self.assertIn('data-mention-reference', app_js)
         self.assertIn('insertReferenceMention', app_js)
@@ -1157,8 +1597,8 @@ class ContractTests(unittest.TestCase):
         self.assertIn("function isAnonymousQueueJob(job)", app_js)
         self.assertIn('"有任务正在运行中"', app_js)
         self.assertIn('const progress = item.progress == null ? ""', app_js)
-        self.assertIn('/assets/app.js?v=43', index)
-        self.assertIn('/assets/styles.css?v=37', index)
+        self.assertIn('/assets/app.js?v=54', index)
+        self.assertIn('/assets/styles.css?v=42', index)
         self.assertIn('id="steps" name="steps" type="number"', index)
         self.assertIn('min="4" max="50" step="1" value="10"', index)
         self.assertNotIn('<select id="steps"', index)
@@ -1358,6 +1798,10 @@ class ContractTests(unittest.TestCase):
         validate_references("music3-int8", [], "music3")
         with self.assertRaises(HTTPException):
             validate_references("music3-int8", ["audio"], "music3")
+        validate_references("ref2va-fp8", [], "tts")
+        validate_references("ref2va-fp8", ["audio"] * 3, "tts")
+        with self.assertRaises(HTTPException):
+            validate_references("ref2va-fp8", ["audio"] * 4, "tts")
         validate_references(
             "ref2va-fp8",
             ["image"] * 9 + ["video"] * 3 + ["audio"] * 3,

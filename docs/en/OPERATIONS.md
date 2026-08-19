@@ -34,6 +34,16 @@ curl -fsS http://127.0.0.1:8188/queue
 curl -fsS http://127.0.0.1:8193/api/v1/logs
 ```
 
+After ComfyUI returns a `prompt_id` or RunningHub returns a `taskId`, the API persists a remote-task checkpoint in `data/jobs/<job_id>.json`. Restarting only `minimax-h3-api.service` preserves the recorded progress and reconnects to the original node without uploading inputs or submitting the task again. Temporary query failures are retried for the interval configured by `H3_REMOTE_RECONNECT_SECONDS`.
+
+Recovery is unavailable in these cases:
+
+- The ComfyUI service executing the task was restarted and the task no longer exists in its queue or history.
+- RunningHub deleted or invalidated the corresponding `taskId`.
+- The task was submitted before this feature was deployed and its job file has no `remote_checkpoint`.
+
+Before the first deployment of this feature, wait for existing active jobs to finish. Subsequent API-only restarts do not require ComfyUI or RunningHub jobs to finish.
+
 ## Live Logs
 
 ```bash

@@ -159,6 +159,24 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
 
 Music3 accepts a maximum duration of 300 seconds. API jobs enable forced-duration mode, suppressing the model end token until the requested duration is reached. The service returns 32 kHz, 16-bit stereo FLAC.
 
+## Create an H3 TTS Character Voice Job
+
+TTS prompts include character age, personality, delivery style, and complete dialogue. Upload zero to three audio files as optional speaker voice references. Without audio references, the voice is generated from the character traits in the prompt. Multi-speaker dialogue should identify `(S1)` and `(S2)`; include the corresponding `<Audio N>` reference when audio references are provided. The service fixes the workflow size at 32x32 and returns FLAC audio only.
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations \
+  -F 'prompt=(S1) Adult woman, measured pace, restrained delivery. <d>[Chinese] 你好，今天我们开始录音。</d>' \
+  -F 'reference_manifest=[{"type":"audio"},{"type":"audio"}]' \
+  -F 'references=@speaker-1.wav;type=audio/wav' \
+  -F 'references=@speaker-2.wav;type=audio/wav' \
+  -F 'model_variant=ref2va-fp8' \
+  -F 'execution_mode=tts' \
+  -F 'duration=5' \
+  -F 'steps=20'
+```
+
+`width` and `height` are forced to 32 even when supplied in the request. TTS duration is limited to 1 to 15 seconds and sampling steps to 4 to 50. Passing `execution_mode=tts` to prompt optimization returns the six-section English H3 TTS prompt while preserving the original language and text of dialogue.
+
 ## Query Jobs
 
 ```bash
@@ -222,6 +240,14 @@ Public logs omit the job ID, title, prompt, and reference-asset information for 
 
 `/api/v1/music/assist` calls the configured OpenAI Chat Completions-compatible service. `arrangement` follows the official MiniMax Music3 `music-caption-rewriter` Skill and returns an English Structured Caption with `### Global Metadata`, `### Vocal Details`, and `### Arrangement`. Lyric lines are used only for emotional and section-directive analysis and are not reproduced. `lyrics` returns original lyrics with tags such as `[Verse]` and `[Chorus]`, ready for the Music3 `lyrics` field.
 
+Store the AI service configuration in the local `data/config.db` database:
+
+```bash
+curl -X PATCH http://127.0.0.1:8193/api/v1/settings/ai \
+  -H 'Content-Type: application/json' \
+  -d '{"enabled":true,"base_url":"https://api.openai.com/v1","model":"gpt-4.1-mini","api_key":"YOUR_OPENAI_API_KEY"}'
+```
+
 ```bash
 curl -N -X POST http://127.0.0.1:8193/api/v1/music/assist \
   -H 'Content-Type: application/json' \
@@ -231,12 +257,11 @@ curl -N -X POST http://127.0.0.1:8193/api/v1/music/assist \
     "lyrics":"[Verse]\nRain falls on the glass\n\n[Chorus]\nWalk with me into the dawn",
     "duration":120,
     "base_url":"https://api.openai.com/v1",
-    "api_key":"YOUR_OPENAI_API_KEY",
     "model":"gpt-4.1-mini"
   }'
 ```
 
-Set `task` to `lyrics` to generate original section-tagged lyrics. The API key is used for this request and is not written to job files.
+Set `task` to `lyrics` to generate original section-tagged lyrics. Prompt endpoints read the API key saved in the local SQLite database.
 
 ## OpenAI-compatible Prompt Optimization
 
@@ -246,7 +271,6 @@ curl -X POST http://127.0.0.1:8193/api/v1/prompts/optimize \
   -d '{
     "prompt":"A character enters the room and speaks",
     "base_url":"https://api.openai.com/v1",
-    "api_key":"YOUR_OPENAI_API_KEY",
     "model":"gpt-4.1-mini",
     "duration":5,
     "model_variant":"fl2va-fp8",
@@ -254,4 +278,18 @@ curl -X POST http://127.0.0.1:8193/api/v1/prompts/optimize \
   }'
 ```
 
-AI-service settings are stored in browser `sessionStorage`. The API key is not written to server-side job files.
+AI-service settings and the API key are stored in local `data/config.db`. The web interface does not store the key in `localStorage` or `sessionStorage`.
+
+## Device Sharing
+
+Desktop mode exposes these endpoints:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/peering/status` | Machine name, sharing switch, six-digit code, local address, and authorized devices |
+| `PATCH` | `/api/v1/peering/settings` | Update the machine name or sharing switch |
+| `POST` | `/api/v1/peering/connect` | Establish persistent authorization with a one-time code |
+| `DELETE` | `/api/v1/peering/peers/{device_id}` | Revoke device access |
+| `GET` | `/api/v1/peering/library` | Return local and authorized remote assets with owner tags |
+
+Paired devices use bearer tokens for `/api/v1/peering/export/*`. Tokens remain in each device's local SQLite database. Peer addresses are restricted to LAN, loopback, and Tailscale ranges.

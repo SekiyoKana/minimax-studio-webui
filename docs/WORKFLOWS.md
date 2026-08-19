@@ -15,6 +15,7 @@
 | `minimax_h3_ref2va_fp8_nsfw_lora_api.json` | Ref2VA FP8 Scaled | NaughtyTimes LoRA | `4fbdcb94d6014fedfd6af50d081feaae891ca97867f888a00673563891e9dad7` |
 | `minimax_h3_ref2va_fp8_digital_human_api.json` | Ref2VA FP8 Scaled | 单图数字人音频驱动 | `829babe98437529714c4608185be9a63cd5db3ea09544d813a060b6e47138c06` |
 | `minimax_music3_int8_api.json` | Music3 INT8 | 文本与歌词生成音乐 | `f3f3d2af89aadd9b25bd4d49628e28b13ba6e9e05e3afc551f4edd5177980fa5` |
+| `minimax_h3_ref2va_fp8_tts_api.json` | Ref2VA FP8 Scaled | 人物音频参考与对白生成语音，音频-only | `b80991825b1e959b4dc6eb7a8714458dcc1620eedce5bc36fc96b5bf66bb65b6` |
 
 ## 动态节点
 
@@ -29,6 +30,17 @@ API 在提交前修改以下节点：
 | `137` | FL2VA 首帧 |
 | `139` | FL2VA 可选尾帧 |
 | `200+` | Ref2VA 动态图片、视频和音频加载节点 |
+
+TTS 工作流动态节点：
+
+| 节点 | 参数 |
+|---|---|
+| `92` | FLAC 输出文件前缀 |
+| `121` | `VAEDecodeAudio`，仅解码音频 |
+| `124` | 采样步数 |
+| `129` | 随机种子 |
+| `136` | TTS 提示词、32×32 尺寸、帧数和音频参考 |
+| `200+` | 动态 `LoadAudio` 参考节点 |
 
 Turbo 工作流增加：
 
@@ -60,6 +72,8 @@ Ref2VA 视频参考由 API 动态创建 `VHS_LoadVideo` 节点，因此需要 [C
 
 Music3 使用 ComfyUI 原生节点 `MiniMaxMusic3TextEncode`、`EmptyMiniMaxMusic3LatentAudio`，以及 ComfyUI-MultiGPU 的 `CLIPLoaderMultiGPU`。文本编码器固定使用当前 ComfyUI 进程的 CUDA 设备。API 任务启用强制时长模式，在目标时长前屏蔽 `<|audio_end|>`，工作流固定 30 步、Euler 采样器、`simple` 调度器和分块音频解码，输出 FLAC。
 
+H3 TTS 使用 Ref2VA FP8、视频 VAE 和音频 VAE。服务将画面尺寸强制为 32×32，节点 `121` 仅输出音频，工作流不包含 `VAEDecode`、`CreateVideo` 或 `SaveVideo`。输出通过 `SaveAudio` 保存为 FLAC。音频参考支持 0 至 3 段，未提供音频参考时根据提示词中的人物特征生成声音，提示词优化使用六段式人物和对白描述。
+
 ## 参数限制
 
 | 参数 | 范围 |
@@ -75,3 +89,7 @@ Music3 使用 ComfyUI 原生节点 `MiniMaxMusic3TextEncode`、`EmptyMiniMaxMusi
 | 数字人步数 | 固定 20 |
 | Music3 时长 | 1 至 300 秒 |
 | Music3 步数 | 固定 30 |
+| H3 TTS 时长 | 1 至 15 秒 |
+| H3 TTS 步数 | 4 至 50 |
+| H3 TTS 尺寸 | 固定 32×32，音频-only |
+| H3 TTS 音频参考 | 0 至 3 段 |

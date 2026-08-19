@@ -17,11 +17,15 @@ class Settings:
     root: Path = Path(os.getenv("H3_ROOT", str(PROJECT_ROOT)))
     host: str = os.getenv("H3_HOST", "0.0.0.0")
     port: int = int(os.getenv("H3_PORT", "8193"))
+    desktop_mode: bool = os.getenv("H3_DESKTOP_MODE", "0") == "1"
     api_key: str = os.getenv("H3_API_KEY", "")
     incognito_code: str = os.getenv("H3_INCOGNITO_CODE", "change-me-before-use")
     gpu_label: str = os.getenv("H3_GPU_LABEL", "MiniMax H3 FP8 / ComfyUI")
     engine_backend: str = os.getenv("H3_ENGINE", "comfyui")
-    comfy_url: str = "http://127.0.0.1:8188"
+    comfy_url: str = os.getenv("H3_COMFY_URL", "http://127.0.0.1:8188")
+    default_comfy_url: str = os.getenv("H3_DEFAULT_COMFY_URL", comfy_url)
+    default_comfy_name: str = os.getenv("H3_DEFAULT_COMFY_NAME", "Local ComfyUI")
+    default_comfy_api_key: str = os.getenv("H3_DEFAULT_COMFY_API_KEY", "")
     comfy_workflow: Path = Path(
         os.getenv(
             "H3_COMFY_WORKFLOW",
@@ -58,6 +62,12 @@ class Settings:
             str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_digital_human_api.json"),
         )
     )
+    comfy_tts_workflow: Path = Path(
+        os.getenv(
+            "H3_COMFY_TTS_WORKFLOW",
+            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_tts_api.json"),
+        )
+    )
     comfy_music3_workflow: Path = Path(
         os.getenv(
             "H3_COMFY_MUSIC3_WORKFLOW",
@@ -71,6 +81,9 @@ class Settings:
         os.getenv("H3_COMFY_OUTPUT_DIR", str(DEFAULT_COMFY_ROOT / "output"))
     )
     comfy_poll_seconds: float = float(os.getenv("H3_COMFY_POLL_SECONDS", "2"))
+    remote_reconnect_seconds: float = float(
+        os.getenv("H3_REMOTE_RECONNECT_SECONDS", "120")
+    )
     sglang_url: str = os.getenv("H3_SGLANG_URL", "http://127.0.0.1:8194")
     sglang_model: str = os.getenv(
         "H3_SGLANG_MODEL", str(PROJECT_ROOT / "models" / "sglang-h3" / "Ref2VA")

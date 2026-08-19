@@ -12,6 +12,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
+from cryptography.exceptions import InvalidTag
+
 
 TERMINAL_STATES = {"completed", "failed", "cancelled"}
 RUNNINGHUB_TARGET_PREFIX = "rh:"
@@ -72,14 +74,25 @@ class JobStore:
                 restored_event["_restricted"] = restricted
                 self._events.append(restored_event)
             if job.get("status") in {"queued", "running"}:
-                job.update(
-                    status="queued",
-                    stage="服务已恢复，等待推理节点执行",
-                    progress=0,
-                    cancel_requested=False,
-                    updated_at=utc_now(),
-                )
-                self._append_event(job, "服务恢复，任务重新进入队列")
+                checkpoint = job.get("remote_checkpoint")
+                if isinstance(checkpoint, dict) and checkpoint.get("remote_id"):
+                    job.update(
+                        status="queued",
+                        stage="服务已恢复，正在重新连接远端任务",
+                        progress=max(1, min(99, int(job.get("progress") or 1))),
+                        cancel_requested=False,
+                        updated_at=utc_now(),
+                    )
+                    self._append_event(job, "服务恢复，正在重新连接原远端任务")
+                else:
+                    job.update(
+                        status="queued",
+                        stage="服务已恢复，等待推理节点执行",
+                        progress=0,
+                        cancel_requested=False,
+                        updated_at=utc_now(),
+                    )
+                    self._append_event(job, "服务恢复，任务重新进入队列")
             self._jobs[job["id"]] = job
             self._persist(job)
         self._revision += 1
@@ -251,6 +264,7 @@ class JobStore:
         if not job:
             return None
         job.pop("input_paths", None)
+        job.pop("remote_checkpoint", None)
         if not include_logs:
             job.pop("logs", None)
         self._decorate_public_job(job)
@@ -294,6 +308,7 @@ class JobStore:
     ) -> tuple[list[dict[str, Any]], int]:
         with self._lock:
             jobs = list(self._jobs.values())
+            jobs = [job for job in jobs if not job.get("remote_record_hidden")]
             resolved_scope = scope or ("all" if include_incognito else "normal")
             if resolved_scope == "normal":
                 jobs = [job for job in jobs if not job.get("request", {}).get("incognito")]
@@ -319,6 +334,7 @@ class JobStore:
             for job in jobs[start : start + page_size]:
                 item = deepcopy(job)
                 item.pop("input_paths", None)
+                item.pop("remote_checkpoint", None)
                 item.pop("logs", None)
                 self._decorate_public_job(item)
                 for index, reference in enumerate(item.get("request", {}).get("references", [])):
@@ -361,6 +377,8 @@ class JobStore:
         with self._lock:
             visible = []
             for stored_event in self._events:
+                if stored_event.get("remote_record_hidden"):
+                    continue
                 if stored_event.get("_restricted"):
                     continue
                 event = deepcopy(stored_event)
@@ -399,6 +417,104 @@ class JobStore:
             queued.sort(key=lambda job: job.get("created_at", ""))
             return [job["id"] for job in queued]
 
+    def jobs_for_peer(self, peer_device_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return [
+                deepcopy(job)
+                for job in self._jobs.values()
+                if job.get("proxy_peer_id") == peer_device_id
+                or job.get("request", {}).get("proxy_source_device_id") == peer_device_id
+            ]
+
+    def local_asset_jobs(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [
+                deepcopy(job)
+                for job in self._jobs.values()
+                if job.get("status") == "completed"
+                and (job.get("result_path") or job.get("asset_deleted"))
+                and not job.get("request", {}).get("incognito")
+            ]
+
+    def protect_peer_jobs(
+        self,
+        peer_device_id: str,
+        *,
+        delete: bool,
+        encrypt_bytes: Callable[[bytes], tuple[bytes, bytes]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Remove peer-owned jobs from the live store and return encrypted snapshots."""
+        with self._lock:
+            jobs = [
+                deepcopy(job)
+                for job in self._jobs.values()
+                if job.get("proxy_peer_id") == peer_device_id
+                or job.get("request", {}).get("proxy_source_device_id") == peer_device_id
+            ]
+            snapshots: list[dict[str, Any]] = []
+            for job in jobs:
+                job_id = str(job["id"])
+                current = self._jobs.pop(job_id, None)
+                if not current:
+                    continue
+                self._remove_job_record_file(job_id)
+                if delete:
+                    self._remove_job_files(job, self.jobs_dir / f"{job_id}.json")
+                else:
+                    if encrypt_bytes is None:
+                        raise ValueError("加密快照缺少加密函数")
+                    snapshot = deepcopy(job)
+                    snapshot["_protected_files"] = self._encrypt_job_files(
+                        job, encrypt_bytes
+                    )
+                    snapshot["remote_record_hidden"] = True
+                    snapshots.append(snapshot)
+                self._revision += 1
+                self._record_change(job, "delete")
+            return snapshots
+
+    def restore_protected_job(
+        self,
+        snapshot: dict[str, Any],
+        decrypt_bytes: Callable[[bytes, bytes], bytes],
+    ) -> dict[str, Any]:
+        """Decrypt a peer snapshot and put it back into the live job store."""
+        restored = deepcopy(snapshot)
+        for item in restored.pop("_protected_files", []) or []:
+            encrypted_path = Path(str(item.get("encrypted_path") or ""))
+            original_path = Path(str(item.get("original_path") or ""))
+            try:
+                encrypted_path.resolve().relative_to(self.data_dir)
+                original_path.resolve().relative_to(self.data_dir)
+                packed = encrypted_path.read_bytes()
+                if not packed.startswith(b"H3E1") or len(packed) < 16:
+                    raise ValueError("受保护文件格式无效")
+                nonce = packed[4:16]
+                plaintext = decrypt_bytes(packed[16:], nonce)
+                original_path.parent.mkdir(parents=True, exist_ok=True)
+                temp = original_path.with_suffix(original_path.suffix + ".restore.tmp")
+                temp.write_bytes(plaintext)
+                temp.replace(original_path)
+                encrypted_path.unlink(missing_ok=True)
+            except (InvalidTag, OSError, ValueError):
+                logger.warning("无法恢复互联任务文件: %s", encrypted_path)
+        restored.pop("remote_record_hidden", None)
+        with self._lock:
+            self._jobs[restored["id"]] = restored
+            self._persist(restored)
+            self._revision += 1
+            self._record_change(restored, "upsert")
+            return deepcopy(restored)
+
+    def active_proxy_job_ids(self) -> list[str]:
+        with self._lock:
+            return [
+                job["id"]
+                for job in self._jobs.values()
+                if job.get("status") not in TERMINAL_STATES
+                and job.get("request", {}).get("remote_proxy")
+            ]
+
     def delete(self, job_id: str) -> bool:
         with self._lock:
             job = self._jobs.pop(job_id, None)
@@ -410,6 +526,79 @@ class JobStore:
             self._record_change(job, "delete")
             if not restricted:
                 logger.info("H3 job=%s deleted", job_id)
+            return True
+
+    def _remove_job_record_file(self, job_id: str) -> None:
+        (self.jobs_dir / f"{job_id}.json").unlink(missing_ok=True)
+
+    def _encrypt_job_files(
+        self,
+        job: dict[str, Any],
+        encrypt_bytes: Callable[[bytes], tuple[bytes, bytes]],
+    ) -> list[dict[str, str]]:
+        candidates: list[tuple[Path, str]] = []
+        for raw_path in job.get("input_paths", []):
+            candidates.append((Path(str(raw_path)), "input"))
+        if job.get("result_path"):
+            result_path = Path(str(job["result_path"]))
+            candidates.extend(
+                (
+                    (result_path, "result"),
+                    (result_path.with_suffix(".json"), "sidecar"),
+                )
+            )
+        entries: list[dict[str, str]] = []
+        seen: set[Path] = set()
+        for path, kind in candidates:
+            try:
+                resolved = path.resolve()
+                resolved.relative_to(self.data_dir)
+            except (OSError, ValueError):
+                logger.warning("Refused to protect path outside H3 data directory: %s", path)
+                continue
+            if resolved in seen or not resolved.is_file():
+                continue
+            seen.add(resolved)
+            encrypted_path = resolved.with_name(resolved.name + ".h3enc")
+            payload, nonce = encrypt_bytes(resolved.read_bytes())
+            temp = encrypted_path.with_suffix(encrypted_path.suffix + ".tmp")
+            temp.write_bytes(b"H3E1" + nonce + payload)
+            temp.replace(encrypted_path)
+            resolved.unlink(missing_ok=True)
+            entries.append(
+                {
+                    "original_path": str(resolved),
+                    "encrypted_path": str(encrypted_path),
+                    "kind": kind,
+                }
+            )
+        return entries
+
+    def replace(self, job: dict[str, Any]) -> dict[str, Any]:
+        """Replace a persisted job after remote-record protection or restoration."""
+        with self._lock:
+            self._jobs[job["id"]] = deepcopy(job)
+            self._persist(self._jobs[job["id"]])
+            self._revision += 1
+            self._record_change(self._jobs[job["id"]], "upsert")
+            return deepcopy(self._jobs[job["id"]])
+
+    def delete_artifacts(self, job_id: str) -> bool:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if not job or job.get("request", {}).get("incognito"):
+                return False
+            raw_result_path = job.get("result_path")
+            result_path = Path(raw_result_path) if raw_result_path else None
+            if result_path:
+                self._delete_data_path(result_path)
+                self._delete_data_path(result_path.with_suffix(".json"))
+            job["result_path"] = None
+            job["result_url"] = None
+            job["asset_deleted"] = True
+            job["asset_deleted_at"] = utc_now()
+            self._append_event(job, "生成产物已删除")
+            self._persist(job)
             return True
 
     def _remove_job_files(self, job: dict[str, Any], job_path: Path) -> None:
@@ -456,7 +645,8 @@ class JobManager:
         self.node_runtime_update = node_runtime_update
         configured_nodes = list(
             nodes
-            or (
+            if nodes is not None
+            else (
                 {
                     "id": "default",
                     "name": "ComfyUI",
@@ -816,8 +1006,6 @@ class JobManager:
             str(getattr(item, "id")): item
             for item in nodes
         }
-        if not configured:
-            raise ValueError("至少需要一个启用的推理节点")
         threads_to_start: list[tuple[str, int]] = []
         with self._condition:
             for node_id, node in self._nodes.items():
@@ -1046,7 +1234,13 @@ class JobManager:
             return False
         self.store.update(job_id, cancel_requested=True, stage="正在取消")
         if job["status"] == "queued":
-            self.store.update(job_id, status="cancelled", stage="已取消", progress=0)
+            self.store.update(
+                job_id,
+                status="cancelled",
+                stage="已取消",
+                progress=0,
+                remote_checkpoint=None,
+            )
             self.remove(job_id)
             self._set_incognito_expiry(job_id)
         return True
@@ -1077,10 +1271,19 @@ class JobManager:
                     return None
                 if node["healthy"]:
                     for job_id in list(self._order):
+                        if job_id in self._running_job_ids.values():
+                            continue
                         job = self.store.get(job_id)
                         if not job or job.get("status") != "queued":
                             self._order.remove(job_id)
                             continue
+                        checkpoint = job.get("remote_checkpoint")
+                        if isinstance(checkpoint, dict) and checkpoint.get("remote_id"):
+                            checkpoint_node_id = str(checkpoint.get("node_id") or "")
+                            if not checkpoint_node_id or checkpoint_node_id != node_id:
+                                continue
+                            if str(checkpoint.get("provider") or "") != node["provider"]:
+                                continue
                         target = job.get("request", {}).get("comfy_node") or "auto"
                         target_resource_id = runninghub_target_resource_id(target)
                         if not target_resource_id and target not in self._nodes:
@@ -1142,11 +1345,23 @@ class JobManager:
             self.store.update(
                 job_id,
                 status="running",
-                stage=f"准备 {node['name']} 推理环境",
-                progress=1,
-                started_at=utc_now(),
+                stage=(
+                    f"正在通过 {node['name']} 重新连接远端任务"
+                    if job.get("remote_checkpoint")
+                    else f"准备 {node['name']} 推理环境"
+                ),
+                progress=(
+                    max(1, min(99, int(job.get("progress") or 1)))
+                    if job.get("remote_checkpoint")
+                    else 1
+                ),
+                started_at=job.get("started_at") or utc_now(),
                 assigned_node=assigned_node,
-                event_message=f"任务已分配至 {node['name']}",
+                event_message=(
+                    f"任务已由 {node['name']} 接管恢复"
+                    if job.get("remote_checkpoint")
+                    else f"任务已分配至 {node['name']}"
+                ),
             )
             engine = None
             try:
@@ -1159,11 +1374,41 @@ class JobManager:
                 engine = self._engines[slot_key]
 
                 def progress(percent: int, stage: str) -> None:
-                    self.store.update(job_id, progress=max(1, min(99, percent)), stage=stage)
+                    current = self.store.get(job_id) or {}
+                    progress_floor = (
+                        int(current.get("progress") or 1)
+                        if current.get("remote_checkpoint")
+                        else 1
+                    )
+                    self.store.update(
+                        job_id,
+                        progress=max(progress_floor, min(99, percent)),
+                        stage=stage,
+                    )
 
-                result = engine.generate(job, progress, lambda: self._is_cancelled(job_id))
+                def checkpoint_callback(checkpoint: dict[str, Any] | None) -> None:
+                    self.store.update(job_id, remote_checkpoint=deepcopy(checkpoint))
+
+                generate_parameters = inspect.signature(engine.generate).parameters
+                generate_kwargs: dict[str, Any] = {}
+                if "checkpoint" in generate_parameters:
+                    generate_kwargs["checkpoint"] = deepcopy(job.get("remote_checkpoint"))
+                if "checkpoint_callback" in generate_parameters:
+                    generate_kwargs["checkpoint_callback"] = checkpoint_callback
+                result = engine.generate(
+                    job,
+                    progress,
+                    lambda: self._is_cancelled(job_id),
+                    **generate_kwargs,
+                )
                 if self._is_cancelled(job_id):
-                    self.store.update(job_id, status="cancelled", stage="已取消", progress=0)
+                    self.store.update(
+                        job_id,
+                        status="cancelled",
+                        stage="已取消",
+                        progress=0,
+                        remote_checkpoint=None,
+                    )
                     self._set_incognito_expiry(job_id)
                 else:
                     request_update = None
@@ -1179,13 +1424,33 @@ class JobManager:
                         result_path=str(result),
                         result_url=f"/api/v1/generations/{job_id}/result",
                         completed_at=utc_now(),
+                        remote_checkpoint=None,
                         **({"request": request_update} if request_update else {}),
                     )
                     self._set_incognito_expiry(job_id)
             except InterruptedError:
-                self.store.update(job_id, status="cancelled", stage="已取消", progress=0)
+                self.store.update(
+                    job_id,
+                    status="cancelled",
+                    stage="已取消",
+                    progress=0,
+                    remote_checkpoint=None,
+                )
                 self._set_incognito_expiry(job_id)
             except Exception as exc:
+                current = self.store.get(job_id) or {}
+                checkpoint = current.get("remote_checkpoint")
+                if checkpoint and getattr(exc, "retry_remote_checkpoint", False):
+                    self.store.update(
+                        job_id,
+                        status="queued",
+                        stage="远端服务暂时不可达，等待重新连接",
+                        progress=max(1, min(99, int(current.get("progress") or 1))),
+                        cancel_requested=False,
+                        event_message="远端服务暂时不可达，任务将在原节点继续恢复",
+                    )
+                    self.submit(job_id)
+                    continue
                 error_log = self.store.jobs_dir / f"{job_id}.log"
                 error_log.write_text(traceback.format_exc(), encoding="utf-8")
                 self.store.update(
@@ -1194,6 +1459,7 @@ class JobManager:
                     stage="生成失败",
                     error=str(exc)[:800],
                     progress=0,
+                    remote_checkpoint=None,
                     event_level="error",
                 )
                 self._set_incognito_expiry(job_id)

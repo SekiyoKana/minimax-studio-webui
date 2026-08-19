@@ -15,6 +15,7 @@ See the [official ComfyUI MiniMax H3 tutorial](https://docs.comfy.org/tutorials/
 | `minimax_h3_ref2va_fp8_nsfw_lora_api.json` | Ref2VA FP8 Scaled | NaughtyTimes LoRA | `4fbdcb94d6014fedfd6af50d081feaae891ca97867f888a00673563891e9dad7` |
 | `minimax_h3_ref2va_fp8_digital_human_api.json` | Ref2VA FP8 Scaled | Single-image audio-driven digital human | `829babe98437529714c4608185be9a63cd5db3ea09544d813a060b6e47138c06` |
 | `minimax_music3_int8_api.json` | Music3 INT8 | Text and lyrics to music | `f3f3d2af89aadd9b25bd4d49628e28b13ba6e9e05e3afc551f4edd5177980fa5` |
+| `minimax_h3_ref2va_fp8_tts_api.json` | Ref2VA FP8 Scaled | Character voice references and dialogue to audio | `b80991825b1e959b4dc6eb7a8714458dcc1620eedce5bc36fc96b5bf66bb65b6` |
 
 ## Dynamic Nodes
 
@@ -29,6 +30,17 @@ The API updates these nodes before submission:
 | `137` | FL2VA first frame |
 | `139` | Optional FL2VA last frame |
 | `200+` | Dynamic Ref2VA image, video, and audio loader nodes |
+
+TTS workflow dynamic nodes:
+
+| Node | Parameter |
+|---|---|
+| `92` | FLAC output filename prefix |
+| `121` | `VAEDecodeAudio`, audio decode only |
+| `124` | Sampling steps |
+| `129` | Random seed |
+| `136` | TTS prompt, 32x32 size, frame count, and audio references |
+| `200+` | Dynamic `LoadAudio` reference nodes |
 
 Turbo workflows add:
 
@@ -60,6 +72,8 @@ The digital human workflow requires the attached `comfyui-vrgamedevgirl` package
 
 Music3 uses ComfyUI's native `MiniMaxMusic3TextEncode` and `EmptyMiniMaxMusic3LatentAudio` nodes with ComfyUI-MultiGPU's `CLIPLoaderMultiGPU`. The text encoder is pinned to the current ComfyUI process CUDA device. API jobs enable forced-duration mode and suppress `<|audio_end|>` until the requested duration is reached. The workflow uses 30 Euler steps, the `simple` scheduler, tiled audio decoding, and FLAC output.
 
+H3 TTS uses Ref2VA FP8 with the video and audio VAEs. The service forces the visual size to 32x32. Node `121` returns audio only, and the workflow contains no `VAEDecode`, `CreateVideo`, or `SaveVideo` node. `SaveAudio` writes FLAC output. TTS accepts zero to three audio references; without audio references, the voice is generated from the character traits in the prompt. Prompt optimization uses a six-section character and dialogue description.
+
 ## Parameter Limits
 
 | Parameter | Range |
@@ -75,3 +89,7 @@ Music3 uses ComfyUI's native `MiniMaxMusic3TextEncode` and `EmptyMiniMaxMusic3La
 | Digital human steps | Fixed at 20 |
 | Music3 duration | 1 to 300 seconds |
 | Music3 steps | Fixed at 30 |
+| H3 TTS duration | 1 to 15 seconds |
+| H3 TTS steps | 4 to 50 |
+| H3 TTS size | Fixed at 32x32, audio-only |
+| H3 TTS audio references | 0 to 3 clips |

@@ -6,12 +6,9 @@
     <meta name="description" content="基于 ComfyUI 与 RunningHub API 的 MiniMax H3 视频与 Music3 音乐生成工作台">
     <meta name="theme-color" content="#f4f5f2">
     <title>MiniMax Studio</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/assets/styles.css?v=37">
-    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
-    <script src="/assets/app.js?v=43" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=42">
+    <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
+    <script src="/assets/app.js?v=54" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -28,7 +25,7 @@
 
         <div class="library-heading">
           <div><h2>素材库</h2><span id="assetTotal">0</span></div>
-          <button class="icon-button" id="newTaskButton" type="button" title="新建生成" aria-label="新建生成"><i data-lucide="square-pen"></i></button>
+          <div class="library-heading-actions"><button class="icon-button" id="refreshAssets" type="button" title="刷新素材库" aria-label="刷新素材库"><i data-lucide="refresh-cw"></i></button><button class="icon-button" id="newTaskButton" type="button" title="新建生成" aria-label="新建生成"><i data-lucide="square-pen"></i></button></div>
         </div>
 
         <div class="library-tools">
@@ -66,11 +63,21 @@
             </div>
           </div>
           <div class="header-actions">
+            <button class="icon-button" id="openPeering" type="button" title="多端互联" aria-label="多端互联"><i data-lucide="key-round"></i></button>
+            <button class="icon-button" id="openGlobalSettings" type="button" title="设置" aria-label="设置"><i data-lucide="settings-2"></i></button>
             <button class="icon-button" id="languageToggle" type="button" title="Switch to English" aria-label="Switch to English"><i data-lucide="languages"></i></button>
             <a class="icon-button" id="apiDocsLink" href="/docs" target="_blank" rel="noreferrer" title="API 文档" aria-label="API 文档"><i data-lucide="braces"></i></a>
           </div>
         </header>
 
+        <div class="conversation-filter-tab" id="conversationFilters" hidden>
+          <button class="conversation-filter-trigger" id="conversationFilterToggle" type="button" aria-expanded="false" aria-controls="conversationFilterPanel">
+            <i data-lucide="list-filter"></i><span>设备筛选</span><b id="conversationFilterCount">全部</b>
+          </button>
+          <div class="conversation-filter-panel" id="conversationFilterPanel" hidden>
+            <label><span>显示设备</span><select id="conversationDeviceFilter" multiple aria-label="对话流设备筛选"></select></label>
+          </div>
+        </div>
         <section class="conversation-feed" id="conversationFeed" aria-live="polite">
           <div class="feed-loading"><span></span><span></span><span></span></div>
         </section>
@@ -109,6 +116,7 @@
                       <option value="native">普通流 · 原生 H3</option>
                       <option value="turbo-lora">8-step LoRA · 1.0</option>
                       <option value="digital-human">数字人 · 音频驱动</option>
+                      <option value="tts">H3 TTS · 人物语音</option>
                       <option value="music3" id="music3ExecutionOption" hidden>Music3 · 30 步</option>
                       <option value="h3-nsfw" id="nsfwExecutionOption" hidden disabled>H3 NSFW · NaughtyTimes LoRA</option>
                     </select>
@@ -188,7 +196,7 @@
                     <label class="switch-row"><span>启用 AI 提示词优化</span><input id="aiEnabled" type="checkbox"><span class="switch"></span></label>
                     <label>OpenAI Base URL<input id="aiBaseUrl" type="url" placeholder="https://api.openai.com/v1"></label>
                     <label>模型<input id="aiModel" type="text" placeholder="gpt-4.1-mini"></label>
-                    <label>API Key<input id="aiApiKey" type="password" autocomplete="off" placeholder="sk-…"></label>
+                    <label>API Key<input id="aiApiKey" type="password" autocomplete="new-password" placeholder="sk-…"><small class="secret-field-status" id="aiApiKeyStatus"></small></label>
                   </div>
                 </details>
                 <button class="send-button" id="generateButton" type="submit" title="开始生成" aria-label="开始生成"><i data-lucide="arrow-up"></i></button>
@@ -245,11 +253,6 @@
           <button class="icon-button" id="closeNodeManager" type="button" title="关闭" aria-label="关闭节点管理"><i data-lucide="x"></i></button>
         </header>
 
-        <div class="node-settings-row">
-          <label for="nodeHealthInterval">节点状态刷新间隔</label>
-          <div><input id="nodeHealthInterval" type="number" min="5" max="3600" step="1" inputmode="numeric"><span>秒</span><button id="saveNodeSettings" type="button">保存</button></div>
-        </div>
-
         <div class="node-manager-toolbar">
           <span id="nodeManagerSummary">0 个节点</span>
           <button id="addNodeButton" type="button"><i data-lucide="plus"></i><span>新增节点</span></button>
@@ -297,7 +300,7 @@
         <div class="asset-detail-body" id="assetDetailBody"><div class="feed-loading"><span></span><span></span><span></span></div></div>
         <footer class="asset-detail-footer">
           <p class="asset-detail-error" id="assetDetailError" role="alert"></p>
-          <div><button class="detail-delete" id="deleteAssetDetail" type="button"><i data-lucide="trash-2"></i><span>删除记录</span></button><a class="detail-download" id="downloadAssetDetail" href="#" download hidden><i data-lucide="download"></i><span>下载 MP4</span></a><button class="detail-regenerate" id="regenerateAssetDetail" type="button"><i data-lucide="rotate-ccw"></i><span>重新生成</span></button><button class="detail-reuse" id="reuseAssetDetail" type="button"><i data-lucide="corner-down-left"></i><span>回填到发送区</span></button></div>
+          <div><button class="detail-delete" id="deleteAssetDetail" type="button"><i data-lucide="trash-2"></i><span>删除记录</span></button><a class="detail-download" id="downloadAssetDetail" href="#" download hidden><i data-lucide="download"></i><span>下载 MP4</span></a><button class="detail-output-input" id="reuseOutputAssetDetail" type="button" disabled><i data-lucide="file-input"></i><span>作为输入</span></button><button class="detail-regenerate" id="regenerateAssetDetail" type="button"><i data-lucide="rotate-ccw"></i><span>重新生成</span></button><button class="detail-reuse" id="reuseAssetDetail" type="button"><i data-lucide="corner-down-left"></i><span>回填到发送区</span></button></div>
         </footer>
       </section>
     </div>
@@ -311,6 +314,85 @@
         <button class="secret-submit" type="submit">进入无痕模式</button>
       </form>
     </div>
+
+    <div class="modal-overlay peering-modal" id="peeringModal" hidden>
+      <section class="peering-dialog" role="dialog" aria-modal="true" aria-labelledby="peeringTitle">
+        <header class="peering-header">
+          <div><span class="peering-mark"><i data-lucide="key-round"></i></span><div><h2 id="peeringTitle">多端互联</h2><p id="peeringSubtitle">在局域网内共享本机素材库</p></div></div>
+          <button class="icon-button" id="closePeering" type="button" title="关闭" aria-label="关闭多端互联"><i data-lucide="x"></i></button>
+        </header>
+        <div class="peering-settings">
+          <label>本机名称<input id="machineName" type="text" maxlength="80" autocomplete="off"></label>
+          <label class="switch-row"><span>开启互联</span><input id="peeringEnabled" type="checkbox"><span class="switch"></span></label>
+        </div>
+        <div class="peering-columns">
+          <section class="peering-panel">
+            <h3>本机互联密钥</h3>
+            <p>将以下地址和验证码提供给另一台设备</p>
+            <output class="pairing-code" id="pairingCode">------</output>
+            <small id="pairingExpiry">30 秒后刷新</small>
+            <label>本机端口地址<input id="peerAddress" type="text" readonly></label>
+          </section>
+          <form class="peering-panel" id="peerConnectForm">
+            <h3>连接其他设备</h3>
+            <p>输入对方当前显示的地址和 6 位验证码</p>
+            <label>对方地址<input id="peerConnectAddress" type="url" placeholder="http://192.168.1.20:38193" required></label>
+            <label>对方验证码<input id="peerConnectCode" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label>
+            <button class="primary" type="submit"><i data-lucide="link"></i><span>建立互联</span></button>
+          </form>
+        </div>
+        <section class="peering-connected">
+          <h3>已连接设备</h3>
+          <div id="peerList"><p class="quiet">暂无已连接设备</p></div>
+        </section>
+        <p class="peering-error" id="peeringError" role="alert"></p>
+      </section>
+    </div>
+
+    <div class="modal-overlay settings-modal" id="globalSettingsModal" hidden>
+      <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="globalSettingsTitle">
+        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="settings-2"></i></span><div><h2 id="globalSettingsTitle">设置</h2><p>本地应用与互联数据设置</p></div></div><button class="icon-button" id="closeGlobalSettings" type="button" title="关闭" aria-label="关闭设置"><i data-lucide="x"></i></button></header>
+        <form id="globalSettingsForm" class="settings-body">
+          <label>节点状态查询周期（秒）<input id="globalHealthInterval" type="number" min="5" max="3600" step="1" required></label>
+          <label class="switch-row"><span>显示运行日志</span><input id="showRuntimeLogs" type="checkbox"><span class="switch"></span></label>
+          <label class="switch-row"><span>显示连接互联入口</span><input id="showPeering" type="checkbox"><span class="switch"></span></label>
+          <label class="switch-row"><span>本地备份生成产物</span><input id="backupOutputs" type="checkbox"><span class="switch"></span></label>
+          <label>互联断开时处理远程记录<select id="remoteDisconnectPolicy"><option value="encrypt">加密</option><option value="delete">删除</option></select></label>
+          <label>远程记录密钥<span class="password-field"><input id="remoteRecordsKey" type="password" minlength="8" maxlength="256" autocomplete="new-password"><button class="password-toggle" id="toggleRemoteRecordsKey" type="button" title="显示密钥" aria-label="显示密钥"><i data-lucide="eye"></i></button></span><small>至少 8 个字符，最多 256 个字符</small></label>
+          <div class="settings-actions"><button type="button" id="manageLocalAssets"><i data-lucide="folder-cog"></i><span>管理本地素材</span></button><button class="primary" type="submit"><i data-lucide="save"></i><span>保存设置</span></button></div>
+          <p class="settings-error" id="globalSettingsError" role="alert"></p>
+        </form>
+      </section>
+    </div>
+
+    <div class="modal-overlay local-assets-modal" id="localAssetsModal" hidden>
+      <section class="local-assets-dialog" role="dialog" aria-modal="true" aria-labelledby="localAssetsTitle">
+        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="folder-cog"></i></span><div><h2 id="localAssetsTitle">管理本地素材</h2><p>删除产物文件，保留任务与工作流记录</p></div></div><button class="icon-button" id="closeLocalAssets" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
+        <div class="local-assets-toolbar"><label><input id="localAssetsSelectAll" type="checkbox"><span>全选已加载素材</span></label><span id="localAssetsCount">0 项</span></div>
+        <div class="local-assets-grid" id="localAssetsList" tabindex="0"></div>
+        <footer class="local-assets-footer"><p id="localAssetsError" role="alert"></p><button class="danger" id="deleteLocalArtifacts" type="button"><i data-lucide="trash-2"></i><span>删除选中产物</span></button></footer>
+      </section>
+    </div>
+
+    <div class="modal-overlay local-asset-preview-modal" id="localAssetPreviewModal" hidden>
+      <section class="local-asset-preview-dialog" role="dialog" aria-modal="true" aria-label="本地素材预览">
+        <button class="icon-button local-asset-preview-close" id="closeLocalAssetPreview" type="button" title="关闭" aria-label="关闭预览"><i data-lucide="x"></i></button>
+        <div class="local-asset-preview-body" id="localAssetPreviewBody"></div>
+      </section>
+    </div>
+
+    <div class="modal-overlay unlock-assets-modal" id="unlockAssetsModal" hidden>
+      <section class="unlock-assets-dialog" role="dialog" aria-modal="true" aria-labelledby="unlockAssetsTitle">
+        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="lock-keyhole"></i></span><div><h2 id="unlockAssetsTitle">解锁加密素材</h2><p id="unlockAssetsOwner"></p></div></div><button class="icon-button" id="closeUnlockAssets" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
+        <form id="unlockAssetsForm" class="unlock-assets-body">
+          <label>所属设备密钥<span class="password-field"><input id="unlockAssetsKey" type="password" minlength="8" maxlength="256" autocomplete="off" required><button class="password-toggle" id="toggleUnlockAssetsKey" type="button" title="显示密钥" aria-label="显示密钥"><i data-lucide="eye"></i></button></span></label>
+          <p id="unlockAssetsError" role="alert"></p>
+          <button class="primary" type="submit"><i data-lucide="unlock-keyhole"></i><span>解锁该设备素材</span></button>
+        </form>
+      </section>
+    </div>
+
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
 
     <div class="mobile-scrim" id="mobileScrim" hidden></div>
   </body>
