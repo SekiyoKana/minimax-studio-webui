@@ -397,7 +397,7 @@ class ContractTests(unittest.TestCase):
             styles,
             r"\.conversation-column \{[^}]*height: 100%;[^}]*overflow: hidden;",
         )
-        self.assertIn('/assets/styles.css?v=42', index)
+        self.assertIn('/assets/styles.css?v=43', index)
 
     def test_settings_popover_is_outside_horizontal_scroll_container(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -1322,7 +1322,7 @@ class ContractTests(unittest.TestCase):
         environment = (project_root / ".env.example").read_text(encoding="utf-8")
 
         self.assertIn('option value="digital-human">数字人 · 音频驱动', index)
-        self.assertIn('/assets/app.js?v=54', index)
+        self.assertIn('/assets/app.js?v=55', index)
         self.assertIn('return { image: 1, video: 0, audio: 1 };', app_js)
         self.assertIn('el("duration").disabled = digitalHuman;', app_js)
         self.assertIn('durationControl.classList.toggle("digital-human", digitalHuman);', app_js)
@@ -1597,8 +1597,8 @@ class ContractTests(unittest.TestCase):
         self.assertIn("function isAnonymousQueueJob(job)", app_js)
         self.assertIn('"有任务正在运行中"', app_js)
         self.assertIn('const progress = item.progress == null ? ""', app_js)
-        self.assertIn('/assets/app.js?v=54', index)
-        self.assertIn('/assets/styles.css?v=42', index)
+        self.assertIn('/assets/app.js?v=55', index)
+        self.assertIn('/assets/styles.css?v=43', index)
         self.assertIn('id="steps" name="steps" type="number"', index)
         self.assertIn('min="4" max="50" step="1" value="10"', index)
         self.assertNotIn('<select id="steps"', index)

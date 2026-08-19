@@ -330,11 +330,13 @@ svg { width: 16px; height: 16px; stroke-width: 1.7; }
 .launcher-copy small { color: #969d94; font: 400 8px/1 var(--mono); font-variant-numeric: tabular-nums; }
 .ops-launcher > b { display: grid; min-width: 20px; height: 20px; place-items: center; border-radius: 4px; background: var(--accent); font: 500 9px/1 var(--mono); }
 
-.ops-window { position: fixed; z-index: 90; top: 0; left: 0; display: grid; width: min(560px, calc(100vw - 24px)); height: min(700px, calc(100dvh - 54px)); grid-template-rows: 66px minmax(108px, auto) minmax(0, 1fr); overflow: hidden; border: 1px solid #434740; border-radius: var(--radius); background: #252825; color: #e9ebe5; box-shadow: 0 24px 70px rgba(24, 28, 23, .35); will-change: transform; }
+.ops-window { position: fixed; z-index: 90; top: 0; left: 0; display: grid; width: min(560px, calc(100vw - 24px)); height: min(620px, calc(100dvh - 96px)); grid-template-rows: 66px minmax(108px, auto) minmax(0, 1fr); overflow: hidden; border: 1px solid #434740; border-radius: var(--radius); background: #252825; color: #e9ebe5; box-shadow: 0 24px 70px rgba(24, 28, 23, .35); will-change: transform; }
 .ops-window.dragging { user-select: none; box-shadow: 0 30px 80px rgba(24, 28, 23, .42); }
-.ops-header { display: flex; touch-action: none; align-items: center; justify-content: space-between; padding: 0 14px 0 17px; border-bottom: 1px solid #3b3f39; cursor: grab; }
+.ops-header { display: flex; touch-action: none; align-items: center; justify-content: space-between; padding: 0 14px 0 12px; border-bottom: 1px solid #3b3f39; cursor: grab; user-select: none; }
 .ops-window.dragging .ops-header { cursor: grabbing; }
 .ops-header > div { display: flex; min-width: 0; align-items: center; gap: 11px; }
+.ops-drag-grip { display: grid; width: 22px; height: 32px; flex: 0 0 auto; place-items: center; color: #737a71; }
+.ops-drag-grip svg { width: 15px; height: 15px; }
 .ops-header h2 { margin: 0; font-size: 12px; font-weight: 500; }
 .ops-header p { overflow: hidden; max-width: 360px; margin: 4px 0 0; color: #8f968d; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .ops-header .icon-button { color: #a2a89f; cursor: pointer; }

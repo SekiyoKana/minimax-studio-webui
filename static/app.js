@@ -2998,7 +2998,7 @@ async function authorizeIncognitoMode(event) {
 function resetOpsPosition() {
   const windowNode = el("opsWindow");
   const rect = windowNode.getBoundingClientRect();
-  state.opsPosition.x = Math.max(8, Math.round((window.innerWidth - rect.width) / 2));
+  state.opsPosition.x = 16;
   state.opsPosition.y = Math.max(24, Math.round(window.innerHeight * 0.08));
   applyOpsPosition();
 }
@@ -3552,34 +3552,56 @@ el("closeAssets").addEventListener("click", closeAssetDrawer);
 el("mobileScrim").addEventListener("click", closeAssetDrawer);
 
 let dragState = null;
-el("opsDragHandle").addEventListener("pointerdown", (event) => {
-  if (event.target.closest("button")) return;
+function startOpsDrag(clientX, clientY) {
   dragState = {
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startY: event.clientY,
+    startX: clientX,
+    startY: clientY,
     originX: state.opsPosition.x,
     originY: state.opsPosition.y,
   };
-  event.preventDefault();
-  el("opsDragHandle").setPointerCapture(event.pointerId);
   el("opsWindow").classList.add("dragging");
-});
-window.addEventListener("pointermove", (event) => {
-  if (!dragState || dragState.pointerId !== event.pointerId) return;
-  state.opsPosition.x = dragState.originX + event.clientX - dragState.startX;
-  state.opsPosition.y = dragState.originY + event.clientY - dragState.startY;
+}
+function moveOpsDrag(clientX, clientY) {
+  if (!dragState) return;
+  state.opsPosition.x = dragState.originX + clientX - dragState.startX;
+  state.opsPosition.y = dragState.originY + clientY - dragState.startY;
   applyOpsPosition();
-});
-function stopOpsDrag(event) {
-  if (!dragState || dragState.pointerId !== event.pointerId) return;
-  const handle = el("opsDragHandle");
+}
+function stopOpsDrag() {
+  if (!dragState) return;
   dragState = null;
   el("opsWindow").classList.remove("dragging");
-  if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
 }
+el("opsDragHandle").addEventListener("mousedown", (event) => {
+  if (event.button !== 0 || event.target.closest("button")) return;
+  event.preventDefault();
+  startOpsDrag(event.clientX, event.clientY);
+});
+window.addEventListener("mousemove", (event) => moveOpsDrag(event.clientX, event.clientY));
+window.addEventListener("mouseup", stopOpsDrag);
+el("opsDragHandle").addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || event.target.closest("button")) return;
+  event.preventDefault();
+  startOpsDrag(event.clientX, event.clientY);
+});
+window.addEventListener("pointermove", (event) => moveOpsDrag(event.clientX, event.clientY));
 window.addEventListener("pointerup", stopOpsDrag);
 window.addEventListener("pointercancel", stopOpsDrag);
+el("opsDragHandle").addEventListener("touchstart", (event) => {
+  if (event.target.closest("button")) return;
+  const touch = event.touches[0];
+  if (!touch) return;
+  event.preventDefault();
+  startOpsDrag(touch.clientX, touch.clientY);
+}, { passive: false });
+window.addEventListener("touchmove", (event) => {
+  const touch = event.touches[0];
+  if (!dragState || !touch) return;
+  event.preventDefault();
+  moveOpsDrag(touch.clientX, touch.clientY);
+}, { passive: false });
+window.addEventListener("touchend", stopOpsDrag);
+window.addEventListener("touchcancel", stopOpsDrag);
 window.addEventListener("resize", () => { if (!el("opsWindow").hidden) applyOpsPosition(); });
 
 async function initialize() {
