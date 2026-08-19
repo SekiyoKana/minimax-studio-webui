@@ -65,6 +65,8 @@ const state = {
   brandClicks: [],
   opsPosition: { x: 0, y: 0 },
   opsPositionInitialized: false,
+  launcherPosition: { x: 0, y: 0 },
+  launcherPositionInitialized: false,
   mentionIndex: -1,
   locale: localStorage.getItem("h3-locale") === "en" ? "en" : "zh-CN",
 };
@@ -3545,7 +3547,15 @@ el("clearVisibleLogs").addEventListener("click", () => {
   state.logFloor = Date.now();
   renderLogs(state.logs);
 });
-el("opsLauncher").addEventListener("click", openOpsWindow);
+let launcherClickSuppressed = false;
+el("opsLauncher").addEventListener("click", (event) => {
+  if (launcherClickSuppressed) {
+    launcherClickSuppressed = false;
+    event.preventDefault();
+    return;
+  }
+  openOpsWindow();
+});
 el("closeOps").addEventListener("click", closeOpsWindow);
 el("openAssets").addEventListener("click", openAssetDrawer);
 el("closeAssets").addEventListener("click", closeAssetDrawer);
@@ -3602,7 +3612,88 @@ window.addEventListener("touchmove", (event) => {
 }, { passive: false });
 window.addEventListener("touchend", stopOpsDrag);
 window.addEventListener("touchcancel", stopOpsDrag);
-window.addEventListener("resize", () => { if (!el("opsWindow").hidden) applyOpsPosition(); });
+
+let launcherDragState = null;
+function initializeLauncherPosition() {
+  if (state.launcherPositionInitialized) return;
+  const launcher = el("opsLauncher");
+  const rect = launcher.getBoundingClientRect();
+  state.launcherPosition = { x: rect.left, y: rect.top };
+  state.launcherPositionInitialized = true;
+  launcher.style.left = `${rect.left}px`;
+  launcher.style.top = `${rect.top}px`;
+  launcher.style.right = "auto";
+}
+function applyLauncherPosition() {
+  if (!state.launcherPositionInitialized) return;
+  const launcher = el("opsLauncher");
+  const rect = launcher.getBoundingClientRect();
+  const maxX = Math.max(8, window.innerWidth - rect.width - 8);
+  const maxY = Math.max(8, window.innerHeight - rect.height - 8);
+  state.launcherPosition.x = Math.min(maxX, Math.max(8, state.launcherPosition.x));
+  state.launcherPosition.y = Math.min(maxY, Math.max(8, state.launcherPosition.y));
+  launcher.style.left = `${state.launcherPosition.x}px`;
+  launcher.style.top = `${state.launcherPosition.y}px`;
+}
+function startLauncherDrag(clientX, clientY) {
+  initializeLauncherPosition();
+  launcherDragState = {
+    startX: clientX,
+    startY: clientY,
+    originX: state.launcherPosition.x,
+    originY: state.launcherPosition.y,
+    moved: false,
+  };
+  el("opsLauncher").classList.add("dragging");
+}
+function moveLauncherDrag(clientX, clientY) {
+  if (!launcherDragState) return;
+  const deltaX = clientX - launcherDragState.startX;
+  const deltaY = clientY - launcherDragState.startY;
+  if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) launcherDragState.moved = true;
+  state.launcherPosition.x = launcherDragState.originX + deltaX;
+  state.launcherPosition.y = launcherDragState.originY + deltaY;
+  applyLauncherPosition();
+}
+function stopLauncherDrag() {
+  if (!launcherDragState) return;
+  launcherClickSuppressed = launcherDragState.moved;
+  launcherDragState = null;
+  el("opsLauncher").classList.remove("dragging");
+}
+el("opsLauncher").addEventListener("mousedown", (event) => {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  startLauncherDrag(event.clientX, event.clientY);
+});
+window.addEventListener("mousemove", (event) => moveLauncherDrag(event.clientX, event.clientY));
+window.addEventListener("mouseup", stopLauncherDrag);
+el("opsLauncher").addEventListener("pointerdown", (event) => {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  startLauncherDrag(event.clientX, event.clientY);
+});
+window.addEventListener("pointermove", (event) => moveLauncherDrag(event.clientX, event.clientY));
+window.addEventListener("pointerup", stopLauncherDrag);
+window.addEventListener("pointercancel", stopLauncherDrag);
+el("opsLauncher").addEventListener("touchstart", (event) => {
+  const touch = event.touches[0];
+  if (!touch) return;
+  event.preventDefault();
+  startLauncherDrag(touch.clientX, touch.clientY);
+}, { passive: false });
+window.addEventListener("touchmove", (event) => {
+  const touch = event.touches[0];
+  if (!launcherDragState || !touch) return;
+  event.preventDefault();
+  moveLauncherDrag(touch.clientX, touch.clientY);
+}, { passive: false });
+window.addEventListener("touchend", stopLauncherDrag);
+window.addEventListener("touchcancel", stopLauncherDrag);
+window.addEventListener("resize", () => {
+  if (!el("opsWindow").hidden) applyOpsPosition();
+  applyLauncherPosition();
+});
 
 async function initialize() {
   applyStaticLocale();

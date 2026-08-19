@@ -25,6 +25,15 @@ The project wraps ComfyUI and RunningHub workflows in a responsive Web interface
 
 ## Feature Updates
 
+### 2026-08-19
+
+**Runtime Log Interaction**
+
+- Both the runtime-log launcher and the runtime-log detail window support mouse, Pointer, and touch dragging.
+- The launcher stays within the visible viewport, and the click immediately after a drag does not open the detail window accidentally.
+- Enabling runtime logs from Settings shows the launcher without expanding the detail window.
+- The selected conversation-device filter participates in the refresh signature, so runtime-log refreshes preserve the selected devices.
+
 ### 2026-08-18
 
 **macOS and Windows desktop app**
