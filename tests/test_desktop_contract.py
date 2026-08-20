@@ -1,7 +1,10 @@
 import asyncio
+import hashlib
+import json
 import os
 import sqlite3
 import tempfile
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 from tempfile import TemporaryDirectory
@@ -21,6 +24,30 @@ from app.settings import Settings
 
 
 class DesktopContractTests(TestCase):
+    def test_comfyui_node_packages_match_manifest(self):
+        root = Path(__file__).resolve().parents[1]
+        package_root = root / "comfyui_nodes"
+        manifest = json.loads((package_root / "manifest.json").read_text(encoding="utf-8"))
+        provided_nodes = {
+            node
+            for package in manifest["packages"]
+            for node in package["provides"]
+        }
+        workflow_nodes = {
+            node["class_type"]
+            for workflow_path in (root / "workflows").glob("*.json")
+            for node in json.loads(workflow_path.read_text(encoding="utf-8")).values()
+        }
+
+        self.assertEqual(len(manifest["packages"]), 4)
+        self.assertEqual(workflow_nodes - provided_nodes, set())
+        for item in manifest["packages"]:
+            archive = package_root / item["file"]
+            self.assertTrue(archive.is_file(), item["file"])
+            self.assertEqual(hashlib.sha256(archive.read_bytes()).hexdigest(), item["sha256"])
+            with zipfile.ZipFile(archive) as package:
+                self.assertIsNone(package.testzip(), item["file"])
+
     def test_ai_key_is_stored_in_sqlite_and_never_returned(self):
         with TemporaryDirectory() as temp:
             database = Path(temp) / "config.db"

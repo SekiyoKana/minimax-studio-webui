@@ -43,6 +43,12 @@ sudo apt-get install -y git ffmpeg aria2 rsync curl openssl python3.11 python3.1
 
 Ubuntu 22.04 默认源可能不包含 Python 3.11。云 GPU 镜像可以预装 Python 3.11、Conda Python 3.11，或通过受控软件源安装。
 
+## ComfyUI 节点包
+
+根目录的 [`comfyui_nodes/`](../comfyui_nodes/) 包含固定版本的 ComfyUI 核心源码、VideoHelperSuite、ComfyUI-MultiGPU 和数字人音频驱动节点。每个依赖均为独立 ZIP 文件，来源、提交、许可和 SHA-256 记录在 [`comfyui_nodes/manifest.json`](../comfyui_nodes/manifest.json)。
+
+安装脚本默认从上游仓库检出相同版本。需要离线安装或复核源码时，可以使用这些压缩包。Music3 还需要应用 `patches/comfyui-music3-force-duration.patch`。
+
 ## 安装参数
 
 | 环境变量 | 默认值 | 说明 |

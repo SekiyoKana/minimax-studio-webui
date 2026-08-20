@@ -43,6 +43,12 @@ sudo apt-get install -y git ffmpeg aria2 rsync curl openssl python3.11 python3.1
 
 The default Ubuntu 22.04 repositories may not contain Python 3.11. Use a cloud GPU image with Python 3.11, a Conda Python 3.11 environment, or an approved package source.
 
+## ComfyUI Node Packages
+
+The root-level [`comfyui_nodes/`](../../comfyui_nodes/) directory contains pinned source archives for ComfyUI core, VideoHelperSuite, ComfyUI-MultiGPU, and the digital-human audio-drive node. Each dependency is a separate ZIP file. Sources, commits, licenses, and SHA-256 checksums are recorded in [`comfyui_nodes/manifest.json`](../../comfyui_nodes/manifest.json).
+
+The installer checks out the same revisions from the upstream repositories by default. Use the archives for offline installation or source verification. Music3 also requires `patches/comfyui-music3-force-duration.patch`.
+
 ## Installer Settings
 
 | Environment Variable | Default | Description |

@@ -1,0 +1,64 @@
+{
+  "generated_at": "2026-08-20",
+  "packages": [
+    {
+      "file": "ComfyUI-core-7fe8a61.zip",
+      "source": "https://github.com/Comfy-Org/ComfyUI",
+      "commit": "7fe8a6138504f90ff7be82f3babf416da32876b1",
+      "license": "GPL-3.0",
+      "sha256": "4b392b42c943f3806c89694309b9cf7c9c293ce4707c866205c41ae6cc09f4d5",
+      "provides": [
+        "BasicGuider",
+        "BasicScheduler",
+        "CLIPLoader",
+        "ConditioningZeroOut",
+        "CreateVideo",
+        "KSampler",
+        "KSamplerSelect",
+        "LoadAudio",
+        "LoadImage",
+        "LoraLoaderBypass",
+        "LoraLoaderModelOnly",
+        "MiniMaxH3ImageToVideo",
+        "MiniMaxH3ReferenceToVideo",
+        "MiniMaxH3SigmaShift",
+        "MiniMaxMusic3TextEncode",
+        "EmptyMiniMaxMusic3LatentAudio",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "SaveAudio",
+        "SaveVideo",
+        "UNETLoader",
+        "VAEDecode",
+        "VAEDecodeAudio",
+        "VAEDecodeAudioTiled",
+        "VAELoader"
+      ]
+    },
+    {
+      "file": "ComfyUI-VideoHelperSuite-993082e.zip",
+      "source": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite",
+      "commit": "993082e4f2473bf4acaf06f51e33877a7eb38960",
+      "license": "GPL-3.0",
+      "sha256": "064ced8c704f8f847430f581044e3b510d312e29169db202e30aa1e8be2176d5",
+      "provides": ["VHS_LoadVideo"]
+    },
+    {
+      "file": "ComfyUI-MultiGPU-62f98ed.zip",
+      "source": "https://github.com/pollockjj/ComfyUI-MultiGPU",
+      "commit": "62f98eda3a1081a551c8efca367973ac854e9d5e",
+      "license": "GPL-3.0",
+      "sha256": "bc9332560726c56388f30eea3e29364c01bf3e767cfaf33a64d464758e193c57",
+      "provides": ["CLIPLoaderMultiGPU"]
+    },
+    {
+      "file": "comfyui-minimax-h3-audio-drive-de65ec5.zip",
+      "source": "https://github.com/vrgamegirl19/comfyui-vrgamedevgirl",
+      "commit": "de65ec552f2552e90170d5572b2c53d544bedd7e",
+      "license": "AGPL-3.0",
+      "sha256": "a316573e223e3673ad9e76afdec83680e95c0e94974c3eb9793035b163225b80",
+      "provides": ["VRGDG_MiniMaxH3AudioDrive"],
+      "scope": "Minimal package containing only the node required by the digital-human workflow"
+    }
+  ]
+}

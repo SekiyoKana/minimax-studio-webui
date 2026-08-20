@@ -64,11 +64,11 @@ The digital human workflow adds:
 
 ## Custom Nodes
 
-The API dynamically creates `VHS_LoadVideo` nodes for Ref2VA video references, so [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) is required.
+The API dynamically creates `VHS_LoadVideo` nodes for Ref2VA video references, so [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) is required. A pinned source package is available under [`comfyui_nodes/`](../../comfyui_nodes/).
 
 The 8-step LoRA workflows use ComfyUI's built-in LoRA loader and sampling nodes, with no Turbo custom node dependency. Ref2VA acceleration temporarily reuses the FL2VA 8-step LoRA.
 
-The digital human workflow requires the attached `comfyui-vrgamedevgirl` package for `VRGDG_MiniMaxH3AudioDrive`. The attached `ComfyUI-SoundFlow` package is installed in the cloud ComfyUI environment. The API workflow uses server-side `ffprobe` duration detection and does not depend on `SoundFlow_GetLength`.
+The digital-human workflow requires `VRGDG_MiniMaxH3AudioDrive`. The minimal archive in this repository contains only that node and its upstream license notice. The service reads driving-audio duration with server-side `ffprobe`; the current API workflow does not depend on ComfyUI-SoundFlow or `SoundFlow_GetLength`.
 
 Music3 uses ComfyUI's native `MiniMaxMusic3TextEncode` and `EmptyMiniMaxMusic3LatentAudio` nodes with ComfyUI-MultiGPU's `CLIPLoaderMultiGPU`. The text encoder is pinned to the current ComfyUI process CUDA device. API jobs enable forced-duration mode and suppress `<|audio_end|>` until the requested duration is reached. The workflow uses 30 Euler steps, the `simple` scheduler, tiled audio decoding, and FLAC output.
 

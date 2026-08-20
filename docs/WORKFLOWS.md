@@ -64,11 +64,11 @@ Turbo 工作流增加：
 
 ## 自定义节点
 
-Ref2VA 视频参考由 API 动态创建 `VHS_LoadVideo` 节点，因此需要 [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite)。
+Ref2VA 视频参考由 API 动态创建 `VHS_LoadVideo` 节点，因此需要 [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite)。固定版本源码包位于 [`comfyui_nodes/`](../comfyui_nodes/)。
 
 8-step LoRA 工作流使用 ComfyUI 内置的 LoRA 加载器和采样节点，无需 Turbo 自定义节点。Ref2VA 加速方案暂时复用 FL2VA 8-step LoRA。
 
-数字人工作流需要附件中的 `comfyui-vrgamedevgirl`，核心节点为 `VRGDG_MiniMaxH3AudioDrive`。附件中的 `ComfyUI-SoundFlow` 已纳入云端 ComfyUI 插件环境；服务端通过 `ffprobe` 读取驱动音频时长，API 工作流不依赖 `SoundFlow_GetLength`。
+数字人工作流需要 `VRGDG_MiniMaxH3AudioDrive`。仓库中的最小节点包只包含该节点及上游许可说明。服务端通过 `ffprobe` 读取驱动音频时长，当前 API 工作流不依赖 ComfyUI-SoundFlow 或 `SoundFlow_GetLength`。
 
 Music3 使用 ComfyUI 原生节点 `MiniMaxMusic3TextEncode`、`EmptyMiniMaxMusic3LatentAudio`，以及 ComfyUI-MultiGPU 的 `CLIPLoaderMultiGPU`。文本编码器固定使用当前 ComfyUI 进程的 CUDA 设备。API 任务启用强制时长模式，在目标时长前屏蔽 `<|audio_end|>`，工作流固定 30 步、Euler 采样器、`simple` 调度器和分块音频解码，输出 FLAC。
 
