@@ -132,8 +132,8 @@ ComfyUI 节点的并发容量固定为 1。RunningHub 节点的容量由 `max_co
 在云 GPU 服务器中执行：
 
 ```bash
-git clone https://github.com/SekiyoKana/minimax-h3-api.git
-cd minimax-h3-api
+git clone https://github.com/SekiyoKana/minimax-studio-webui.git
+cd minimax-studio-webui
 
 INSTALL_ROOT=/data/minimax-h3-stack \
 GPU_ID=0 \
@@ -148,7 +148,7 @@ bash scripts/install.sh
 3. 下载约 77.3 GB 模型，并校验文件大小和 SHA-256。
 4. 应用 Music3 强制时长补丁。
 5. 生成 `.env` 和随机无痕授权码。
-6. 安装并启动 `comfyui.service` 与 `minimax-h3-api.service`。
+6. 安装并启动 `comfyui.service` 与 `minimax-studio-webui.service`。
 
 安装完成后访问：
 

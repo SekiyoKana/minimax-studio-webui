@@ -2,7 +2,7 @@
 set -euo pipefail
 
 INSTALL_ROOT="${INSTALL_ROOT:-$HOME/minimax-h3-stack}"
-API_ROOT="${API_ROOT:-$INSTALL_ROOT/minimax-h3-api}"
+API_ROOT="${API_ROOT:-$INSTALL_ROOT/minimax-studio-webui}"
 COMFY_ROOT="${COMFY_ROOT:-$INSTALL_ROOT/ComfyUI}"
 API_URL="${API_URL:-http://127.0.0.1:8193}"
 COMFY_URL="${COMFY_URL:-http://127.0.0.1:8188}"

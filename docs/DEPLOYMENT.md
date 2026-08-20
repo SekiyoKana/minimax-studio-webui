@@ -97,7 +97,7 @@ bash scripts/install.sh
 
 ```text
 ~/.config/systemd/user/comfyui.service
-~/.config/systemd/user/minimax-h3-api.service
+~/.config/systemd/user/minimax-studio-webui.service
 ```
 
 退出 SSH 后保持服务运行：

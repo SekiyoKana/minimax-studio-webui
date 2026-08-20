@@ -8,23 +8,23 @@ The examples below use the default installation directory, `$HOME/minimax-h3-sta
 
 ```bash
 systemctl --user status comfyui.service --no-pager
-systemctl --user status minimax-h3-api.service --no-pager
+systemctl --user status minimax-studio-webui.service --no-pager
 ```
 
 ## Start, Stop, and Restart
 
 ```bash
-systemctl --user start comfyui.service minimax-h3-api.service
-systemctl --user stop minimax-h3-api.service comfyui.service
+systemctl --user start comfyui.service minimax-studio-webui.service
+systemctl --user stop minimax-studio-webui.service comfyui.service
 systemctl --user restart comfyui.service
-systemctl --user restart minimax-h3-api.service
+systemctl --user restart minimax-studio-webui.service
 ```
 
 After changing `.env` or a systemd service file:
 
 ```bash
 systemctl --user daemon-reload
-systemctl --user restart comfyui.service minimax-h3-api.service
+systemctl --user restart comfyui.service minimax-studio-webui.service
 ```
 
 Inspect the queues before restarting:
@@ -34,7 +34,7 @@ curl -fsS http://127.0.0.1:8188/queue
 curl -fsS http://127.0.0.1:8193/api/v1/logs
 ```
 
-After ComfyUI returns a `prompt_id` or RunningHub returns a `taskId`, the API persists a remote-task checkpoint in `data/jobs/<job_id>.json`. Restarting only `minimax-h3-api.service` preserves the recorded progress and reconnects to the original node without uploading inputs or submitting the task again. Temporary query failures are retried for the interval configured by `H3_REMOTE_RECONNECT_SECONDS`.
+After ComfyUI returns a `prompt_id` or RunningHub returns a `taskId`, the API persists a remote-task checkpoint in `data/jobs/<job_id>.json`. Restarting only `minimax-studio-webui.service` preserves the recorded progress and reconnects to the original node without uploading inputs or submitting the task again. Temporary query failures are retried for the interval configured by `H3_REMOTE_RECONNECT_SECONDS`.
 
 Recovery is unavailable in these cases:
 
@@ -48,14 +48,14 @@ Before the first deployment of this feature, wait for existing active jobs to fi
 
 ```bash
 journalctl --user -u comfyui.service -f
-journalctl --user -u minimax-h3-api.service -f
+journalctl --user -u minimax-studio-webui.service -f
 ```
 
 Most recent 200 lines:
 
 ```bash
 journalctl --user -u comfyui.service -n 200 --no-pager
-journalctl --user -u minimax-h3-api.service -n 200 --no-pager
+journalctl --user -u minimax-studio-webui.service -n 200 --no-pager
 ```
 
 ## GPU Status
@@ -69,7 +69,7 @@ Change the assigned GPU:
 
 ```bash
 sed -i 's/^CUDA_VISIBLE_DEVICES=.*/CUDA_VISIBLE_DEVICES=1/' \
-  "$HOME/minimax-h3-stack/minimax-h3-api/.env"
+  "$HOME/minimax-h3-stack/minimax-studio-webui/.env"
 systemctl --user restart comfyui.service
 ```
 
@@ -90,12 +90,12 @@ INSTALL_ROOT="$HOME/minimax-h3-stack" bash scripts/verify_install.sh
 
 | Path | Contents |
 |---|---|
-| `minimax-h3-api/data/config.db` | SQLite database for ComfyUI nodes and service settings |
-| `minimax-h3-api/data/jobs` | Job-state JSON files |
-| `minimax-h3-api/data/uploads` | User-uploaded reference assets |
-| `minimax-h3-api/data/outputs` | API-managed MP4 files and parameter sidecars |
-| `ComfyUI/input/minimax-h3-api` | Job inputs uploaded through the ComfyUI API |
-| `ComfyUI/output/minimax-h3-api` | Node-side artifacts returned to the API over HTTP |
+| `minimax-studio-webui/data/config.db` | SQLite database for ComfyUI nodes and service settings |
+| `minimax-studio-webui/data/jobs` | Job-state JSON files |
+| `minimax-studio-webui/data/uploads` | User-uploaded reference assets |
+| `minimax-studio-webui/data/outputs` | API-managed MP4 files and parameter sidecars |
+| `ComfyUI/input/minimax-studio-webui` | Job inputs uploaded through the ComfyUI API |
+| `ComfyUI/output/minimax-studio-webui` | Node-side artifacts returned to the API over HTTP |
 
 Uploads, job files, and artifacts for incognito jobs remain for 30 minutes after completion and are then removed by the service. The public asset library and normal conversation stream do not return these jobs.
 
@@ -107,8 +107,8 @@ Back up source code and job metadata while excluding model files:
 rsync -a \
   --exclude '.venv' \
   --exclude '.cache' \
-  "$HOME/minimax-h3-stack/minimax-h3-api/" \
-  /backup/minimax-h3-api/
+  "$HOME/minimax-h3-stack/minimax-studio-webui/" \
+  /backup/minimax-studio-webui/
 ```
 
 Models can be downloaded and verified again from `model-manifest.json`.

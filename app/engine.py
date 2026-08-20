@@ -430,7 +430,7 @@ class ComfyUIH3Engine:
         manifest = job["request"]["references"]
         if len(paths) != len(manifest):
             raise ValueError("参考素材清单与文件不一致")
-        task_dir = self.settings.comfy_input_dir / "minimax-h3-api" / job["id"]
+        task_dir = self.settings.comfy_input_dir / "minimax-studio-webui" / job["id"]
         task_dir.mkdir(parents=True, exist_ok=True)
         relative_paths = []
         for index, (source, item) in enumerate(zip(paths, manifest, strict=True), start=1):
@@ -445,7 +445,7 @@ class ComfyUIH3Engine:
         manifest = job["request"]["references"]
         if len(paths) != len(manifest):
             raise ValueError("参考素材清单与文件不一致")
-        subfolder = f"minimax-h3-api/{job['id']}"
+        subfolder = f"minimax-studio-webui/{job['id']}"
         uploaded = []
         for index, (source, item) in enumerate(zip(paths, manifest, strict=True), start=1):
             suffix = source.suffix.lower() or ".bin"
@@ -481,7 +481,7 @@ class ComfyUIH3Engine:
         execution_mode = self._execution_mode(job)
         workflow = self._load_workflow(variant, execution_mode)
         request = job["request"]
-        workflow["92"]["inputs"]["filename_prefix"] = f"minimax-h3-api/{job['id']}"
+        workflow["92"]["inputs"]["filename_prefix"] = f"minimax-studio-webui/{job['id']}"
         if variant == "music3-int8":
             if music3_device:
                 workflow["3"]["inputs"]["device"] = music3_device
@@ -884,7 +884,7 @@ class ComfyUIH3Engine:
             checkpoint, "comfyui", str(self.node.id)
         )
         client_id = str((checkpoint or {}).get("client_id") or "")
-        client_id = client_id or f"minimax-h3-api-{uuid.uuid4().hex}"
+        client_id = client_id or f"minimax-studio-webui-{uuid.uuid4().hex}"
         websocket_url = self.comfy_url.replace("http://", "ws://", 1).replace(
             "https://", "wss://", 1
         )

@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
-os.environ.setdefault("H3_ROOT", str(Path(tempfile.gettempdir()) / "minimax-h3-api-tests"))
+os.environ.setdefault("H3_ROOT", str(Path(tempfile.gettempdir()) / "minimax-studio-webui-tests"))
 
 from fastapi import HTTPException
 
@@ -269,7 +269,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(checkpoints[0]["provider"], "comfyui")
         self.assertEqual(checkpoints[0]["node_id"], "gpu-1")
         self.assertEqual(checkpoints[0]["remote_id"], "prompt-checkpoint")
-        self.assertTrue(checkpoints[0]["client_id"].startswith("minimax-h3-api-"))
+        self.assertTrue(checkpoints[0]["client_id"].startswith("minimax-studio-webui-"))
 
     @patch("app.engine.ComfyUIH3Engine._release_vram")
     @patch("httpx.Client")
@@ -1299,7 +1299,7 @@ class ContractTests(unittest.TestCase):
         project_root = Path(__file__).resolve().parents[1]
         index = (project_root / "static" / "index.html").read_text(encoding="utf-8")
         app_js = (project_root / "static" / "app.js").read_text(encoding="utf-8")
-        service = (project_root / "deploy" / "minimax-h3-api.service.in").read_text(encoding="utf-8")
+        service = (project_root / "deploy" / "minimax-studio-webui.service.in").read_text(encoding="utf-8")
         environment = (project_root / ".env.example").read_text(encoding="utf-8")
         deployment = service + environment
 
@@ -1381,8 +1381,8 @@ class ContractTests(unittest.TestCase):
         built = engine._build_workflow(
             job,
             [
-                "minimax-h3-api/tts-test/01_audio.wav",
-                "minimax-h3-api/tts-test/02_audio.wav",
+                "minimax-studio-webui/tts-test/01_audio.wav",
+                "minimax-studio-webui/tts-test/02_audio.wav",
             ],
         )
         self.assertEqual(built["136"]["inputs"]["width"], 32)
@@ -1634,7 +1634,7 @@ class ContractTests(unittest.TestCase):
             },
         }
 
-        first_frame = engine._build_workflow(job, ["minimax-h3-api/test-job/01.png"])
+        first_frame = engine._build_workflow(job, ["minimax-studio-webui/test-job/01.png"])
         self.assertNotIn("last_frame", first_frame["136"]["inputs"])
         self.assertEqual(first_frame["124"]["inputs"]["steps"], 30)
         self.assertEqual(first_frame["129"]["inputs"]["noise_seed"], 123)
@@ -1642,12 +1642,12 @@ class ContractTests(unittest.TestCase):
 
         first_last = engine._build_workflow(
             job,
-            ["minimax-h3-api/test-job/01.png", "minimax-h3-api/test-job/02.png"],
+            ["minimax-studio-webui/test-job/01.png", "minimax-studio-webui/test-job/02.png"],
         )
         self.assertEqual(first_last["136"]["inputs"]["last_frame"], ["139", 0])
         self.assertEqual(
             first_last["139"]["inputs"]["image"],
-            "minimax-h3-api/test-job/02.png",
+            "minimax-studio-webui/test-job/02.png",
         )
 
     def test_ref2va_workflow_supports_all_reference_types(self):
@@ -1682,10 +1682,10 @@ class ContractTests(unittest.TestCase):
             },
         }
         names = [
-            "minimax-h3-api/ref2va-test/01_image.png",
-            "minimax-h3-api/ref2va-test/02_video.mp4",
-            "minimax-h3-api/ref2va-test/03_video.mp4",
-            "minimax-h3-api/ref2va-test/04_audio.wav",
+            "minimax-studio-webui/ref2va-test/01_image.png",
+            "minimax-studio-webui/ref2va-test/02_video.mp4",
+            "minimax-studio-webui/ref2va-test/03_video.mp4",
+            "minimax-studio-webui/ref2va-test/04_audio.wav",
         ]
 
         workflow = engine._build_workflow(job, names)
@@ -1717,8 +1717,8 @@ class ContractTests(unittest.TestCase):
             },
         }
         names = [
-            "minimax-h3-api/digital-human-test/01_audio.wav",
-            "minimax-h3-api/digital-human-test/02_image.png",
+            "minimax-studio-webui/digital-human-test/01_audio.wav",
+            "minimax-studio-webui/digital-human-test/02_image.png",
         ]
 
         workflow = engine._build_workflow(job, names)
@@ -1758,7 +1758,7 @@ class ContractTests(unittest.TestCase):
         self.assertTrue(workflow["13"]["inputs"]["force_duration"])
         self.assertEqual(workflow["13"]["inputs"]["seed"], 1234)
         self.assertEqual(workflow["9"]["inputs"]["seed"], 1234)
-        self.assertEqual(workflow["92"]["inputs"]["filename_prefix"], "minimax-h3-api/music3-test")
+        self.assertEqual(workflow["92"]["inputs"]["filename_prefix"], "minimax-studio-webui/music3-test")
         self.assertEqual(workflow["3"]["inputs"]["device"], "cuda:1")
 
     def test_music3_uses_cuda_device_reported_by_selected_comfy_node(self):
@@ -1827,7 +1827,7 @@ class ContractTests(unittest.TestCase):
         with TemporaryDirectory() as temp:
             root = Path(temp) / "api"
             comfy_output = Path(temp) / "comfy-output"
-            source = comfy_output / "minimax-h3-api" / "test-job_00001_.mp4"
+            source = comfy_output / "minimax-studio-webui" / "test-job_00001_.mp4"
             source.parent.mkdir(parents=True)
             source.write_bytes(b"test-video")
             settings = Settings(root=root, comfy_output_dir=comfy_output)
@@ -1840,7 +1840,7 @@ class ContractTests(unittest.TestCase):
                         "images": [
                             {
                                 "filename": source.name,
-                                "subfolder": "minimax-h3-api",
+                                "subfolder": "minimax-studio-webui",
                                 "type": "output",
                             }
                         ]
@@ -1860,7 +1860,7 @@ class ContractTests(unittest.TestCase):
         with TemporaryDirectory() as temp:
             root = Path(temp) / "api"
             comfy_output = Path(temp) / "comfy-output"
-            source = comfy_output / "minimax-h3-api" / "music3-test_00001_.flac"
+            source = comfy_output / "minimax-studio-webui" / "music3-test_00001_.flac"
             source.parent.mkdir(parents=True)
             source.write_bytes(b"test-flac")
             settings = Settings(root=root, comfy_output_dir=comfy_output)
@@ -1873,7 +1873,7 @@ class ContractTests(unittest.TestCase):
                         "audio": [
                             {
                                 "filename": source.name,
-                                "subfolder": "minimax-h3-api",
+                                "subfolder": "minimax-studio-webui",
                                 "type": "output",
                             }
                         ]

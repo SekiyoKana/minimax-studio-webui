@@ -18,7 +18,7 @@
 
 Agent 应按以下顺序执行：
 
-1. 确认当前目录是 `minimax-h3-api` 仓库，并读取本文件、`README.md` 和 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
+1. 确认当前目录是 `minimax-studio-webui` 仓库，并读取本文件、`README.md` 和 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
 2. 检查工作区是否存在用户未提交修改。不要覆盖这些修改。
 3. 检查操作系统、Python、GPU、磁盘空间和安装脚本所需命令。
 4. 先运行一次 `DRY_RUN=1`，向用户报告安装目录、Python、GPU、模型来源和固定提交。
@@ -112,8 +112,8 @@ python3 scripts/download_models.py \
 ## 安装验证
 
 ```bash
-systemctl --user is-enabled comfyui.service minimax-h3-api.service
-systemctl --user is-active comfyui.service minimax-h3-api.service
+systemctl --user is-enabled comfyui.service minimax-studio-webui.service
+systemctl --user is-active comfyui.service minimax-studio-webui.service
 curl -fsS http://127.0.0.1:8188/system_stats
 curl -fsS http://127.0.0.1:8193/health
 ```
@@ -134,7 +134,7 @@ INSTALL_ROOT=/data/minimax-h3-stack bash scripts/verify_install.sh
 
 ```bash
 journalctl --user -u comfyui.service -n 200 --no-pager
-journalctl --user -u minimax-h3-api.service -n 200 --no-pager
+journalctl --user -u minimax-studio-webui.service -n 200 --no-pager
 ```
 
 ## 服务与访问
@@ -152,7 +152,7 @@ journalctl --user -u minimax-h3-api.service -n 200 --no-pager
 
 ```text
 ~/.config/systemd/user/comfyui.service
-~/.config/systemd/user/minimax-h3-api.service
+~/.config/systemd/user/minimax-studio-webui.service
 ```
 
 退出 SSH 后仍需保持用户服务运行时，在用户明确授权后执行：
@@ -163,7 +163,7 @@ sudo loginctl enable-linger "$USER"
 
 ## 配置与敏感信息
 
-API 配置文件为 `${INSTALL_ROOT}/minimax-h3-api/.env`。该文件包含无痕授权码和可选 API Key，权限必须保持为用户私有。Agent 不应在聊天输出、日志摘要或提交记录中展示这些值。
+API 配置文件为 `${INSTALL_ROOT}/minimax-studio-webui/.env`。该文件包含无痕授权码和可选 API Key，权限必须保持为用户私有。Agent 不应在聊天输出、日志摘要或提交记录中展示这些值。
 
 安装完成后向用户报告：
 

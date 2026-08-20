@@ -97,7 +97,7 @@ The installer writes:
 
 ```text
 ~/.config/systemd/user/comfyui.service
-~/.config/systemd/user/minimax-h3-api.service
+~/.config/systemd/user/minimax-studio-webui.service
 ```
 
 Keep the services running after SSH logout:

@@ -132,8 +132,8 @@ Higher resolutions, longer videos, and concurrent multi-node execution require a
 Run on the cloud GPU server:
 
 ```bash
-git clone https://github.com/SekiyoKana/minimax-h3-api.git
-cd minimax-h3-api
+git clone https://github.com/SekiyoKana/minimax-studio-webui.git
+cd minimax-studio-webui
 
 INSTALL_ROOT=/data/minimax-h3-stack \
 GPU_ID=0 \
@@ -148,7 +148,7 @@ The installer:
 3. Downloads approximately 77.3 GB of models and verifies sizes and SHA-256 hashes.
 4. Applies the Music3 forced-duration patch.
 5. Generates `.env` and a random incognito access code.
-6. Installs and starts `comfyui.service` and `minimax-h3-api.service`.
+6. Installs and starts `comfyui.service` and `minimax-studio-webui.service`.
 
 After installation:
 

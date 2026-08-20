@@ -7,7 +7,7 @@ MULTIGPU_COMMIT="62f98eda3a1081a551c8efca367973ac854e9d5e"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALL_ROOT="${INSTALL_ROOT:-$HOME/minimax-h3-stack}"
-API_ROOT="$INSTALL_ROOT/minimax-h3-api"
+API_ROOT="$INSTALL_ROOT/minimax-studio-webui"
 COMFY_ROOT="$INSTALL_ROOT/ComfyUI"
 PYTHON_BIN="${PYTHON_BIN:-python3.11}"
 GPU_ID="${GPU_ID:-0}"
@@ -199,7 +199,7 @@ fi
 service_dir="$HOME/.config/systemd/user"
 mkdir -p "$service_dir"
 render_service "$API_ROOT/deploy/comfyui.service.in" "$service_dir/comfyui.service"
-render_service "$API_ROOT/deploy/minimax-h3-api.service.in" "$service_dir/minimax-h3-api.service"
+render_service "$API_ROOT/deploy/minimax-studio-webui.service.in" "$service_dir/minimax-studio-webui.service"
 
 if [[ "$ENABLE_LINGER" == "1" ]] && command -v loginctl >/dev/null 2>&1; then
   if [[ "$(id -u)" == "0" ]]; then
@@ -220,7 +220,7 @@ if [[ "$START_SERVICES" == "1" ]]; then
   done
   curl -fsS "http://127.0.0.1:$COMFY_PORT/system_stats" >/dev/null \
     || fail "ComfyUI 未在预期时间内启动"
-  systemctl --user enable --now minimax-h3-api.service
+  systemctl --user enable --now minimax-studio-webui.service
   for _ in $(seq 1 30); do
     curl -fsS "http://127.0.0.1:$API_PORT/health" >/dev/null 2>&1 && break
     sleep 2

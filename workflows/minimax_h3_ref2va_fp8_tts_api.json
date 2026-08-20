@@ -3,7 +3,7 @@
     "class_type": "SaveAudio",
     "inputs": {
       "audio": ["121", 0],
-      "filename_prefix": "minimax-h3-api/tts"
+      "filename_prefix": "minimax-studio-webui/tts"
     },
     "_meta": {"title": "Save H3 TTS Audio"}
   },

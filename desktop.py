@@ -79,7 +79,7 @@ def main() -> None:
             access_log=False,
         )
     )
-    thread = threading.Thread(target=server.run, name="h3-api", daemon=True)
+    thread = threading.Thread(target=server.run, name="minimax-studio-webui", daemon=True)
     thread.start()
     try:
         wait_for_server(local_url)

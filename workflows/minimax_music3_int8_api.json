@@ -75,7 +75,7 @@
     "class_type": "SaveAudio",
     "inputs": {
       "audio": ["42", 0],
-      "filename_prefix": "minimax-h3-api/music3"
+      "filename_prefix": "minimax-studio-webui/music3"
     },
     "_meta": {"title": "Save Music3 FLAC"}
   }
