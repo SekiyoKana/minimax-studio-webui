@@ -294,6 +294,7 @@ model-manifest.json   模型来源、大小、SHA-256 和许可元数据
 ## 文档
 
 - [云 GPU 部署](docs/DEPLOYMENT.md)
+- [Agent 安装指南](AGENT.md)
 - [桌面应用](docs/DESKTOP.md)
 - [API 请求](docs/API.md)
 - [模型清单](docs/MODELS.md)

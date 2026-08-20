@@ -294,6 +294,7 @@ model-manifest.json   Model sources, sizes, SHA-256 hashes, and license metadata
 ## Documentation
 
 - [Cloud GPU deployment](docs/en/DEPLOYMENT.md)
+- [Agent installation guide](AGENT.md)
 - [Desktop app](docs/DESKTOP.md)
 - [API requests](docs/en/API.md)
 - [Model manifest](docs/en/MODELS.md)
