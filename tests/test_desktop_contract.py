@@ -24,6 +24,35 @@ from app.settings import Settings
 
 
 class DesktopContractTests(TestCase):
+    def test_infinite_canvas_feature_is_ablated(self):
+        root = Path(__file__).resolve().parents[1]
+        html = (root / "static" / "index.html").read_text(encoding="utf-8")
+        source = (root / "static" / "app.js").read_text(encoding="utf-8")
+        styles = (root / "static" / "styles.css").read_text(encoding="utf-8")
+        for marker in ("openCanvas", "canvasModal", "canvasViewport", "canvasWorld", "无限画布", "infinite canvas", "application/x-h3-canvas-material", "/api/v1/canvas/"):
+            self.assertNotIn(marker, html)
+            self.assertNotIn(marker, source)
+            self.assertNotIn(marker, styles)
+        self.assertNotIn("canvas_materials", (root / "app" / "main.py").read_text(encoding="utf-8"))
+
+    def test_web_page_disables_html_caching(self):
+        source = (Path(__file__).resolve().parents[1] / "app" / "main.py").read_text(encoding="utf-8")
+        self.assertIn('"Cache-Control": "no-store, no-cache, must-revalidate"', source)
+        self.assertIn('"Pragma": "no-cache"', source)
+
+    def test_canvas_material_api_is_ablated(self):
+        source = (Path(__file__).resolve().parents[1] / "app" / "main.py").read_text(encoding="utf-8")
+        self.assertNotIn("/api/v1/canvas/", source)
+        self.assertNotIn("CANVAS_MATERIALS", source)
+        self.assertFalse(any(route.path.startswith("/api/v1/canvas") for route in main_module.app.routes))
+
+    def test_frontend_supports_pasting_clipboard_images_as_references(self):
+        source = (Path(__file__).resolve().parents[1] / "static" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("clipboardData", source)
+        self.assertIn("getAsFile", source)
+        self.assertIn("pasted-image-", source)
+        self.assertIn('document.addEventListener("paste"', source)
+
     def test_comfyui_node_packages_match_manifest(self):
         root = Path(__file__).resolve().parents[1]
         package_root = root / "comfyui_nodes"
@@ -39,7 +68,7 @@ class DesktopContractTests(TestCase):
             for node in json.loads(workflow_path.read_text(encoding="utf-8")).values()
         }
 
-        self.assertEqual(len(manifest["packages"]), 4)
+        self.assertEqual(len(manifest["packages"]), 8)
         self.assertEqual(workflow_nodes - provided_nodes, set())
         for item in manifest["packages"]:
             archive = package_root / item["file"]

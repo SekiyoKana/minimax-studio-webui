@@ -12,6 +12,10 @@
 | `minimax_h3_ref2va_fp8_scaled_api.json` | Ref2VA FP8 Scaled | 普通流 | `dcd2db8828bb631abd6ff3707d545037047815dc54743d1fab2f98ac53749561` |
 | `minimax_h3_fl2va_fp8_turbo_lora_api.json` | FL2VA FP8 Scaled + 8-step LoRA v1.0 | `res_multistep`，8 步 | `e5ce3e5640424a8427f467ee9a27d9e30278a6f11b46193d14ec9841af92c3e0` |
 | `minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA FP8 Scaled + FL2VA 8-step LoRA v1.0 | `res_multistep`，8 步 | `138ea319f489b545b075196cf5ff1bc3ef73fe918d82f0a5d31e80a73a10f586` |
+| `minimax_h3_fl2va_fp8_sa_api.json` | FL2VA FP8 + 8-step LoRA + Sol-Attn + Latent 3D Upscaler | H3 SA，双阶段 8 步 | `9e7c0b48a6d5f603c8c011711d83aafa7f1e772d75f9d2824465825c1c1554e2` |
+| `minimax_h3_ref2va_fp8_sa_api.json` | Ref2VA FP8 + 8-step LoRA + Sol-Attn + Latent 3D Upscaler | H3 SA，双阶段 8 步 | `ed19681db53c34620cf50a9cd57269b4d74d355476664dad4000fc6c7fc8f070` |
+| `minimax_h3_fl2va_vdn_api.json` | FL2VA FP8 + VDN-H3 Video Delta Net | VDN-H3，8–50 步自动选择 stage | `42db673ea1927d17e43e0687017f1f33765e8d5da6446c74b717141314cfaa93` |
+| `minimax_h3_ref2va_vdn_api.json` | Ref2VA FP8 + VDN-H3 Video Delta Net | VDN-H3，8–50 步自动选择 stage | `937d67a67c6c5d79b23a27650442e295559251eb6e8911c8ec6aa38628328919` |
 | `minimax_h3_ref2va_fp8_nsfw_lora_api.json` | Ref2VA FP8 Scaled | NaughtyTimes LoRA | `4fbdcb94d6014fedfd6af50d081feaae891ca97867f888a00673563891e9dad7` |
 | `minimax_h3_ref2va_fp8_digital_human_api.json` | Ref2VA FP8 Scaled | 单图数字人音频驱动 | `829babe98437529714c4608185be9a63cd5db3ea09544d813a060b6e47138c06` |
 | `minimax_music3_int8_api.json` | Music3 INT8 | 文本与歌词生成音乐 | `f3f3d2af89aadd9b25bd4d49628e28b13ba6e9e05e3afc551f4edd5177980fa5` |
@@ -51,6 +55,12 @@ Turbo 工作流增加：
 | `142` | `LoraLoaderModelOnly` | FL2VA 8-step LoRA v1.0，模型强度 1.0 |
 | `143` | `MiniMaxH3SigmaShift` | 视频偏移 12.0，音频偏移 3.0 |
 
+H3 SA 工作流增加低分辨率首阶段、Latent 3D 放大和高分辨率 Sol-Attn 二阶段。首阶段尺寸按目标尺寸的约三分之二计算，二阶段尺寸使用请求尺寸。`ref2va-fp8` 的图片、视频和音频参考在首阶段动态注入，首阶段输出的联合潜变量继续传入二阶段。
+
+H3 SA 可调参数：`sa_tau`、`sa_start_percent`、`sa_end_percent`、`sa_min_tokens`、`sa_int8_qk`、`sa_int8_pv`、`sa_sink_conditioning`、`sa_morton`、`sa_morton_curve`、`sa_dense_blocks` 和 `sa_stage2_denoise`。默认值与远端 `SolAttnPatch` 节点签名一致，`steps` 固定为 8。
+
+VDN-H3 工作流通过 `ApplyVDNH3` 注入 Video Delta Net 混合注意力。步数控件开放 8–50 步，默认 50 步：选择 8 步时自动使用 `stage-dmd-step-250` 并启用 turbo adapter，选择 9–50 步时自动使用 `stage-b-step-2000` 并关闭 turbo adapter。两种路径均使用 `merge` 和 `stream`。VDN-H3 与 Sol-Attn 节点不叠加，检查点放置于 `ComfyUI/models/vdn/`。
+
 可选 NaughtyTimes 工作流增加节点 `141`，类型为 `LoraLoaderBypass`，模型强度 0.5，CLIP 强度 0.0。
 
 数字人工作流增加：
@@ -78,7 +88,9 @@ H3 TTS 使用 Ref2VA FP8、视频 VAE 和音频 VAE。服务将画面尺寸强�
 
 | 参数 | 范围 |
 |---|---|
-| 时长 | 1 至 15 秒 |
+| 普通 H3、双采、8-step 时长 | 1 至 15 秒 |
+| H3 SA 时长 | 1 至 300 秒，超过单段上限时自动拼接 |
+| VDN-H3 时长 | 1 至 15 秒 |
 | 步数 | 普通流 4 至 50，8-step LoRA 加速固定 8 |
 | 宽高 | 32 的倍数，最小边不低于 352 |
 | FL2VA 素材 | 1 至 2 张图片 |
@@ -93,3 +105,7 @@ H3 TTS 使用 Ref2VA FP8、视频 VAE 和音频 VAE。服务将画面尺寸强�
 | H3 TTS 步数 | 4 至 50 |
 | H3 TTS 尺寸 | 固定 32×32，音频-only |
 | H3 TTS 音频参考 | 0 至 3 段 |
+
+H3 SA 支持 1 至 300 秒。超过单段 H3 时长上限时，服务自动按合法帧网格分段，使用固定的 22 帧音视频上下文连续生成，裁切重复帧并合并为一个 MP4。Sol-Attn 和二阶段精修参数使用服务端验证默认值。
+
+VDN-H3 当前按单段 1 至 15 秒执行，线性分支状态覆盖长时序注意力。步数可在 8–50 之间调整，默认 50 步。8 步使用 `stage-dmd-step-250`，其余步数使用 `stage-b-step-2000`。官方检查点目录结构保持不变。

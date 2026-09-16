@@ -82,6 +82,23 @@ Read field keys from `runninghub_schema` returned by `GET /api/v1/comfy/nodes`. 
 
 Delete a node with `DELETE /api/v1/comfy/nodes/{node_id}`. The service rejects disabling or deleting a node that is running a job, has manually targeted queued jobs, or is the final enabled node.
 
+## Create a VDN-H3 Job
+
+VDN-H3 supports 8–50 steps for FL2VA and Ref2VA. Eight steps automatically selects `stage-dmd-step-250`; 9–50 steps selects `stage-b-step-2000`:
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations \
+  -F 'prompt=One continuous locked-off shot of a person walking forward with stable motion and ambient sound.' \
+  -F 'reference_manifest=[{"type":"image"}]' \
+  -F 'references=@first-frame.png;type=image/png' \
+  -F 'model_variant=fl2va-fp8' \
+  -F 'execution_mode=vdn-h3' \
+  -F 'width=864' \
+  -F 'height=480' \
+  -F 'duration=15' \
+  -F 'steps=8'
+```
+
 ## Create an FL2VA Turbo Job
 
 ```bash
@@ -122,6 +139,38 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
   -F 'duration=5' \
   -F 'steps=20'
 ```
+
+## Create an H3 SA Job
+
+H3 SA supports both `fl2va-fp8` and `ref2va-fp8`. Ref2VA retains support for up to 9 images, 3 videos, and 3 audio clips. The workflow runs a low-resolution H3 stage, Latent 3D upscaling, and a high-resolution Sol-Attn refinement stage. `steps` is fixed at 8.
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations \
+  -F 'prompt=The character slowly turns indoors while preserving the referenced identity, clothing, and environment.' \
+  -F 'reference_manifest=[{"type":"image"},{"type":"video"},{"type":"audio"}]' \
+  -F 'references=@character.png;type=image/png' \
+  -F 'references=@motion.mp4;type=video/mp4' \
+  -F 'references=@voice.wav;type=audio/wav' \
+  -F 'model_variant=ref2va-fp8' \
+  -F 'execution_mode=h3-sa' \
+  -F 'width=1344' \
+  -F 'height=768' \
+  -F 'duration=5' \
+  -F 'steps=8' \
+  -F 'sa_tau=1.3' \
+  -F 'sa_start_percent=0.2' \
+  -F 'sa_end_percent=0.9' \
+  -F 'sa_min_tokens=4096' \
+  -F 'sa_int8_qk=true' \
+  -F 'sa_int8_pv=true' \
+  -F 'sa_sink_conditioning=exact_kv_and_rows' \
+  -F 'sa_morton=false' \
+  -F 'sa_morton_curve=2d_frame' \
+  -F 'sa_dense_blocks=0' \
+  -F 'sa_stage2_denoise=0.35'
+```
+
+The web interface exposes the same parameters under More settings. `sa_start_percent` must be lower than `sa_end_percent`; `sa_dense_blocks` uses ComfyUI Sol-Attn layer expressions.
 
 ## Create a Digital Human Job
 

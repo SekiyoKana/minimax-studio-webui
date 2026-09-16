@@ -35,7 +35,7 @@ from .runninghub import assign_media_fields, normalize_parameters, output_media_
 from .settings import settings
 
 
-ExecutionMode = Literal["native", "turbo-lora", "h3-nsfw", "digital-human", "tts", "music3"]
+ExecutionMode = Literal["native", "turbo-lora", "dual-sampling", "h3-sa", "vdn-h3", "h3-nsfw", "digital-human", "tts", "music3"]
 ModelVariant = Literal["fl2va-fp8", "ref2va-fp8", "music3-int8"]
 
 
@@ -110,6 +110,17 @@ class GenerationPatch(BaseModel):
     seed: int | None = Field(None, ge=0, le=2**31 - 1)
     model_variant: ModelVariant | None = None
     execution_mode: ExecutionMode | None = None
+    sa_tau: float | None = Field(None, ge=0, le=4)
+    sa_start_percent: float | None = Field(None, ge=0, le=1)
+    sa_end_percent: float | None = Field(None, ge=0, le=1)
+    sa_min_tokens: int | None = Field(None, ge=0, le=1048576)
+    sa_int8_qk: bool | None = None
+    sa_int8_pv: bool | None = None
+    sa_sink_conditioning: Literal["exact_kv", "exact_kv_and_rows", "off"] | None = None
+    sa_morton: bool | None = None
+    sa_morton_curve: Literal["3d", "2d_frame"] | None = None
+    sa_dense_blocks: str | None = Field(None, max_length=256)
+    sa_stage2_denoise: float | None = Field(None, ge=0, le=1)
     lyrics: str | None = Field(None, max_length=12000)
     comfy_node: str | None = Field(None, min_length=1, max_length=200)
     runninghub_parameters: dict[str, object] | None = None
@@ -122,9 +133,9 @@ class OptimizePromptRequest(BaseModel):
     base_url: str = Field(min_length=8, max_length=500)
     model: str = Field(min_length=1, max_length=200)
     references: list[dict[str, str]] = Field(default_factory=list, max_length=15)
-    duration: float = Field(default=5, ge=1, le=15)
+    duration: float = Field(default=5, ge=1, le=300)
     model_variant: Literal["fl2va-fp8", "ref2va-fp8"] = "fl2va-fp8"
-    execution_mode: Literal["native", "tts"] = "native"
+    execution_mode: Literal["native", "h3-sa", "vdn-h3", "tts"] = "native"
 
 
 class MusicAssistRequest(BaseModel):
@@ -246,16 +257,51 @@ def validate_generation(
         if not 4 <= steps <= 50:
             raise HTTPException(status_code=422, detail="H3 TTS 采样步数范围为 4–50")
         return
+    if execution_mode == "dual-sampling":
+        if not 1 <= duration <= 15:
+            raise HTTPException(status_code=422, detail="双采工作流时长范围为 1–15 秒")
+        if not 4 <= steps <= 50:
+            raise HTTPException(status_code=422, detail="双采工作流采样步数范围为 4–50")
+        if width % 32 or height % 32 or width < 352 or height < 352:
+            raise HTTPException(status_code=422, detail="宽高必须是 32 的倍数，且不低于 352×352")
+        return
+    if execution_mode == "h3-sa" and steps != 8:
+        raise HTTPException(status_code=422, detail="H3 SA 固定使用 8 步 LoRA 采样")
+    if execution_mode == "vdn-h3" and not 8 <= steps <= 50:
+        raise HTTPException(status_code=422, detail="VDN-H3 步数范围为 8–50")
     if width % 32 or height % 32 or width < 352 or height < 352:
         raise HTTPException(status_code=422, detail="宽高必须是 32 的倍数，且不低于 352×352")
-    if not 1 <= duration <= 15:
-        raise HTTPException(status_code=422, detail="时长范围为 1–15 秒")
+    max_duration = 300 if execution_mode == "h3-sa" else 15
+    if not 1 <= duration <= max_duration:
+        duration_label = "H3 SA" if execution_mode == "h3-sa" else "VDN-H3" if execution_mode == "vdn-h3" else "H3"
+        raise HTTPException(status_code=422, detail=f"{duration_label} 时长范围为 1–{max_duration:g} 秒")
     if execution_mode == "turbo-lora" and steps != 8:
         raise HTTPException(status_code=422, detail="8-step LoRA 加速模式固定使用 8 步")
     if execution_mode == "digital-human" and steps != 20:
         raise HTTPException(status_code=422, detail="数字人模式固定使用 20 步")
     if execution_mode not in {"turbo-lora", "digital-human"} and not 4 <= steps <= 50:
         raise HTTPException(status_code=422, detail="采样步数范围为 4–50")
+
+
+def validate_sa_parameters(
+    *,
+    tau: float = 1.3,
+    start_percent: float = 0.2,
+    end_percent: float = 0.9,
+    min_tokens: int = 4096,
+    stage2_denoise: float = 0.35,
+) -> None:
+    values = (tau, start_percent, end_percent, stage2_denoise)
+    if not all(math.isfinite(float(value)) for value in values):
+        raise HTTPException(status_code=422, detail="H3 SA 参数必须为有限数值")
+    if not 0 <= tau <= 4:
+        raise HTTPException(status_code=422, detail="H3 SA tau 范围为 0–4")
+    if not 0 <= start_percent < end_percent <= 1:
+        raise HTTPException(status_code=422, detail="H3 SA 加速起止比例必须满足 0 ≤ start < end ≤ 1")
+    if not 0 <= stage2_denoise <= 1:
+        raise HTTPException(status_code=422, detail="H3 SA 二阶段 denoise 范围为 0–1")
+    if type(min_tokens) is not int or not 0 <= min_tokens <= 1048576:
+        raise HTTPException(status_code=422, detail="H3 SA 最小 token 数范围为 0–1048576")
 
 
 def classify_upload(upload: UploadFile, allow_file: bool = False) -> str:
@@ -329,6 +375,12 @@ def validate_references(
         if len(kinds) > 3:
             raise HTTPException(status_code=422, detail="H3 TTS 最多支持 3 段音频参考")
         return
+    if execution_mode == "dual-sampling":
+        if model_variant != "ref2va-fp8" or not kinds or any(kind != "image" for kind in kinds):
+            raise HTTPException(status_code=422, detail="双采工作流需要至少一张图片参考")
+        if len(kinds) > 9:
+            raise HTTPException(status_code=422, detail="双采工作流最多支持 9 张图片参考")
+        return
     if not kinds:
         raise HTTPException(status_code=422, detail="至少需要一份参考素材")
     if execution_mode == "digital-human":
@@ -356,6 +408,18 @@ def validate_execution_mode(
     if model_variant == "music3-int8":
         raise HTTPException(status_code=422, detail="Music3 INT8 必须使用 Music3 执行方案")
     if execution_mode in {"native", "turbo-lora"}:
+        return
+    if execution_mode == "h3-sa":
+        if model_variant not in {"fl2va-fp8", "ref2va-fp8"}:
+            raise HTTPException(status_code=422, detail="H3 SA 仅支持 FL2VA FP8 或 Ref2VA FP8")
+        return
+    if execution_mode == "vdn-h3":
+        if model_variant not in {"fl2va-fp8", "ref2va-fp8"}:
+            raise HTTPException(status_code=422, detail="VDN-H3 仅支持 FL2VA FP8 或 Ref2VA FP8")
+        return
+    if execution_mode == "dual-sampling":
+        if model_variant != "ref2va-fp8":
+            raise HTTPException(status_code=422, detail="双采工作流仅支持 Ref2VA FP8")
         return
     if execution_mode == "digital-human":
         if model_variant != "ref2va-fp8":
@@ -1915,6 +1979,17 @@ async def create_generation(
     height: Annotated[int, Form()] = 480,
     duration: Annotated[float, Form()] = 5,
     steps: Annotated[int, Form()] = 10,
+    sa_tau: Annotated[float, Form(ge=0, le=4)] = 1.3,
+    sa_start_percent: Annotated[float, Form(ge=0, le=1)] = 0.2,
+    sa_end_percent: Annotated[float, Form(ge=0, le=1)] = 0.9,
+    sa_min_tokens: Annotated[int, Form(ge=0, le=1048576)] = 4096,
+    sa_int8_qk: Annotated[bool, Form()] = True,
+    sa_int8_pv: Annotated[bool, Form()] = True,
+    sa_sink_conditioning: Annotated[Literal["exact_kv", "exact_kv_and_rows", "off"], Form()] = "exact_kv_and_rows",
+    sa_morton: Annotated[bool, Form()] = False,
+    sa_morton_curve: Annotated[Literal["3d", "2d_frame"], Form()] = "2d_frame",
+    sa_dense_blocks: Annotated[str, Form(max_length=256)] = "0",
+    sa_stage2_denoise: Annotated[float, Form(ge=0, le=1)] = 0.35,
     seed: Annotated[str | None, Form()] = None,
     lyrics: Annotated[str, Form(max_length=12000)] = "",
     title: Annotated[str | None, Form(max_length=120)] = None,
@@ -1943,6 +2018,17 @@ async def create_generation(
             height=height,
             duration=duration,
             steps=steps,
+            sa_tau=sa_tau,
+            sa_start_percent=sa_start_percent,
+            sa_end_percent=sa_end_percent,
+            sa_min_tokens=sa_min_tokens,
+            sa_int8_qk=sa_int8_qk,
+            sa_int8_pv=sa_int8_pv,
+            sa_sink_conditioning=sa_sink_conditioning,
+            sa_morton=sa_morton,
+            sa_morton_curve=sa_morton_curve,
+            sa_dense_blocks=sa_dense_blocks,
+            sa_stage2_denoise=sa_stage2_denoise,
             seed=seed,
             lyrics=lyrics,
             title=title,
@@ -1976,6 +2062,14 @@ async def create_generation(
             width = 32
             height = 32
         validate_generation(width, height, duration, steps, execution_mode)
+        if execution_mode == "h3-sa":
+            validate_sa_parameters(
+                tau=sa_tau,
+                start_percent=sa_start_percent,
+                end_percent=sa_end_percent,
+                min_tokens=sa_min_tokens,
+                stage2_denoise=sa_stage2_denoise,
+            )
 
     try:
         seed_raw = (seed or "").strip()
@@ -2088,6 +2182,17 @@ async def create_generation(
             "duration": duration,
             "num_frames": align_frames(duration),
             "steps": steps,
+            "sa_tau": sa_tau,
+            "sa_start_percent": sa_start_percent,
+            "sa_end_percent": sa_end_percent,
+            "sa_min_tokens": sa_min_tokens,
+            "sa_int8_qk": sa_int8_qk,
+            "sa_int8_pv": sa_int8_pv,
+            "sa_sink_conditioning": sa_sink_conditioning,
+            "sa_morton": sa_morton,
+            "sa_morton_curve": sa_morton_curve,
+            "sa_dense_blocks": sa_dense_blocks,
+            "sa_stage2_denoise": sa_stage2_denoise,
             "seed": seed_value,
             "references": public_manifest,
             "media_type": media_type,
@@ -2136,6 +2241,17 @@ async def submit_proxy_generation(
     height: int,
     duration: float,
     steps: int,
+    sa_tau: float,
+    sa_start_percent: float,
+    sa_end_percent: float,
+    sa_min_tokens: int,
+    sa_int8_qk: bool,
+    sa_int8_pv: bool,
+    sa_sink_conditioning: str,
+    sa_morton: bool,
+    sa_morton_curve: str,
+    sa_dense_blocks: str,
+    sa_stage2_denoise: float,
     seed: str | None,
     lyrics: str,
     title: str | None,
@@ -2175,6 +2291,17 @@ async def submit_proxy_generation(
         "height": str(height),
         "duration": str(duration),
         "steps": str(steps),
+        "sa_tau": str(sa_tau),
+        "sa_start_percent": str(sa_start_percent),
+        "sa_end_percent": str(sa_end_percent),
+        "sa_min_tokens": str(sa_min_tokens),
+        "sa_int8_qk": "true" if sa_int8_qk else "false",
+        "sa_int8_pv": "true" if sa_int8_pv else "false",
+        "sa_sink_conditioning": sa_sink_conditioning,
+        "sa_morton": "true" if sa_morton else "false",
+        "sa_morton_curve": sa_morton_curve,
+        "sa_dense_blocks": sa_dense_blocks,
+        "sa_stage2_denoise": str(sa_stage2_denoise),
         "seed": seed or "",
         "lyrics": lyrics,
         "title": title or "",
@@ -2437,6 +2564,14 @@ async def update_generation(
             request_data["steps"],
             request_data["execution_mode"],
         )
+        if request_data["execution_mode"] == "h3-sa":
+            validate_sa_parameters(
+                tau=float(request_data.get("sa_tau", 1.3)),
+                start_percent=float(request_data.get("sa_start_percent", 0.2)),
+                end_percent=float(request_data.get("sa_end_percent", 0.9)),
+                min_tokens=int(request_data.get("sa_min_tokens", 4096)),
+                stage2_denoise=float(request_data.get("sa_stage2_denoise", 0.35)),
+            )
         request_data["media_type"] = "audio" if request_data["execution_mode"] in {"music3", "tts"} else "video"
         request_data["num_frames"] = align_frames(request_data["duration"])
     changes: dict[str, object] = {"request": request_data, "event_message": "任务参数已修改"}
@@ -2556,6 +2691,14 @@ async def regenerate_generation(
             request_data.get("steps", 10),
             execution_mode,
         )
+        if execution_mode == "h3-sa":
+            validate_sa_parameters(
+                tau=float(request_data.get("sa_tau", 1.3)),
+                start_percent=float(request_data.get("sa_start_percent", 0.2)),
+                end_percent=float(request_data.get("sa_end_percent", 0.9)),
+                min_tokens=int(request_data.get("sa_min_tokens", 4096)),
+                stage2_denoise=float(request_data.get("sa_stage2_denoise", 0.35)),
+            )
         validate_references(
             model_variant,
             [item.get("type") for item in references],
@@ -3126,6 +3269,10 @@ def openai_stream_response(
 
 @app.post("/api/v1/prompts/optimize", dependencies=[Depends(authorize)])
 async def optimize_prompt(payload: OptimizePromptRequest):
+    if payload.execution_mode != "tts" and payload.duration > 15 and payload.execution_mode != "h3-sa":
+        raise HTTPException(status_code=422, detail="提示词优化的 H3 时长范围为 1–15 秒")
+    if payload.execution_mode == "native" and payload.duration > 15:
+        raise HTTPException(status_code=422, detail="普通 H3 提示词优化的时长范围为 1–15 秒")
     url = openai_chat_url(payload.base_url)
     stored_ai = local_state.ai_config(include_secret=True)
     api_key = str(stored_ai.get("api_key") or "")
@@ -3220,7 +3367,14 @@ app.mount("/assets", StaticFiles(directory=static_dir), name="assets")
 
 @app.get("/", include_in_schema=False)
 async def index():
-    return FileResponse(static_dir / "index.html")
+    return FileResponse(
+        static_dir / "index.html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @app.exception_handler(HTTPException)

@@ -10,8 +10,15 @@
 | `ComfyUI-VideoHelperSuite-993082e.zip` | Ref2VA 视频参考使用的 `VHS_LoadVideo` | `ComfyUI/custom_nodes/` | `064ced8c704f8f847430f581044e3b510d312e29169db202e30aa1e8be2176d5` |
 | `ComfyUI-MultiGPU-62f98ed.zip` | Music3 文本编码器使用的 `CLIPLoaderMultiGPU` | `ComfyUI/custom_nodes/` | `bc9332560726c56388f30eea3e29364c01bf3e767cfaf33a64d464758e193c57` |
 | `comfyui-minimax-h3-audio-drive-de65ec5.zip` | 数字人工作流使用的 `VRGDG_MiniMaxH3AudioDrive` 最小节点包 | `ComfyUI/custom_nodes/` | `a316573e223e3673ad9e76afdec83680e95c0e94974c3eb9793035b163225b80` |
+| `ComfyUI-YCNodes-MiniMax-H3-ba2ec50.zip` | 双采工作流使用的 `H3SigmaRefiner` 和 `MiniMaxH3ImageToVideoTail` | `ComfyUI/custom_nodes/` | `246c3862d4ae6fe46be64d7a21a018bf12ddedb1fbd9fa59b1b35d4ede864267` |
+| `Comfyui_Minimax_h3_latent_Upscaler-52a48af.zip` | 双采工作流使用的 `MinimaxH3LatentUpscaler3D` | `ComfyUI/custom_nodes/` | `dba5985f49d01c3497a36b136b5ace53ee926abaee9a2a908338ff97eec26ec7` |
+| `ComfyUI-SolAttn_triton-842c4ea.zip` | 双采工作流使用的 `SolAttnPatch` | `ComfyUI/custom_nodes/` | `2968e53cee05670e49d95261b308164b6cccfd375080ad713e0559c2e6f265a3` |
+| `ComfyUI-VDN-H3-23470b0.zip` | VDN-H3 `ApplyVDNH3` Video Delta Net 节点 | `ComfyUI/custom_nodes/` | `0d476d7ef88686638d33b8b893757d53a907980ee07b080257f5e11b357bf306` |
 
 安装自定义节点时，解压压缩包并将其顶层目录放入 `ComfyUI/custom_nodes/`。完成后使用运行 ComfyUI 的 Python 环境安装对应目录中的 `requirements.txt`，然后重启 ComfyUI。
+
+VDN-H3 节点和官方 8 步检查点可使用 [`scripts/install_vdn_h3.sh`](../scripts/install_vdn_h3.sh) 安装。检查点下载自 `OpenVDN/vdn-minimax-h3`，目标目录为 `ComfyUI/models/vdn/stage-dmd-step-250/`。
+
 
 > [!IMPORTANT]
 > Music3 强制时长功能还需要对固定版本 ComfyUI 应用 [`patches/comfyui-music3-force-duration.patch`](../patches/comfyui-music3-force-duration.patch)。[`scripts/install.sh`](../scripts/install.sh) 会自动完成该操作。

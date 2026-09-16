@@ -13,6 +13,7 @@ from fastapi import HTTPException
 
 from app.engine import (
     ComfyUIH3Engine,
+    RemoteTaskNotFoundError,
     RemoteTaskUnavailableError,
     RunningHubH3Engine,
     create_engine,
@@ -227,6 +228,71 @@ class ContractTests(unittest.TestCase):
                 completed = store.get("retry-remote")
                 self.assertEqual(completed["status"], "completed")
                 self.assertEqual(RetryEngine.calls, 2)
+                self.assertIsNone(completed["remote_checkpoint"])
+            finally:
+                manager.stop()
+
+    def test_lost_comfyui_task_is_resubmitted_without_checkpoint(self):
+        class LostTaskEngine:
+            calls = []
+
+            def __init__(self, output):
+                self.output = output
+
+            def generate(
+                self,
+                job,
+                progress,
+                cancelled,
+                checkpoint=None,
+                checkpoint_callback=None,
+            ):
+                self.__class__.calls.append(checkpoint)
+                if len(self.calls) == 1:
+                    raise RemoteTaskNotFoundError("prompt no longer exists")
+                return self.output
+
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            jobs_dir = root / "jobs"
+            jobs_dir.mkdir()
+            output = root / "result.mp4"
+            output.write_bytes(b"video")
+            store = JobStore(jobs_dir)
+            checkpoint = {
+                "provider": "comfyui",
+                "node_id": "gpu-a",
+                "remote_id": "prompt-lost",
+            }
+            store.create(
+                {
+                    "id": "lost-comfy-task",
+                    "status": "queued",
+                    "stage": "等待恢复",
+                    "progress": 63,
+                    "created_at": "2026-08-19T00:00:00+00:00",
+                    "request": {"comfy_node": "gpu-a"},
+                    "input_paths": [],
+                    "remote_checkpoint": checkpoint,
+                }
+            )
+            LostTaskEngine.calls = []
+            manager = JobManager(
+                store,
+                lambda node: LostTaskEngine(output),
+                nodes=(ComfyNodeConfig("gpu-a", "GPU A", "http://gpu-a:8188"),),
+            )
+            manager.start()
+            try:
+                for _ in range(100):
+                    if store.get("lost-comfy-task")["status"] == "completed":
+                        break
+                    import time
+
+                    time.sleep(0.02)
+                completed = store.get("lost-comfy-task")
+                self.assertEqual(completed["status"], "completed")
+                self.assertEqual(LostTaskEngine.calls, [checkpoint, None])
                 self.assertIsNone(completed["remote_checkpoint"])
             finally:
                 manager.stop()
@@ -979,6 +1045,14 @@ class ContractTests(unittest.TestCase):
                 "minimax_h3_ref2va_fp8_turbo_lora_api.json",
                 configured.comfy_ref2va_turbo_workflow,
             ),
+            comfy_sa_workflow=local_or_configured(
+                "minimax_h3_fl2va_fp8_sa_api.json",
+                configured.comfy_sa_workflow,
+            ),
+            comfy_ref2va_sa_workflow=local_or_configured(
+                "minimax_h3_ref2va_fp8_sa_api.json",
+                configured.comfy_ref2va_sa_workflow,
+            ),
             comfy_nsfw_workflow=local_or_configured(
                 "minimax_h3_ref2va_fp8_nsfw_lora_api.json",
                 configured.comfy_nsfw_workflow,
@@ -1021,6 +1095,19 @@ class ContractTests(unittest.TestCase):
                 else "minimax_h3_ref2va_pruned_fp8_scaled.safetensors"
             )
             self.assertEqual(turbo["127"]["inputs"]["unet_name"], expected_model)
+
+            sa = engine._load_workflow(variant, "h3-sa")
+            self.assertEqual(sa["144"]["class_type"], "SolAttnPatch")
+            self.assertEqual(sa["142"]["class_type"], "LoraLoaderModelOnly")
+            self.assertEqual(sa["26"]["class_type"], "MinimaxH3LatentUpscaler3D")
+            self.assertEqual(
+                sa["136"]["class_type"],
+                "MiniMaxH3ImageToVideo" if variant == "fl2va-fp8" else "MiniMaxH3ReferenceToVideo",
+            )
+            if variant == "fl2va-fp8":
+                self.assertIn("137", sa)
+            else:
+                self.assertNotIn("137", sa)
 
         with self.assertRaises(ValueError):
             engine._load_workflow("ref2va-fp8", "speed-cache")
@@ -1269,6 +1356,19 @@ class ContractTests(unittest.TestCase):
             client.post.assert_called_once()
 
     def test_nsfw_mode_requires_incognito_ref2va(self):
+        validate_execution_mode("h3-sa", "fl2va-fp8", False)
+        validate_execution_mode("h3-sa", "ref2va-fp8", False)
+        validate_execution_mode("vdn-h3", "fl2va-fp8", False)
+        validate_execution_mode("vdn-h3", "ref2va-fp8", False)
+        validate_generation(1344, 768, 5, 8, "h3-sa")
+        validate_generation(1344, 768, 5, 8, "vdn-h3")
+        validate_generation(1344, 768, 5, 50, "vdn-h3")
+        with self.assertRaises(HTTPException):
+            validate_generation(1344, 768, 5, 7, "h3-sa")
+        with self.assertRaises(HTTPException):
+            validate_generation(1344, 768, 5, 7, "vdn-h3")
+        with self.assertRaises(HTTPException):
+            validate_generation(1344, 768, 5, 51, "vdn-h3")
         validate_execution_mode("h3-nsfw", "ref2va-fp8", True)
         validate_execution_mode("turbo-lora", "fl2va-fp8", False)
         validate_execution_mode("turbo-lora", "ref2va-fp8", False)
@@ -1308,12 +1408,24 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn("H3_COMFY_REF2VA_SPEED_WORKFLOW", deployment)
         self.assertIn('option value="turbo-lora"', index)
         self.assertIn('option value="turbo-lora">8-step LoRA · 1.0', index)
+        self.assertIn('option value="h3-sa">MiniMax H3 SA · Sol-Attn', index)
+        self.assertIn('option value="vdn-h3">VDN-H3 · Video Delta Net', index)
+        self.assertIn('vdnH3: "VDN-H3 · Video Delta Net"', app_js)
+        self.assertIn('vdnH3 ? "50"', app_js)
+        self.assertIn('isVDNH3() ? Number(el("steps").value)', app_js)
+        self.assertIn('id="saTau"', index)
+        self.assertIn('function readSaParameters()', app_js)
+        self.assertIn('id="duration" type="number"', index)
+        self.assertIn('duration.max = String(maxDuration);', app_js)
+        self.assertNotIn('const H3_SA_DURATIONS', app_js)
         self.assertIn('const accelerated = selectedExecutionMode() === "turbo-lora";', app_js)
         self.assertIn('accelerated ? "8"', app_js)
-        self.assertIn('music3 || accelerated || digitalHuman', app_js)
-        self.assertIn('selectedExecutionMode() === "turbo-lora" ? 8', app_js)
+        self.assertIn('music3 || accelerated || digitalHuman || h3Sa', app_js)
+        self.assertIn('selectedExecutionMode() === "turbo-lora" || isH3SA() ? 8', app_js)
         self.assertIn("H3_COMFY_TURBO_WORKFLOW", deployment)
         self.assertIn("H3_COMFY_REF2VA_TURBO_WORKFLOW", deployment)
+        self.assertIn("H3_COMFY_SA_WORKFLOW", deployment)
+        self.assertIn("H3_COMFY_REF2VA_SA_WORKFLOW", deployment)
 
     def test_digital_human_frontend_contract(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -1322,14 +1434,15 @@ class ContractTests(unittest.TestCase):
         environment = (project_root / ".env.example").read_text(encoding="utf-8")
 
         self.assertIn('option value="digital-human">数字人 · 音频驱动', index)
-        self.assertIn('/assets/app.js?v=56', index)
+        self.assertIn('/assets/app.js?v=60', index)
+        self.assertIn('/assets/app.js?v=60&rev=69', index)
         self.assertIn('return { image: 1, video: 0, audio: 1 };', app_js)
         self.assertIn('el("duration").disabled = digitalHuman;', app_js)
         self.assertIn('durationControl.classList.toggle("digital-human", digitalHuman);', app_js)
         self.assertIn('视频长度由驱动音频长度决定', index)
         self.assertIn('class="control-tooltip"', index)
         self.assertIn('el("durationHint").hidden = !digitalHuman;', app_js)
-        self.assertIn('music3 || accelerated || digitalHuman', app_js)
+        self.assertIn('music3 || accelerated || digitalHuman || h3Sa', app_js)
         self.assertIn("H3_COMFY_DIGITAL_HUMAN_WORKFLOW", environment)
 
     def test_tts_frontend_and_prompt_contract(self):
@@ -1597,7 +1710,7 @@ class ContractTests(unittest.TestCase):
         self.assertIn("function isAnonymousQueueJob(job)", app_js)
         self.assertIn('"有任务正在运行中"', app_js)
         self.assertIn('const progress = item.progress == null ? ""', app_js)
-        self.assertIn('/assets/app.js?v=56', index)
+        self.assertIn('/assets/app.js?v=60', index)
         self.assertIn('/assets/styles.css?v=44', index)
         self.assertIn('id="steps" name="steps" type="number"', index)
         self.assertIn('min="4" max="50" step="1" value="10"', index)
@@ -1700,6 +1813,207 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(workflow["201"]["inputs"]["force_rate"], 24)
         self.assertEqual(workflow["201"]["inputs"]["frame_load_cap"], 360)
 
+    def test_h3_sa_supports_fl2va_and_ref2va_with_tunable_sol_attention(self):
+        root = Path(__file__).resolve().parents[1]
+        engine = ComfyUIH3Engine(
+            Settings(
+                comfy_sa_workflow=root / "workflows/minimax_h3_fl2va_fp8_sa_api.json",
+                comfy_ref2va_sa_workflow=root / "workflows/minimax_h3_ref2va_fp8_sa_api.json",
+            )
+        )
+        base = {
+            "execution_mode": "h3-sa",
+            "prompt": "a stable shot with continuous motion",
+            "width": 1344,
+            "height": 768,
+            "num_frames": 124,
+            "steps": 8,
+            "seed": 987,
+            "sa_tau": 1.1,
+            "sa_start_percent": 0.15,
+            "sa_end_percent": 0.85,
+            "sa_min_tokens": 2048,
+            "sa_int8_qk": False,
+            "sa_int8_pv": True,
+            "sa_sink_conditioning": "exact_kv",
+            "sa_morton": True,
+            "sa_morton_curve": "3d",
+            "sa_dense_blocks": "0,-1",
+            "sa_stage2_denoise": 0.25,
+        }
+        fl2va = engine._build_workflow(
+            {"id": "sa-fl2va", "request": {"model_variant": "fl2va-fp8", **base}},
+            ["minimax-studio-webui/sa-fl2va/01_image.png"],
+        )
+        self.assertEqual(fl2va["136"]["class_type"], "MiniMaxH3ImageToVideo")
+        self.assertEqual(fl2va["136"]["inputs"]["width"], 896)
+        self.assertEqual(fl2va["11"]["inputs"]["width"], 1344)
+        self.assertEqual(fl2va["144"]["inputs"]["tau"], 1.1)
+        self.assertEqual(fl2va["144"]["inputs"]["dense_blocks"], "0,-1")
+        self.assertFalse(fl2va["144"]["inputs"]["int8_qk"])
+        self.assertTrue(fl2va["144"]["inputs"]["morton"])
+        self.assertEqual(fl2va["148"]["inputs"]["denoise"], 0.25)
+
+        ref2va = engine._build_workflow(
+            {"id": "sa-ref2va", "request": {"model_variant": "ref2va-fp8", **base, "references": [{"type": "image"}, {"type": "video", "has_audio": True}, {"type": "audio"}]}},
+            [
+                "minimax-studio-webui/sa-ref2va/01_image.png",
+                "minimax-studio-webui/sa-ref2va/02_video.mp4",
+                "minimax-studio-webui/sa-ref2va/03_audio.wav",
+            ],
+        )
+        self.assertEqual(ref2va["136"]["class_type"], "MiniMaxH3ReferenceToVideo")
+        self.assertEqual(ref2va["136"]["inputs"]["ref_images.ref_image_0"], ["200", 0])
+        self.assertEqual(ref2va["136"]["inputs"]["ref_videos.ref_video_0"], ["201", 0])
+        self.assertEqual(ref2va["136"]["inputs"]["ref_audios.ref_audio_0"], ["202", 0])
+
+    def test_vdn_h3_workflow_uses_native_vdn_patch_without_sol_attn(self):
+        root = Path(__file__).resolve().parents[1]
+        engine = ComfyUIH3Engine(
+            Settings(
+                comfy_vdn_workflow=root / "workflows/minimax_h3_fl2va_vdn_api.json",
+                comfy_ref2va_vdn_workflow=root / "workflows/minimax_h3_ref2va_vdn_api.json",
+            )
+        )
+        base = {
+            "execution_mode": "vdn-h3",
+            "prompt": "a continuous cinematic shot",
+            "width": 864,
+            "height": 480,
+            "num_frames": 124,
+            "steps": 8,
+            "seed": 42,
+        }
+        fl2va = engine._build_workflow(
+            {"id": "vdn-fl2va", "request": {"model_variant": "fl2va-fp8", **base}},
+            ["vdn-fl2va/01.png"],
+        )
+        self.assertEqual(fl2va["144"]["class_type"], "ApplyVDNH3")
+        self.assertEqual(fl2va["144"]["inputs"]["vdn_checkpoint"], "stage-dmd-step-250")
+        self.assertEqual(fl2va["144"]["inputs"]["lora_mode"], "merge")
+        self.assertEqual(fl2va["123"]["inputs"]["sampler_name"], "er_sde")
+        self.assertEqual(fl2va["124"]["inputs"]["scheduler"], "beta")
+        self.assertEqual(fl2va["124"]["inputs"]["model"], ["144", 0])
+        self.assertNotIn("142", fl2va)
+        self.assertNotIn("143", fl2va)
+
+        base["steps"] = 50
+        fl2va_50 = engine._build_workflow(
+            {"id": "vdn-fl2va-50", "request": {"model_variant": "fl2va-fp8", **base}},
+            ["vdn-fl2va-50/01.png"],
+        )
+        self.assertEqual(fl2va_50["144"]["inputs"]["vdn_checkpoint"], "stage-b-step-2000")
+        self.assertFalse(fl2va_50["144"]["inputs"]["apply_turbo_adapter"])
+        self.assertEqual(fl2va_50["144"]["inputs"]["lora_mode"], "merge")
+        self.assertEqual(fl2va_50["124"]["inputs"]["steps"], 50)
+
+        ref2va = engine._build_workflow(
+            {
+                "id": "vdn-ref2va",
+                "request": {
+                    "model_variant": "ref2va-fp8",
+                    **base,
+                    "references": [{"type": "image"}],
+                },
+            },
+            ["vdn-ref2va/01.png"],
+        )
+        self.assertEqual(ref2va["144"]["inputs"]["model"], ["127", 0])
+        self.assertEqual(ref2va["136"]["inputs"]["ref_images.ref_image_0"], ["200", 0])
+
+    def test_h3_sa_context_loop_keeps_sampler_latent_input_valid(self):
+        root = Path(__file__).resolve().parents[1]
+        engine = ComfyUIH3Engine(
+            Settings(comfy_sa_workflow=root / "workflows/minimax_h3_fl2va_fp8_sa_api.json")
+        )
+        job = {
+            "id": "sa-context",
+            "request": {
+                "model_variant": "fl2va-fp8",
+                "execution_mode": "h3-sa",
+                "prompt": "continue the existing motion",
+                "width": 864,
+                "height": 480,
+                "num_frames": 362,
+                "steps": 8,
+                "seed": 123,
+            },
+        }
+        workflow = engine._build_workflow(
+            job,
+            ["minimax-studio-webui/sa-context/01_image.png"],
+            context_video_name="minimax-studio-webui/sa-context/context/segment_001.mp4",
+            context_latent_path="minimax-studio-webui/sa-context/context",
+            context_clip_index=1,
+            save_latent_prefix="minimax-studio-webui/sa-context/context/h3_context",
+            save_latent_clip_index=2,
+        )
+        self.assertEqual(workflow["126"]["inputs"]["conditioning"], ["9002", 0])
+        self.assertEqual(workflow["125"]["inputs"]["latent_image"], ["136", 1])
+        self.assertNotIn("video_context_latent", workflow["9002"]["inputs"])
+
+    def test_h3_sa_long_duration_uses_context_loop(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            settings = Settings(
+                root=root,
+                comfy_sa_workflow=Path(__file__).resolve().parents[1]
+                / "workflows/minimax_h3_fl2va_fp8_sa_api.json",
+            )
+            settings.ensure_directories()
+            engine = ComfyUIH3Engine(settings)
+            job = {
+                "id": "long-sa",
+                "request": {
+                    "model_variant": "fl2va-fp8",
+                    "execution_mode": "h3-sa",
+                    "prompt": "A continuous cinematic walk through one location.",
+                    "width": 1344,
+                    "height": 768,
+                    "duration": 30,
+                    "num_frames": align_frames(30),
+                    "steps": 8,
+                    "seed": 123,
+                    "references": [],
+                },
+                "input_paths": [],
+            }
+            segment_paths = [root / f"segment-{index}.mp4" for index in range(1, 4)]
+            for path in segment_paths:
+                path.write_bytes(b"segment")
+            merged_path = settings.outputs_dir / "long-sa.mp4"
+            generated_calls: list[dict[str, object]] = []
+
+            def fake_generate_once(*args, **kwargs):
+                generated_calls.append(kwargs)
+                return segment_paths[len(generated_calls) - 1]
+
+            def fake_merge(paths, output):
+                self.assertEqual(paths, segment_paths)
+                output.write_bytes(b"merged")
+
+            with (
+                patch.object(engine, "_generate_once", side_effect=fake_generate_once),
+                patch.object(engine, "_upload_context_video", side_effect=["context/01.mp4", "context/02.mp4"]),
+                patch.object(engine, "_merge_h3_segments", side_effect=fake_merge),
+            ):
+                result = engine._generate_h3_sa_long(
+                    job,
+                    lambda *_: None,
+                    lambda: False,
+                )
+
+            self.assertEqual(result, merged_path)
+            self.assertEqual(len(generated_calls), 3)
+            self.assertEqual(generated_calls[0]["save_latent_clip_index"], 1)
+            self.assertIsNone(generated_calls[0]["context_video_name"])
+            self.assertEqual(generated_calls[1]["context_video_name"], "context/01.mp4")
+            self.assertEqual(generated_calls[1]["context_clip_index"], 1)
+            self.assertEqual(generated_calls[2]["context_video_name"], "context/02.mp4")
+            self.assertEqual(generated_calls[2]["context_clip_index"], 2)
+            self.assertEqual(generated_calls[2]["context_latent_path"], "minimax-studio-webui/long-sa/context")
+            self.assertTrue(merged_path.is_file())
+
     def test_digital_human_workflow_uses_source_audio(self):
         engine = ComfyUIH3Engine(Settings())
         job = {
@@ -1791,6 +2105,17 @@ class ContractTests(unittest.TestCase):
         for steps in (8, 19, 21):
             with self.assertRaises(HTTPException):
                 validate_generation(608, 352, 5, steps, "digital-human")
+        validate_generation(608, 352, 30, 8, "h3-sa")
+        validate_generation(608, 352, 300, 8, "h3-sa")
+        with self.assertRaises(HTTPException):
+            validate_generation(608, 352, 300.01, 8, "h3-sa")
+        engine = ComfyUIH3Engine(Settings())
+        for duration in (16, 30, 120, 300):
+            frames = align_frames(duration)
+            parts = engine._split_h3_frames(frames)
+            delivered = sum(parts) - (len(parts) - 1) * engine.H3_CONTEXT_FRAMES
+            self.assertEqual(delivered, frames)
+            self.assertTrue(all(part <= engine.H3_MAX_SEGMENT_FRAMES and part % 17 == 5 for part in parts))
         validate_generation(0, 0, 300, 30, "music3")
         for duration, steps in ((0.99, 30), (300.01, 30), (60, 29)):
             with self.assertRaises(HTTPException):

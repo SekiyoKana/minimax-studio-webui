@@ -75,7 +75,6 @@ const el = (id) => document.getElementById(id);
 const form = el("generationForm");
 const promptInput = el("prompt");
 const referenceInput = el("referenceInput");
-const H3_DURATIONS = Array.from({ length: 15 }, (_, index) => index + 1);
 const MUSIC3_DURATIONS = [30, 60, 120, 180, 240, 300];
 const RUNNINGHUB_TARGET_PREFIX = "rh:";
 
@@ -86,7 +85,7 @@ const COPY = {
     connectEngine: "连接推理节点", offline: "服务离线", autoSchedule: "自动调度", nodePending: "节点待分配", online: "在线", available: "可用", nodeOffline: "离线", disabled: "已停用", busy: "执行中",
     balance: "余额", credits: "点数", recentCost: "最近调用消耗", accountUnavailable: "账户信息不可用", workflowUnavailable: "工作流信息不可用", balancePending: "余额读取中", accountTasks: "账户任务", balanceUpdated: "余额更新", balanceFailed: "余额读取失败",
     noAssets: "暂无素材", loading: "加载中", allLoaded: "已加载全部", loadFailed: "加载失败", startCreating: "开始创作", you: "你",
-    native: "普通流 · 原生 H3", turbo: "8-step LoRA · 强度 1.0", digitalHuman: "数字人 · 音频驱动", tts: "H3 TTS · 人物语音", music3: "Music3 · 30 步", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache（已停用）",
+    native: "普通流 · 原生 H3", turbo: "8-step LoRA · 强度 1.0", dualSampling: "双采 · Sigma + 潜空间放大", h3Sa: "MiniMax H3 SA · Sol-Attn", vdnH3: "VDN-H3 · Video Delta Net", digitalHuman: "数字人 · 音频驱动", tts: "H3 TTS · 人物语音", music3: "Music3 · 30 步", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache（已停用）",
     reuse: "回填到发送区", useAsInput: "作为输入", regenerate: "重新生成", edit: "修改", cancel: "取消", delete: "删除", deleteRecord: "删除记录", downloadVideo: "下载视频", downloadAudio: "下载音频", downloadImage: "下载图片", downloadFile: "下载文件", videoReady: "视频已生成", musicReady: "音频已生成", imageReady: "图片已生成", fileReady: "文件已生成", peering: "多端互联", peerConnected: "已连接设备", peerRevoked: "已撤销设备访问", peerConnectNotice: "设备已完成互联", localPeerKey: "本机互联密钥",
     aiKeySaved: "API Key 已保存到本机数据库", aiKeyEmpty: "尚未保存 API Key", aiKeyReplace: "输入新值可覆盖已保存密钥", noPeers: "暂无已连接设备", revokeAccess: "撤销访问", owner: "归属方", pairingRefresh: "秒后刷新", connectPeer: "建立互联",
     assetDetail: "素材详情", prompt: "关键词与提示词", lyrics: "歌词", sourceFiles: "使用的文件", parameters: "生成参数", noSourceFiles: "未使用参考文件", outputUnavailable: "当前没有可预览的生成产物", assetDeleted: "该资产已删除", deviceFilter: "设备筛选",
@@ -99,7 +98,7 @@ const COPY = {
     connectEngine: "Connecting to inference nodes", offline: "Service offline", autoSchedule: "Auto", nodePending: "Awaiting node", online: "Online", available: "available", nodeOffline: "Offline", disabled: "Disabled", busy: "Running",
     balance: "Balance", credits: "credits", recentCost: "Recent call cost", accountUnavailable: "Account unavailable", workflowUnavailable: "Workflow information unavailable", balancePending: "Loading balance", accountTasks: "Account tasks", balanceUpdated: "balance updated", balanceFailed: "balance read failed",
     noAssets: "No assets", loading: "Loading", allLoaded: "All assets loaded", loadFailed: "Load failed", startCreating: "Start creating", you: "You",
-    native: "Native H3", turbo: "8-step LoRA · 1.0", digitalHuman: "Digital human · audio driven", tts: "H3 TTS · Character voice", music3: "Music3 · 30 steps", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache (disabled)",
+    native: "Native H3", turbo: "8-step LoRA · 1.0", dualSampling: "Dual sampling · Sigma + latent upscale", h3Sa: "MiniMax H3 SA · Sol-Attn", vdnH3: "VDN-H3 · Video Delta Net", digitalHuman: "Digital human · audio driven", tts: "H3 TTS · Character voice", music3: "Music3 · 30 steps", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache (disabled)",
     reuse: "Fill composer", useAsInput: "Use as input", regenerate: "Regenerate", edit: "Edit", cancel: "Cancel", delete: "Delete", deleteRecord: "Delete record", downloadVideo: "Download video", downloadAudio: "Download audio", downloadImage: "Download image", downloadFile: "Download file", videoReady: "Video generated", musicReady: "Audio generated", imageReady: "Image generated", fileReady: "File generated", peering: "Device sharing", peerConnected: "Connected device", peerRevoked: "Device access revoked", peerConnectNotice: "Device pairing completed", localPeerKey: "Local pairing key",
     aiKeySaved: "API Key saved in the local database", aiKeyEmpty: "No API Key saved", aiKeyReplace: "Enter a new value to replace the saved key", noPeers: "No connected devices", revokeAccess: "Revoke access", owner: "Owner", pairingRefresh: "s until refresh", connectPeer: "Connect",
     assetDetail: "Asset details", prompt: "Keywords and prompt", lyrics: "Lyrics", sourceFiles: "Source files", parameters: "Parameters", noSourceFiles: "No reference files", outputUnavailable: "No generated output is available for preview", assetDeleted: "This asset has been deleted", deviceFilter: "Device filter",
@@ -158,7 +157,6 @@ function applyStaticLocale() {
   setTitle("#openAssets", t("assets"));
   setTitle("#languageToggle", t("switchLanguage"));
   setTitle("#openPeering", t("peering"));
-  setTitle("#apiDocsLink", t("apiDocs"));
   setTitle("#closeAssetDetail", t("close"));
   setText("#assetDetailTitle", t("assetDetail"));
   setText("#deleteAssetDetail span", t("deleteRecord"));
@@ -173,6 +171,9 @@ function applyStaticLocale() {
   setText(".edit-banner span", "Editing queued task");
   setText("#exitEdit", "Stop editing");
   setText('#executionMode option[value="native"]', "Native H3");
+  setText('#executionMode option[value="h3-sa"]', "MiniMax H3 SA · Sol-Attn");
+  setText('#executionMode option[value="vdn-h3"]', "VDN-H3 · Video Delta Net");
+  setText('#executionMode option[value="dual-sampling"]', "Dual sampling · Sigma + latent upscale");
   setText('#executionMode option[value="digital-human"]', "Digital human · audio driven");
   setText('#executionMode option[value="tts"]', "H3 TTS · character voice");
   setText("#music3ExecutionOption", "Music3 · 30 steps");
@@ -222,10 +223,22 @@ function applyStaticLocale() {
   setText("#peerConnectForm button span", "Connect");
   setText(".peering-connected h3", "Connected devices");
   setLeadingText("#seed", "Random seed");
+  setText("#saSettingsTitle", "MiniMax H3 SA parameters");
+  setLeadingText("#saTauControl", "Sol-Attn tau");
+  setLeadingText("#saStartControl", "Acceleration start");
+  setLeadingText("#saEndControl", "Acceleration end");
+  setLeadingText("#saMinTokensControl", "Minimum tokens");
+  setLeadingText("#saDenoiseControl", "Stage 2 denoise");
+  setLeadingText("#saSinkControl", "Conditioning sink");
+  setLeadingText("#saDenseControl", "Dense blocks");
+  setLeadingText("#saMortonCurveControl", "Morton curve");
+  setText("#saInt8QkControl > span:first-child", "INT8 QK");
+  setText("#saInt8PvControl > span:first-child", "INT8 PV");
+  setText("#saMortonControl > span:first-child", "Morton token order");
   setLeadingText("#aiBaseUrl", "OpenAI Base URL");
   setLeadingText("#aiModel", "Model");
   setLeadingText("#aiApiKey", "API Key");
-  setText(".popover-panel .switch-row > span:first-child", "Enable AI prompt assistance");
+  setText(".popover-panel > .switch-row > span:first-child", "Enable AI prompt assistance");
   el("seed").placeholder = "Auto";
   setTitle("#addReference", "Add reference files");
   setTitle("#advancedSettings summary", "More settings");
@@ -347,7 +360,10 @@ function executionModeLabel(job) {
   if (job.request?.execution_mode === "digital-human") return t("digitalHuman");
   if (job.request?.execution_mode === "tts") return t("tts");
   if (job.request?.execution_mode === "h3-nsfw") return t("nsfw");
+  if (job.request?.execution_mode === "h3-sa") return t("h3Sa");
+  if (job.request?.execution_mode === "vdn-h3") return t("vdnH3");
   if (job.request?.execution_mode === "turbo-lora") return t("turbo");
+  if (job.request?.execution_mode === "dual-sampling") return t("dualSampling");
   if (job.request?.execution_mode === "speed-cache") return t("speedCache");
   return t("native");
 }
@@ -357,7 +373,10 @@ function executionModeClass(job) {
   if (job.request?.execution_mode === "digital-human") return "digital-human";
   if (job.request?.execution_mode === "tts") return "tts";
   if (job.request?.execution_mode === "h3-nsfw") return "nsfw";
+  if (job.request?.execution_mode === "h3-sa") return "h3-sa";
+  if (job.request?.execution_mode === "vdn-h3") return "vdn-h3";
   if (job.request?.execution_mode === "turbo-lora") return "turbo";
+  if (job.request?.execution_mode === "dual-sampling") return "dual-sampling";
   if (job.request?.execution_mode === "speed-cache") return "speed";
   return "native";
 }
@@ -762,6 +781,51 @@ function selectedExecutionMode() {
   return el("executionMode").value;
 }
 
+const SA_DEFAULTS = {
+  sa_tau: 1.3,
+  sa_start_percent: 0.2,
+  sa_end_percent: 0.9,
+  sa_min_tokens: 4096,
+  sa_int8_qk: true,
+  sa_int8_pv: true,
+  sa_sink_conditioning: "exact_kv_and_rows",
+  sa_morton: false,
+  sa_morton_curve: "2d_frame",
+  sa_dense_blocks: "0",
+  sa_stage2_denoise: 0.35,
+};
+
+function readSaParameters() {
+  return {
+    sa_tau: Number(el("saTau").value),
+    sa_start_percent: Number(el("saStartPercent").value),
+    sa_end_percent: Number(el("saEndPercent").value),
+    sa_min_tokens: Number(el("saMinTokens").value),
+    sa_int8_qk: el("saInt8Qk").checked,
+    sa_int8_pv: el("saInt8Pv").checked,
+    sa_sink_conditioning: el("saSinkConditioning").value,
+    sa_morton: el("saMorton").checked,
+    sa_morton_curve: el("saMortonCurve").value,
+    sa_dense_blocks: el("saDenseBlocks").value,
+    sa_stage2_denoise: Number(el("saStage2Denoise").value),
+  };
+}
+
+function setSaParameters(values = {}) {
+  const next = { ...SA_DEFAULTS, ...values };
+  el("saTau").value = String(next.sa_tau);
+  el("saStartPercent").value = String(next.sa_start_percent);
+  el("saEndPercent").value = String(next.sa_end_percent);
+  el("saMinTokens").value = String(next.sa_min_tokens);
+  el("saInt8Qk").checked = Boolean(next.sa_int8_qk);
+  el("saInt8Pv").checked = Boolean(next.sa_int8_pv);
+  el("saSinkConditioning").value = next.sa_sink_conditioning;
+  el("saMorton").checked = Boolean(next.sa_morton);
+  el("saMortonCurve").value = next.sa_morton_curve;
+  el("saDenseBlocks").value = String(next.sa_dense_blocks ?? "0");
+  el("saStage2Denoise").value = String(next.sa_stage2_denoise);
+}
+
 function selectedInferenceNode() {
   const nodeId = el("comfyNode").value;
   return nodeId === "auto" ? null : state.nodes.find((node) => node.id === nodeId) || null;
@@ -932,6 +996,18 @@ function isDigitalHuman(executionMode = selectedExecutionMode()) {
   return executionMode === "digital-human";
 }
 
+function isDualSampling(executionMode = selectedExecutionMode()) {
+  return executionMode === "dual-sampling";
+}
+
+function isH3SA(executionMode = selectedExecutionMode()) {
+  return executionMode === "h3-sa";
+}
+
+function isVDNH3(executionMode = selectedExecutionMode()) {
+  return executionMode === "vdn-h3";
+}
+
 function isTTS(executionMode = selectedExecutionMode()) {
   return executionMode === "tts";
 }
@@ -949,6 +1025,7 @@ function referenceLimits(variant = selectedVariant()) {
   }
   if (isMusic3(variant)) return { image: 0, video: 0, audio: 0 };
   if (isDigitalHuman()) return { image: 1, video: 0, audio: 1 };
+  if (isDualSampling()) return { image: 9, video: 0, audio: 0 };
   if (isTTS()) return { image: 0, video: 0, audio: 3 };
   return isRef2VA(variant)
     ? { image: 9, video: 3, audio: 3 }
@@ -1032,7 +1109,7 @@ function showError(message) {
 }
 
 function positionDurationTooltip() {
-  if (!isDigitalHuman()) return;
+  if (!isDigitalHuman() && !(isH3SA() && Number(el("duration").value) > 15)) return;
   const control = el("duration").closest(".duration-control");
   const tooltip = el("durationHint");
   const bounds = control.getBoundingClientRect();
@@ -1083,50 +1160,72 @@ function updateModelUi() {
   el("executionMode").disabled = music3;
   const nsfw = selectedExecutionMode() === "h3-nsfw";
   const digitalHuman = isDigitalHuman();
+  const dualSampling = isDualSampling();
+  const h3Sa = isH3SA();
+  const vdnH3 = isVDNH3();
   const tts = isTTS();
   const fl2vaOption = el("modelVariant").querySelector('option[value="fl2va-fp8"]');
-  fl2vaOption.disabled = nsfw || digitalHuman || tts;
-  if (nsfw || digitalHuman || tts) el("modelVariant").value = "ref2va-fp8";
-  el("modelVariant").disabled = digitalHuman || tts;
+  fl2vaOption.disabled = nsfw || digitalHuman || tts || dualSampling;
+  if (nsfw || digitalHuman || tts || dualSampling) el("modelVariant").value = "ref2va-fp8";
+  el("modelVariant").disabled = digitalHuman || tts || dualSampling;
   const ref2va = isRef2VA();
   const accelerated = selectedExecutionMode() === "turbo-lora";
   const stepsMode = el("steps").dataset.mode;
-  if (stepsMode !== (music3 ? "music3" : "h3")) {
-    el("steps").value = music3 ? "30" : "10";
-    el("steps").dataset.mode = music3 ? "music3" : "h3";
+  const nextStepsMode = music3 ? "music3" : vdnH3 ? "vdn-h3" : "h3";
+  if (stepsMode !== nextStepsMode) {
+    el("steps").value = music3 ? "30" : vdnH3 ? "50" : "10";
+    el("steps").dataset.mode = nextStepsMode;
   }
-  const durationMode = el("duration").dataset.mode;
-  if (durationMode !== (music3 ? "music3" : "h3")) {
-    const durations = music3 ? MUSIC3_DURATIONS : H3_DURATIONS;
-    el("duration").innerHTML = durations.map((seconds) => `<option value="${seconds}">${seconds}s</option>`).join("");
-    el("duration").value = music3 ? "60" : "5";
-    el("duration").dataset.mode = music3 ? "music3" : "h3";
+  el("steps").min = vdnH3 ? "8" : "4";
+  el("steps").max = "50";
+  el("steps").step = vdnH3 ? "1" : "1";
+  const duration = el("duration");
+  const maxDuration = music3 || h3Sa ? 300 : 15;
+  const defaultDuration = music3 ? 60 : 5;
+  const currentDuration = Number(duration.value);
+  duration.min = "1";
+  duration.max = String(maxDuration);
+  duration.value = Number.isFinite(currentDuration) && currentDuration >= 1 && currentDuration <= maxDuration
+    ? String(currentDuration)
+    : String(defaultDuration);
+  if (music3 || accelerated || digitalHuman || h3Sa) {
+    el("steps").value = music3 ? "30" : accelerated ? "8" : digitalHuman ? "20" : "8";
+  } else if (vdnH3) {
+    const vdnSteps = Number(el("steps").value);
+    if (!Number.isInteger(vdnSteps) || vdnSteps < 8 || vdnSteps > 50) el("steps").value = "50";
   }
-  el("steps").value = music3 ? "30" : accelerated ? "8" : digitalHuman ? "20" : el("steps").value;
-  el("steps").disabled = music3 || accelerated || digitalHuman || runningHub;
+  el("steps").disabled = music3 || accelerated || digitalHuman || h3Sa || runningHub;
   el("duration").disabled = digitalHuman;
   const durationControl = el("duration").closest(".duration-control");
   durationControl.classList.toggle("digital-human", digitalHuman);
+  durationControl.classList.toggle("h3-sa", h3Sa && Number(duration.value) > 15);
   durationControl.title = state.locale === "en"
-    ? digitalHuman ? "Video length follows the driving audio" : music3 ? "Maximum music duration" : "Video duration"
-    : digitalHuman ? "视频长度由驱动音频长度决定" : music3 ? "音乐最长时长" : "视频时长";
+    ? digitalHuman ? "Video length follows the driving audio" : music3 ? "Maximum music duration" : h3Sa ? "H3 SA duration; longer videos are stitched automatically" : "Video duration"
+    : digitalHuman ? "视频长度由驱动音频长度决定" : music3 ? "音乐最长时长" : h3Sa ? "H3 SA 时长，超过 15 秒时自动拼接" : "视频时长";
   el("durationHint").hidden = !digitalHuman;
+  if (h3Sa && Number(el("duration").value) > 15) el("durationHint").hidden = false;
+  el("durationHint").textContent = state.locale === "en"
+    ? digitalHuman ? "Video length follows the driving audio" : h3Sa ? "Over 15 seconds is stitched automatically" : "Video duration"
+    : digitalHuman ? "视频长度由驱动音频长度决定" : h3Sa ? "超过 15 秒时系统自动连续拼接" : "视频时长";
   const runningHubKinds = new Set(runningHubMediaFields().map((field) => field.media_kind));
   referenceInput.accept = runningHub
     ? [...runningHubKinds].map((kind) => kind === "file" ? "*/*" : `${kind}/*`).join(",")
-    : music3 ? "" : tts ? "audio/*" : digitalHuman ? "image/*,audio/*" : ref2va ? "image/*,video/*,audio/*" : "image/*";
+    : music3 ? "" : tts ? "audio/*" : digitalHuman ? "image/*,audio/*" : dualSampling ? "image/*" : ref2va ? "image/*,video/*,audio/*" : "image/*";
   el("addReference").title = state.locale === "en"
-    ? runningHub ? "Add a workflow input file" : tts ? "Add up to three character voice references" : digitalHuman ? "Add portrait and driving audio" : ref2va ? "Add image, video, or audio references" : "Add first or last frame"
-    : runningHub ? "添加工作流输入文件" : tts ? "添加最多 3 段人物音频参考" : digitalHuman ? "添加人物图片和驱动音频" : ref2va ? "添加图片、视频或音频参考" : "添加首帧或尾帧";
+    ? runningHub ? "Add a workflow input file" : tts ? "Add up to three character voice references" : digitalHuman ? "Add portrait and driving audio" : dualSampling ? "Add image references for dual sampling" : ref2va ? "Add image, video, or audio references" : "Add first or last frame"
+    : runningHub ? "添加工作流输入文件" : tts ? "添加最多 3 段人物音频参考" : digitalHuman ? "添加人物图片和驱动音频" : dualSampling ? "添加双采图片参考" : ref2va ? "添加图片、视频或音频参考" : "添加首帧或尾帧";
   el("addReference").setAttribute("aria-label", el("addReference").title);
   el("addReference").hidden = music3 || (runningHub && runningHubKinds.size === 0);
   el("aspectControl").hidden = music3 || tts || runningHub;
   el("resolutionControl").hidden = music3 || tts || runningHub;
   el("duration").closest(".duration-control").hidden = runningHub;
-  el("stepsControl").hidden = runningHub;
+  el("stepsControl").hidden = runningHub || h3Sa;
   el("lyrics").hidden = !music3;
   el("globalSeedControl").hidden = runningHub;
-  el("stepsControl").title = state.locale === "en" ? music3 ? "Music3 uses 30 steps" : "Sampling steps" : music3 ? "Music3 固定使用 30 步" : "采样步数";
+  // SA tuning uses the validated server defaults. Keep the controls in the
+  // DOM for backward-compatible saved settings, but do not expose them.
+  el("saSettings").hidden = true;
+  el("stepsControl").title = state.locale === "en" ? music3 ? "Music3 uses 30 steps" : h3Sa ? "H3 SA uses 8 LoRA steps" : vdnH3 ? "VDN-H3 uses 8 to 50 steps; default 50" : "Sampling steps" : music3 ? "Music3 固定使用 30 步" : h3Sa ? "H3 SA 固定使用 8 步 LoRA" : vdnH3 ? "VDN-H3 可使用 8–50 步，默认 50 步" : "采样步数";
   el("optimizePrompt").hidden = runningHub;
   el("optimizePrompt").title = state.locale === "en" ? music3 ? "Optimize style" : tts ? "Optimize TTS dialogue prompt" : "Optimize prompt" : music3 ? "优化曲风" : tts ? "优化 TTS 对话提示词" : "优化提示词";
   el("optimizePrompt").setAttribute("aria-label", el("optimizePrompt").title);
@@ -1229,6 +1328,19 @@ function addFiles(files, forcedFieldKey = "") {
   showError(error);
   renderReferences();
   return !error;
+}
+
+function clipboardImageFile(event) {
+  const items = Array.from(event.clipboardData?.items || []);
+  const item = items.find((entry) => entry.kind === "file" && entry.type.startsWith("image/"));
+  const blob = item?.getAsFile();
+  if (!blob) return null;
+  const mime = blob.type || item.type || "image/png";
+  const extension = mime.split("/", 2)[1]?.replace("jpeg", "jpg") || "png";
+  return new File([blob], `pasted-image-${Date.now()}.${extension}`, {
+    type: mime,
+    lastModified: Date.now(),
+  });
 }
 
 function renderReferences() {
@@ -2158,6 +2270,7 @@ async function backfillJob(jobId) {
     el("lyrics").value = job.request?.lyrics || "";
     el("modelVariant").value = job.request?.model_variant || "fl2va-fp8";
     el("executionMode").value = job.request?.execution_mode || "native";
+    setSaParameters(job.request || {});
     el("comfyNode").value = composerNodeForJob(job);
     updateModelUi();
     if (job.request?.provider === "runninghub") {
@@ -2190,6 +2303,7 @@ function resetComposer() {
   promptInput.value = "";
   el("lyrics").value = "";
   el("seed").value = "";
+  setSaParameters();
   state.runningHubParameters = runningHubDefaultParameters(selectedRunningHubSchema());
   state.pendingRunningHubMediaField = "";
   el("editBanner").hidden = true;
@@ -2216,6 +2330,7 @@ async function startEdit(jobId) {
     el("lyrics").value = job.request.lyrics || "";
     el("modelVariant").value = job.request.model_variant || "fl2va-fp8";
     el("executionMode").value = job.request.execution_mode || "native";
+    setSaParameters(job.request || {});
     el("comfyNode").value = composerNodeForJob(job);
     el("seed").value = String(job.request.seed);
     setDimensions(job.request.width, job.request.height);
@@ -2303,7 +2418,7 @@ form.addEventListener("submit", async (event) => {
   const runningHub = Boolean(runningHubNode?.runninghub_schema);
   const minimumPromptLength = isMusic3() ? 2 : 8;
   if (!runningHub && prompt.length < minimumPromptLength) return showError(localized(`请填写至少 ${minimumPromptLength} 个字符的提示词`, `Enter a prompt with at least ${minimumPromptLength} characters`));
-  const steps = isMusic3() ? 30 : selectedExecutionMode() === "turbo-lora" ? 8 : isDigitalHuman() ? 20 : Number(el("steps").value);
+  const steps = isMusic3() ? 30 : selectedExecutionMode() === "turbo-lora" || isH3SA() ? 8 : isVDNH3() ? Number(el("steps").value) : isDigitalHuman() ? 20 : Number(el("steps").value);
   if (!runningHub && (!Number.isInteger(steps) || steps < 4 || steps > 50)) return showError(localized("采样步数请输入 4–50 的整数", "Sampling steps must be an integer from 4 to 50"));
   const [width, height] = isTTS() ? [32, 32] : getDimensions();
   const button = el("generateButton");
@@ -2912,7 +3027,7 @@ async function optimizePrompt() {
         model,
         duration: Number(el("duration").value),
         model_variant: selectedVariant(),
-        execution_mode: isTTS() ? "tts" : "native",
+        execution_mode: isTTS() ? "tts" : isH3SA() ? "h3-sa" : isVDNH3() ? "vdn-h3" : "native",
         references: state.references.map((ref) => ({ type: ref.kind || ref.type, name: ref.name || ref.file?.name || "reference" })),
       }),
     });
@@ -3218,6 +3333,16 @@ el("addReference").addEventListener("click", () => {
   state.pendingRunningHubMediaField = "";
   referenceInput.click();
 });
+
+document.addEventListener("paste", (event) => {
+  const file = clipboardImageFile(event);
+  if (!file) return;
+  event.preventDefault();
+  const added = addFiles([file], state.pendingRunningHubMediaField);
+  if (added) showToast(localized("已从剪贴板添加图片", "Image pasted from clipboard"));
+  updateModelUi();
+});
+
 referenceInput.addEventListener("change", () => {
   addFiles(referenceInput.files, state.pendingRunningHubMediaField);
   referenceInput.value = "";

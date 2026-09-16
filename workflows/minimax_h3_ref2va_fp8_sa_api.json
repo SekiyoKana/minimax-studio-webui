@@ -1,0 +1,461 @@
+{
+  "92": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "150",
+        0
+      ],
+      "filename_prefix": "video/MiniMax_H3_SA_Ref2VA",
+      "format": "mp4",
+      "codec": "auto"
+    },
+    "_meta": {
+      "title": "MiniMax H3 SA · Save Video"
+    }
+  },
+  "119": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    },
+    "_meta": {
+      "title": "H3 Video VAE"
+    }
+  },
+  "120": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    },
+    "_meta": {
+      "title": "H3 Audio VAE"
+    }
+  },
+  "122": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "141",
+        0
+      ],
+      "vae": [
+        "119",
+        0
+      ]
+    }
+  },
+  "121": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "141",
+        0
+      ],
+      "vae": [
+        "120",
+        0
+      ]
+    }
+  },
+  "130": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "122",
+        0
+      ],
+      "audio": [
+        "121",
+        0
+      ],
+      "fps": 24.0,
+      "bit_depth": 8
+    }
+  },
+  "127": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_ref2va_pruned_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "MiniMax H3 FL2VA FP8 Scaled"
+    }
+  },
+  "128": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "Qwen3-VL MiniMax H3 Text Encoder"
+    }
+  },
+  "136": {
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "inputs": {
+      "clip": [
+        "128",
+        0
+      ],
+      "vae": [
+        "119",
+        0
+      ],
+      "audio_vae": [
+        "120",
+        0
+      ],
+      "prompt": "Generate a coherent audiovisual shot using the supplied image, video, and audio references. Preserve reference identity and temporal continuity.",
+      "width": 896,
+      "height": 512,
+      "length": 124,
+      "ref_image_size": "match"
+    },
+    "_meta": {
+      "title": "MiniMax H3 SA Ref2VA · Stage 1 896x512"
+    }
+  },
+  "123": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "res_multistep"
+    },
+    "_meta": {
+      "title": "Stage 1 Res Multistep"
+    }
+  },
+  "124": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "model": [
+        "143",
+        0
+      ],
+      "scheduler": "simple",
+      "steps": 8,
+      "denoise": 1.0
+    },
+    "_meta": {
+      "title": "Stage 1 · 8 Steps"
+    }
+  },
+  "126": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "143",
+        0
+      ],
+      "conditioning": [
+        "136",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Stage 1 Guider"
+    }
+  },
+  "129": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 0
+    },
+    "_meta": {
+      "title": "SA Seed"
+    }
+  },
+  "125": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "129",
+        0
+      ],
+      "guider": [
+        "126",
+        0
+      ],
+      "sampler": [
+        "123",
+        0
+      ],
+      "sigmas": [
+        "124",
+        0
+      ],
+      "latent_image": [
+        "136",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "MiniMax H3 SA · Stage 1 Sample"
+    }
+  },
+  "35": {
+    "class_type": "LTXVSeparateAVLatent",
+    "inputs": {
+      "av_latent": [
+        "125",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Separate H3 Video and Audio Latent"
+    }
+  },
+  "26": {
+    "class_type": "MinimaxH3LatentUpscaler3D",
+    "inputs": {
+      "latent": [
+        "35",
+        0
+      ],
+      "model_name": "minimax_h3_latent_upscaler_3d_fp16.safetensors",
+      "mode": "target dimensions",
+      "mode.width": 1344,
+      "mode.height": 768,
+      "align": 32,
+      "keep_proportion": true,
+      "device": "cuda",
+      "precision": "fp16"
+    },
+    "_meta": {
+      "title": "SA Latent 3D Upscale · 1344x768"
+    }
+  },
+  "10": {
+    "class_type": "LTXVConcatAVLatent",
+    "inputs": {
+      "video_latent": [
+        "26",
+        0
+      ],
+      "audio_latent": [
+        "35",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Recombine Video and Audio Latent"
+    }
+  },
+  "11": {
+    "class_type": "MiniMaxH3ImageToVideoTail",
+    "inputs": {
+      "clip": [
+        "128",
+        0
+      ],
+      "vae": [
+        "119",
+        0
+      ],
+      "prompt": "Refine the supplied Ref2VA latent while preserving reference identity, motion, lighting, and audio continuity.",
+      "width": 1344,
+      "height": 768,
+      "length": 124,
+      "video_latent": [
+        "10",
+        0
+      ],
+      "apply_keyframes": "disable"
+    },
+    "_meta": {
+      "title": "MiniMax H3 SA · Stage 2 1344x768"
+    }
+  },
+  "142": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "127",
+        0
+      ],
+      "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+      "strength_model": 1.0
+    },
+    "_meta": {
+      "title": "H3 8-step LoRA"
+    }
+  },
+  "143": {
+    "class_type": "MiniMaxH3SigmaShift",
+    "inputs": {
+      "model": [
+        "142",
+        0
+      ],
+      "shift_video": 12.0,
+      "shift_audio": 3.0
+    },
+    "_meta": {
+      "title": "MiniMax H3 Sigma Shift"
+    }
+  },
+  "144": {
+    "class_type": "SolAttnPatch",
+    "inputs": {
+      "model": [
+        "143",
+        0
+      ],
+      "tau": 1.3,
+      "start_percent": 0.2,
+      "end_percent": 0.9,
+      "min_tokens": 4096,
+      "int8_qk": true,
+      "sink_conditioning": "exact_kv_and_rows",
+      "morton": false,
+      "morton_curve": "2d_frame",
+      "int8_pv": true,
+      "verbose": false,
+      "use_tma": false,
+      "tau_profile": "",
+      "dense_blocks": "0"
+    },
+    "_meta": {
+      "title": "MiniMax H3 SA · Sol-Attn"
+    }
+  },
+  "145": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "144",
+        0
+      ],
+      "conditioning": [
+        "11",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Stage 2 Sol-Attn Guider"
+    }
+  },
+  "146": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "res_multistep"
+    },
+    "_meta": {
+      "title": "Stage 2 Res Multistep"
+    }
+  },
+  "147": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 0
+    },
+    "_meta": {
+      "title": "Stage 2 Seed"
+    }
+  },
+  "148": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "model": [
+        "144",
+        0
+      ],
+      "scheduler": "simple",
+      "steps": 8,
+      "denoise": 0.35
+    },
+    "_meta": {
+      "title": "Stage 2 · 8 Steps · Denoise 0.35"
+    }
+  },
+  "149": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "147",
+        0
+      ],
+      "guider": [
+        "145",
+        0
+      ],
+      "sampler": [
+        "146",
+        0
+      ],
+      "sigmas": [
+        "148",
+        0
+      ],
+      "latent_image": [
+        "11",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "MiniMax H3 SA · Sol-Attn Refine"
+    }
+  },
+  "141": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "149",
+        0
+      ],
+      "vae": [
+        "120",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Decode SA Audio"
+    }
+  },
+  "150": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "151",
+        0
+      ],
+      "audio": [
+        "141",
+        0
+      ],
+      "fps": 24.0,
+      "bit_depth": 8
+    },
+    "_meta": {
+      "title": "Create MiniMax H3 SA Video"
+    }
+  },
+  "151": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "149",
+        0
+      ],
+      "vae": [
+        "119",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Decode SA Video"
+    }
+  },
+  "200": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "first_reference.png"
+    },
+    "_meta": {
+      "title": "MiniMax H3 SA · First Frame"
+    }
+  }
+}

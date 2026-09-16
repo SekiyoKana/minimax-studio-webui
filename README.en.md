@@ -20,7 +20,7 @@ A Web service and desktop application for MiniMax H3 video, character voice, and
 
 MiniMax H3 Studio runs as either a server application or a local desktop application. The server exposes a responsive Web interface and HTTP API around ComfyUI and RunningHub workflows. It handles uploads, validation, persistent queues, live progress, node scheduling, and output management. The desktop application runs FastAPI and pywebview locally while sending inference requests to a configured remote ComfyUI node. Tasks, assets, outputs, node configuration, and credentials remain on the local machine.
 
-Supported workflows include H3 FL2VA, Ref2VA, 8-step LoRA v1.0, single-image audio-driven digital humans, H3 TTS, Music3 INT8, generic RunningHub workflows, and an optional H3 NSFW workflow.
+Supported workflows include H3 FL2VA, Ref2VA, 8-step LoRA v1.0, MiniMax H3 SA, single-image audio-driven digital humans, H3 TTS, Music3 INT8, generic RunningHub workflows, and an optional H3 NSFW workflow.
 
 ![MiniMax H3 Studio workspace](docs/images/h3-studio-overview.jpg)
 
@@ -49,6 +49,9 @@ Enabling runtime logs in Settings shows the launcher while the detail window rem
 | Native Ref2VA | Ref2VA FP8 Scaled | Up to 9 images, 3 videos, and 3 audio clips | 1 to 15 seconds, 4 to 50 steps, MP4 |
 | 8-step FL2VA | FL2VA FP8 Scaled with 8-step LoRA v1.0 | One first frame and an optional last frame | Fixed at 8 steps, LoRA strength 1.0, MP4 |
 | 8-step Ref2VA | Ref2VA FP8 Scaled with the FL2VA 8-step LoRA v1.0 | Ref2VA reference assets | Fixed at 8 steps, LoRA strength 1.0, MP4 |
+| MiniMax H3 SA FL2VA | FL2VA FP8, 8-step LoRA, Sol-Attn, and Latent 3D Upscaler | One first frame and an optional last frame | Low-resolution first stage and high-resolution second stage, fixed at 8 steps, MP4 |
+| MiniMax H3 SA Ref2VA | Ref2VA FP8, 8-step LoRA, Sol-Attn, and Latent 3D Upscaler | Up to 9 images, 3 videos, and 3 audio clips | Low-resolution first stage and high-resolution second stage, fixed at 8 steps, MP4 |
+H3 SA accepts 1 to 300 seconds. Requests longer than 15 seconds are automatically split on the valid H3 frame grid, generated with fixed audiovisual context, trimmed at repeated leading frames, and merged into one MP4. Advanced acceleration and stitching parameters are set by the service.
 | Digital human | Ref2VA FP8 Scaled | One character image and one driving audio file | Audio determines duration, fixed at 20 steps, MP4 |
 | H3 TTS | Ref2VA FP8 Scaled | Character traits, dialogue, and 0 to 3 audio references | 1 to 15 seconds, 4 to 50 steps, FLAC |
 | Music3 | Music3 DiT INT8 and INT8 text encoder | Music description and optional section-tagged lyrics | 1 to 300 seconds, fixed at 30 steps, FLAC |
@@ -83,6 +86,8 @@ The root-level [`comfyui_nodes/`](comfyui_nodes/) directory contains pinned sour
 | `ComfyUI-VideoHelperSuite-993082e.zip` | `VHS_LoadVideo` for Ref2VA video references | `ComfyUI/custom_nodes/` |
 | `ComfyUI-MultiGPU-62f98ed.zip` | `CLIPLoaderMultiGPU` for Music3 | `ComfyUI/custom_nodes/` |
 | `comfyui-minimax-h3-audio-drive-de65ec5.zip` | `VRGDG_MiniMaxH3AudioDrive` for the digital-human workflow | `ComfyUI/custom_nodes/` |
+| `ComfyUI-SolAttn_triton-842c4ea.zip` | `SolAttnPatch` for H3 SA | `ComfyUI/custom_nodes/` |
+| `Comfyui_Minimax_h3_latent_Upscaler-52a48af.zip` | `MinimaxH3LatentUpscaler3D` for H3 SA | `ComfyUI/custom_nodes/` |
 
 Extract the custom-node archives and place their top-level directories under `ComfyUI/custom_nodes/`. Install any included `requirements.txt` with the Python environment used by ComfyUI.
 
@@ -216,6 +221,10 @@ When multiple ComfyUI processes run on one server, assign each process an indepe
 The API service must be able to reach every remote node. Restrict ComfyUI ports at the network layer when nodes run on separate hosts.
 
 ## API
+
+### VDN-H3
+
+VDN-H3 adds Video Delta Net hybrid attention to MiniMax H3. Use `execution_mode=vdn-h3` with FL2VA or Ref2VA and choose 8–50 steps, defaulting to 50. Eight steps automatically selects `stage-dmd-step-250`; 9–50 steps selects `stage-b-step-2000`. Place checkpoints under `ComfyUI/models/vdn/` and install the node and checkpoints with `scripts/install_vdn_h3.sh`.
 
 Create an 8-step FL2VA job:
 

@@ -17,6 +17,7 @@ from cryptography.exceptions import InvalidTag
 
 TERMINAL_STATES = {"completed", "failed", "cancelled"}
 RUNNINGHUB_TARGET_PREFIX = "rh:"
+MAX_FRESH_REMOTE_RETRIES = 3
 logger = logging.getLogger("uvicorn.error")
 
 
@@ -1387,7 +1388,11 @@ class JobManager:
                     )
 
                 def checkpoint_callback(checkpoint: dict[str, Any] | None) -> None:
-                    self.store.update(job_id, remote_checkpoint=deepcopy(checkpoint))
+                    self.store.update(
+                        job_id,
+                        remote_checkpoint=deepcopy(checkpoint),
+                        remote_retry_count=0,
+                    )
 
                 generate_parameters = inspect.signature(engine.generate).parameters
                 generate_kwargs: dict[str, Any] = {}
@@ -1440,6 +1445,59 @@ class JobManager:
             except Exception as exc:
                 current = self.store.get(job_id) or {}
                 checkpoint = current.get("remote_checkpoint")
+                if (
+                    checkpoint
+                    and str(checkpoint.get("provider") or "") == "comfyui"
+                    and getattr(exc, "retry_fresh_task", False)
+                ):
+                    retry_count = int(current.get("remote_retry_count") or 0)
+                    if retry_count < MAX_FRESH_REMOTE_RETRIES:
+                        request_update = deepcopy(current.get("request") or {})
+                        with self._condition:
+                            original_node = self._nodes.get(node_id)
+                            original_node_healthy = bool(
+                                original_node and original_node.get("healthy")
+                            )
+                        if (
+                            request_update.get("comfy_node") == node_id
+                            and not original_node_healthy
+                        ):
+                            request_update["comfy_node"] = "auto"
+                        self.store.update(
+                            job_id,
+                            status="queued",
+                            stage="远端任务已丢失，重新提交任务",
+                            progress=0,
+                            remote_checkpoint=None,
+                            remote_retry_count=retry_count + 1,
+                            cancel_requested=False,
+                            request=request_update,
+                            event_message=(
+                                "ComfyUI 远端任务已丢失，重新提交新任务"
+                                + (
+                                    "，原节点不可用，改用自动调度"
+                                    if request_update.get("comfy_node") == "auto"
+                                    and current.get("request", {}).get("comfy_node")
+                                    == node_id
+                                    else ""
+                                )
+                            ),
+                        )
+                        self.submit(job_id)
+                        continue
+                    error_log = self.store.jobs_dir / f"{job_id}.log"
+                    error_log.write_text(traceback.format_exc(), encoding="utf-8")
+                    self.store.update(
+                        job_id,
+                        status="failed",
+                        stage="生成失败",
+                        error="ComfyUI 远端任务连续丢失，已达到重新提交次数上限",
+                        progress=0,
+                        remote_checkpoint=None,
+                        event_level="error",
+                    )
+                    self._set_incognito_expiry(job_id)
+                    continue
                 if checkpoint and getattr(exc, "retry_remote_checkpoint", False):
                     self.store.update(
                         job_id,

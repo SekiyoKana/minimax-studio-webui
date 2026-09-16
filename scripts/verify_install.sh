@@ -20,6 +20,8 @@ curl -fsS "$COMFY_URL/object_info/KSamplerSelect" >/dev/null
 curl -fsS "$COMFY_URL/object_info/VHS_LoadVideo" >/dev/null
 curl -fsS "$COMFY_URL/object_info/MiniMaxMusic3TextEncode" >/dev/null
 curl -fsS "$COMFY_URL/object_info/EmptyMiniMaxMusic3LatentAudio" >/dev/null
+curl -fsS "$COMFY_URL/object_info/VideoGenerator" >/dev/null
+curl -fsS "$COMFY_URL/object_info/InferenceArgs" >/dev/null
 curl -fsS "$COMFY_URL/object_info/CLIPLoaderMultiGPU" >/dev/null
 curl -fsS "$API_URL/health"
 echo

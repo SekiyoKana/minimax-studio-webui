@@ -74,8 +74,35 @@ class Settings:
             str(DEFAULT_WORKFLOW_ROOT / "minimax_music3_int8_api.json"),
         )
     )
-    comfy_input_dir: Path = Path(
-        os.getenv("H3_COMFY_INPUT_DIR", str(DEFAULT_COMFY_ROOT / "input"))
+    comfy_dual_sampling_workflow: Path = Path(
+        os.getenv(
+            "H3_COMFY_DUAL_SAMPLING_WORKFLOW",
+            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json"),
+        )
+    )
+    comfy_sa_workflow: Path = Path(
+        os.getenv(
+            "H3_COMFY_SA_WORKFLOW",
+            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_fl2va_fp8_sa_api.json"),
+        )
+    )
+    comfy_ref2va_sa_workflow: Path = Path(
+        os.getenv(
+            "H3_COMFY_REF2VA_SA_WORKFLOW",
+            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_sa_api.json"),
+        )
+    )
+    comfy_vdn_workflow: Path = Path(
+        os.getenv(
+            "H3_COMFY_VDN_WORKFLOW",
+            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_fl2va_vdn_api.json"),
+        )
+    )
+    comfy_ref2va_vdn_workflow: Path = Path(
+        os.getenv(
+            "H3_COMFY_REF2VA_VDN_WORKFLOW",
+            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_vdn_api.json"),
+        )
     )
     comfy_output_dir: Path = Path(
         os.getenv("H3_COMFY_OUTPUT_DIR", str(DEFAULT_COMFY_ROOT / "output"))

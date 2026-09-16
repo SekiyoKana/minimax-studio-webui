@@ -147,6 +147,8 @@ svg { width: 16px; height: 16px; stroke-width: 1.7; }
 .message-plan { display: inline-flex; min-height: 20px; align-items: center; padding: 0 6px; border: 1px solid var(--line-strong); border-radius: 4px; color: var(--muted); }
 .message-plan.speed { border-color: #abc4d7; background: #eaf1f5; color: #315f82; }
 .message-plan.turbo { border-color: #abc4d7; background: #eaf1f5; color: #315f82; }
+.message-plan.h3-sa { border-color: #9eb8d0; background: #e7f0f7; color: #2d5b7d; }
+.message-plan.vdn-h3 { border-color: #b6a4dc; background: #eee9f8; color: #5e478b; }
 .message-plan.digital-human { border-color: #b7cbbd; background: #edf4ef; color: #365b42; }
 .message-plan.nsfw { border-color: #d6a99e; background: var(--accent-soft); color: #843b2f; }
 .message-plan.music3 { border-color: #b7cbbd; background: #edf4ef; color: #365b42; }
@@ -260,9 +262,9 @@ svg { width: 16px; height: 16px; stroke-width: 1.7; }
 .compact-control svg { width: 14px; flex: 0 0 auto; }
 .duration-control { position: relative; }
 .duration-control.digital-human { background: #fff3cf; color: #8a5b16; }
-.duration-control.digital-human select { color: inherit; cursor: not-allowed; }
+.duration-control.digital-human input { color: inherit; cursor: not-allowed; }
 .control-tooltip { position: fixed; z-index: 70; width: max-content; max-width: 220px; padding: 7px 9px; transform: translateX(-50%) translateY(3px); border: 1px solid #e5cc91; border-radius: 5px; background: #fffaf0; color: #694b1d; box-shadow: 0 8px 20px rgba(73, 56, 20, .14); font-size: 10px; line-height: 1.4; opacity: 0; pointer-events: none; visibility: hidden; transition: opacity .15s ease, transform .15s ease, visibility .15s ease; }
-.duration-control.digital-human:hover .control-tooltip, .duration-control.digital-human:focus-within .control-tooltip { transform: translateX(-50%) translateY(0); opacity: 1; visibility: visible; }
+.duration-control.digital-human:hover .control-tooltip, .duration-control.digital-human:focus-within .control-tooltip, .duration-control.h3-sa:hover .control-tooltip, .duration-control.h3-sa:focus-within .control-tooltip { transform: translateX(-50%) translateY(0); opacity: 1; visibility: visible; }
 .compact-control select { max-width: 104px; height: 28px; padding: 0 15px 0 0; border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 10px; outline: 0; }
 .node-control select { max-width: 150px; }
 .composer-toolbar .compact-control select { max-width: 92px; }
@@ -272,6 +274,8 @@ svg { width: 16px; height: 16px; stroke-width: 1.7; }
 .runninghub-workflow-control span { overflow: hidden; max-width: 200px; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .node-control select option:disabled { color: var(--quiet); }
 .compact-control input[type="number"] { width: 34px; height: 28px; padding: 0; border: 0; appearance: textfield; background: transparent; color: inherit; font: 400 10px/1 var(--mono); outline: 0; text-align: center; }
+.duration-control input[type="number"] { width: 42px; }
+.duration-unit { color: var(--quiet); font: 400 10px/1 var(--mono); }
 .compact-control input[type="number"]::-webkit-inner-spin-button,
 .compact-control input[type="number"]::-webkit-outer-spin-button { margin: 0; -webkit-appearance: none; }
 .execution-control select { max-width: 145px; }
@@ -300,6 +304,10 @@ svg { width: 16px; height: 16px; stroke-width: 1.7; }
 .popover-panel { position: absolute; z-index: 30; right: 0; bottom: 43px; display: grid; width: 310px; gap: 11px; padding: 15px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); box-shadow: 0 16px 40px rgba(36, 42, 34, .16); }
 .popover-panel label { display: grid; gap: 6px; color: var(--muted); font-size: 10px; }
 .popover-panel input:not([type="checkbox"]) { width: 100%; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--canvas); color: var(--ink); font-size: 11px; }
+.popover-panel select { width: 100%; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--canvas); color: var(--ink); font-size: 11px; }
+.popover-panel > #saSettings { display: grid; gap: 11px; }
+.popover-panel > #saSettings[hidden] { display: none; }
+.popover-panel > #saSettings > strong { color: var(--ink); font-size: 10px; font-weight: 600; }
 .secret-field-status { display: block; min-height: 14px; color: var(--quiet); font-size: 8px; }
 .popover-divider { height: 1px; background: var(--line); }
 .switch-row { display: grid !important; grid-template-columns: 1fr auto !important; align-items: center; }

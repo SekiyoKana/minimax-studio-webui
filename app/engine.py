@@ -39,7 +39,7 @@ class RemoteTaskUnavailableError(RuntimeError):
 
 
 class RemoteTaskNotFoundError(RuntimeError):
-    pass
+    retry_fresh_task = True
 
 
 def _remote_checkpoint_id(
@@ -346,6 +346,8 @@ class MiniMaxH3Engine:
 
 
 class ComfyUIH3Engine:
+    H3_CONTEXT_FRAMES = 22
+    H3_MAX_SEGMENT_FRAMES = 362
     NODE_STAGES = {
         "3": (7, "加载 Music3 文本编码器"),
         "6": (5, "加载 Music3 INT8 DiT"),
@@ -355,11 +357,16 @@ class ComfyUIH3Engine:
         "42": (92, "分块解码 Music3 音频"),
         "127": (6, "加载 MiniMax H3 FP8 模型"),
         "128": (8, "加载 Qwen3-VL 文本编码器"),
+        "142": (10, "加载 H3 SA 8-step LoRA"),
+        "143": (12, "应用 H3 Sigma Shift"),
         "141": (10, "加载 H3 NSFW LoRA"),
         "136": (12, "编码提示词与首尾帧"),
+        "26": (27, "执行 H3 SA Latent 3D 放大"),
+        "144": (38, "应用 H3 SA Sol-Attn / VDN-H3"),
         "171": (10, "加载数字人驱动音频"),
         "172": (14, "编码并锁定数字人驱动音频"),
         "125": (15, "联合音视频采样"),
+        "149": (62, "H3 SA Sol-Attn 二阶段采样"),
         "121": (90, "解码音频"),
         "122": (92, "解码视频"),
         "130": (95, "合成音视频"),
@@ -391,6 +398,11 @@ class ComfyUIH3Engine:
             ("fl2va-fp8", "turbo-lora"): self.settings.comfy_turbo_workflow,
             ("ref2va-fp8", "native"): self.settings.comfy_ref2va_workflow,
             ("ref2va-fp8", "turbo-lora"): self.settings.comfy_ref2va_turbo_workflow,
+            ("ref2va-fp8", "dual-sampling"): self.settings.comfy_dual_sampling_workflow,
+            ("fl2va-fp8", "h3-sa"): self.settings.comfy_sa_workflow,
+            ("ref2va-fp8", "h3-sa"): self.settings.comfy_ref2va_sa_workflow,
+            ("fl2va-fp8", "vdn-h3"): self.settings.comfy_vdn_workflow,
+            ("ref2va-fp8", "vdn-h3"): self.settings.comfy_ref2va_vdn_workflow,
             ("ref2va-fp8", "h3-nsfw"): self.settings.comfy_nsfw_workflow,
             ("ref2va-fp8", "digital-human"): self.settings.comfy_digital_human_workflow,
             ("ref2va-fp8", "tts"): self.settings.comfy_tts_workflow,
@@ -414,6 +426,14 @@ class ComfyUIH3Engine:
             required.discard("137")
         if execution_mode == "turbo-lora":
             required.update({"142", "143"})
+        if execution_mode == "vdn-h3":
+            required.add("144")
+        if execution_mode in {"dual-sampling", "h3-sa"}:
+            required = {"10", "11", "26", "35", "92", "119", "120", "121", "122", "123", "124", "125", "126", "127", "128", "129", "130", "136", "140", "142", "143", "144", "145", "146", "147", "148", "149", "150", "151"}
+            if execution_mode == "h3-sa":
+                required.discard("140")
+            if execution_mode == "h3-sa" and variant == "fl2va-fp8":
+                required.add("137")
         if execution_mode == "h3-nsfw":
             required.add("141")
         if execution_mode == "digital-human":
@@ -424,21 +444,6 @@ class ComfyUIH3Engine:
         if missing:
             raise ValueError(f"ComfyUI 工作流缺少节点：{', '.join(missing)}")
         return workflow
-
-    def _prepare_inputs(self, job: dict[str, Any]) -> tuple[Path, list[str]]:
-        paths = [Path(path) for path in job["input_paths"]]
-        manifest = job["request"]["references"]
-        if len(paths) != len(manifest):
-            raise ValueError("参考素材清单与文件不一致")
-        task_dir = self.settings.comfy_input_dir / "minimax-studio-webui" / job["id"]
-        task_dir.mkdir(parents=True, exist_ok=True)
-        relative_paths = []
-        for index, (source, item) in enumerate(zip(paths, manifest, strict=True), start=1):
-            suffix = source.suffix.lower() or ".png"
-            target = task_dir / f"{index:02d}_{item['type']}{suffix}"
-            shutil.copy2(source, target)
-            relative_paths.append(target.relative_to(self.settings.comfy_input_dir).as_posix())
-        return task_dir, relative_paths
 
     def _upload_inputs(self, client, job: dict[str, Any]) -> list[str]:
         paths = [Path(path) for path in job["input_paths"]]
@@ -476,6 +481,11 @@ class ComfyUIH3Engine:
         job: dict[str, Any],
         input_names: list[str],
         music3_device: str | None = None,
+        context_video_name: str | None = None,
+        context_latent_path: str | None = None,
+        context_clip_index: int = 0,
+        save_latent_prefix: str | None = None,
+        save_latent_clip_index: int = 0,
     ) -> dict[str, Any]:
         variant = self._variant(job)
         execution_mode = self._execution_mode(job)
@@ -503,6 +513,269 @@ class ComfyUIH3Engine:
             height=32 if execution_mode == "tts" else request["height"],
             length=request["num_frames"],
         )
+        if execution_mode == "vdn-h3":
+            # VDN-H3 supplies its own released adapters and hybrid attention.
+            # It must remain separate from Sol-Attn and community turbo LoRAs.
+            vdn_steps = int(request["steps"])
+            vdn_checkpoint = "stage-dmd-step-250" if vdn_steps == 8 else "stage-b-step-2000"
+            workflow["127"]["inputs"]["unet_name"] = (
+                "minimax_h3_fl2va_pruned_fp8_scaled.safetensors"
+                if variant == "fl2va-fp8"
+                else "minimax_h3_ref2va_pruned_fp8_scaled.safetensors"
+            )
+            workflow["124"]["inputs"].update(
+                model=["144", 0],
+                scheduler="beta",
+                steps=vdn_steps,
+                denoise=1.0,
+            )
+            workflow["126"]["inputs"]["model"] = ["144", 0]
+            workflow["123"]["inputs"]["sampler_name"] = "er_sde"
+            workflow["144"]["inputs"].update(
+                model=["127", 0],
+                vdn_checkpoint=vdn_checkpoint,
+                apply_turbo_adapter=vdn_steps == 8,
+                strength=1.0,
+                lora_mode="merge",
+                branch_weights="stream",
+                attention_backend="grouped",
+                verbose=False,
+            )
+            if variant == "ref2va-fp8":
+                self._build_h3_sa_references(workflow, request, input_names)
+            else:
+                if not input_names:
+                    raise ValueError("VDN-H3 FL2VA 需要首帧图片")
+                if "137" not in workflow:
+                    raise ValueError("VDN-H3 FL2VA 工作流缺少首帧节点 137")
+                workflow["137"]["inputs"]["image"] = input_names[0]
+                conditioning["first_frame"] = ["137", 0]
+            return workflow
+        if execution_mode == "h3-sa":
+            low_width = max(352, round(request["width"] * 2 / 3 / 32) * 32)
+            low_height = max(352, round(request["height"] * 2 / 3 / 32) * 32)
+            conditioning.update(
+                width=low_width,
+                height=low_height,
+                length=request["num_frames"],
+            )
+            workflow["11"]["inputs"].update(
+                width=request["width"],
+                height=request["height"],
+                length=request["num_frames"],
+                prompt=request["prompt"],
+                video_latent=["10", 0],
+                apply_keyframes="disable",
+            )
+            workflow["127"]["inputs"]["unet_name"] = (
+                "minimax_h3_fl2va_pruned_fp8_scaled.safetensors"
+                if variant == "fl2va-fp8"
+                else "minimax_h3_ref2va_pruned_fp8_scaled.safetensors"
+            )
+            workflow["142"]["inputs"].update(
+                model=["127", 0],
+                lora_name="minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+                strength_model=1.0,
+            )
+            workflow["143"]["inputs"].update(
+                model=["142", 0],
+                shift_video=12.0,
+                shift_audio=3.0,
+            )
+            workflow["124"]["inputs"].update(
+                model=["143", 0],
+                steps=8,
+                denoise=1.0,
+            )
+            workflow["126"]["inputs"]["model"] = ["143", 0]
+            workflow["144"]["inputs"].update(
+                model=["143", 0],
+                tau=float(request.get("sa_tau", 1.3)),
+                start_percent=float(request.get("sa_start_percent", 0.2)),
+                end_percent=float(request.get("sa_end_percent", 0.9)),
+                min_tokens=int(request.get("sa_min_tokens", 4096)),
+                int8_qk=bool(request.get("sa_int8_qk", True)),
+                sink_conditioning=request.get("sa_sink_conditioning", "exact_kv_and_rows"),
+                morton=bool(request.get("sa_morton", False)),
+                morton_curve=request.get("sa_morton_curve", "2d_frame"),
+                int8_pv=bool(request.get("sa_int8_pv", True)),
+                dense_blocks=request.get("sa_dense_blocks", "0"),
+            )
+            workflow["145"]["inputs"]["model"] = ["144", 0]
+            workflow["148"]["inputs"].update(
+                model=["144", 0],
+                steps=8,
+                denoise=float(request.get("sa_stage2_denoise", 0.35)),
+            )
+            workflow["129"]["inputs"]["noise_seed"] = request["seed"]
+            workflow["147"]["inputs"]["noise_seed"] = request["seed"]
+            workflow["26"]["inputs"].update(
+                model_name="minimax_h3_latent_upscaler_3d_fp16.safetensors",
+                mode="target dimensions",
+                **{
+                    "mode.width": request["width"],
+                    "mode.height": request["height"],
+                },
+                align=32,
+                keep_proportion=True,
+                device="cuda",
+                precision="fp16",
+            )
+            if variant == "ref2va-fp8":
+                self._build_h3_sa_references(workflow, request, input_names)
+            elif context_video_name is None:
+                if not input_names:
+                    raise ValueError("H3 SA FL2VA 需要首帧图片")
+                if "137" not in workflow:
+                    raise ValueError("H3 SA FL2VA 工作流缺少首帧节点 137")
+                workflow["137"]["inputs"]["image"] = input_names[0]
+                conditioning["first_frame"] = ["137", 0]
+            else:
+                conditioning.pop("first_frame", None)
+
+            if context_video_name is not None:
+                workflow["9000"] = {
+                    "class_type": "VHS_LoadVideo",
+                    "inputs": {
+                        "video": context_video_name,
+                        "force_rate": 24,
+                        "custom_width": 0,
+                        "custom_height": 0,
+                        "frame_load_cap": self.H3_MAX_SEGMENT_FRAMES,
+                        "skip_first_frames": 0,
+                        "select_every_nth": 1,
+                    },
+                    "_meta": {"title": "Context Loop previous segment"},
+                }
+                if not context_latent_path:
+                    raise ValueError("H3 Context Loop 缺少上一段 latent checkpoint")
+                workflow["9001"] = {
+                    "class_type": "MiniMaxH3MotionContextLoadLatent",
+                    "inputs": {
+                        "latent_path": context_latent_path,
+                        "clip_index": int(context_clip_index),
+                    },
+                    "_meta": {"title": "Context Loop load AV latent"},
+                }
+                workflow["9002"] = {
+                    "class_type": "MiniMaxH3MotionContext",
+                    "inputs": {
+                        "conditioning": ["136", 0],
+                        "vae": ["119", 0],
+                        "latent": ["136", 1],
+                        "context_frames": ["9000", 0],
+                        "context_length": self.H3_CONTEXT_FRAMES,
+                        "encode_mode": "video",
+                        "anchor_mode": "head",
+                        "crop": "disabled",
+                        "audio_context_length": self.H3_CONTEXT_FRAMES,
+                        "audio_mode": "timeline",
+                        "context_latent": ["9001", 0],
+                        "target_start": 0,
+                    },
+                    "_meta": {"title": "Context Loop seamless stitching"},
+                }
+                workflow["126"]["inputs"]["conditioning"] = ["9002", 0]
+                # Motion Context returns CONDITIONING and trim_frames. The
+                # sampler keeps the original H3 latent as its latent_image;
+                # the loaded previous latent is consumed through the
+                # conditioning node's context_latent input.
+                workflow["125"]["inputs"]["latent_image"] = ["136", 1]
+
+            if save_latent_prefix is not None:
+                workflow["9005"] = {
+                    "class_type": "MiniMaxH3MotionContextSaveLatent",
+                    "inputs": {
+                        "latent": ["125", 0],
+                        "filename_prefix": save_latent_prefix,
+                        "clip_index": int(save_latent_clip_index),
+                    },
+                    "_meta": {"title": "Context Loop save AV latent"},
+                }
+
+            if context_video_name is not None:
+                workflow["9003"] = {
+                    "class_type": "MiniMaxH3MotionContextTrim",
+                    "inputs": {
+                        "images": ["151", 0],
+                        "audio": ["141", 0],
+                        "trim_frames": self.H3_CONTEXT_FRAMES,
+                        "fps": 24.0,
+                        # H3's audio latent grid can differ from the exact
+                        # 24-fps picture duration by one audio cell. The trim
+                        # node's conformance path handles this deterministically.
+                        "match_tail": True,
+                        "video_crossfade_frames": self.H3_CONTEXT_FRAMES,
+                    },
+                    "_meta": {"title": "Context Loop trim overlap"},
+                }
+                workflow["9004"] = {
+                    "class_type": "CreateVideo",
+                    "inputs": {
+                        "images": ["9003", 0],
+                        "audio": ["9003", 1],
+                        "fps": 24.0,
+                        "bit_depth": 8,
+                    },
+                    "_meta": {"title": "Context Loop delivered segment"},
+                }
+                workflow["92"]["inputs"]["video"] = ["9004", 0]
+            return workflow
+        if execution_mode == "dual-sampling":
+            # The public workflow uses a low-resolution pass, a learned latent
+            # upscale, then a second low-noise refinement pass. The API form
+            # keeps the same graph and exposes the request dimensions through
+            # the resolution and upscale controls.
+            low_width = max(352, round(request["width"] * 0.5 / 32) * 32)
+            low_height = max(352, round(request["height"] * 0.5 / 32) * 32)
+            workflow["136"]["inputs"].update(
+                width=low_width,
+                height=low_height,
+                length=request["num_frames"],
+            )
+            workflow["11"]["inputs"].update(
+                width=request["width"],
+                height=request["height"],
+                length=request["num_frames"],
+                prompt=request["prompt"],
+                video_latent=["10", 0],
+                apply_keyframes="disable",
+            )
+            workflow["127"]["inputs"]["unet_name"] = "minimax_h3_ref2va_pruned_fp8_scaled.safetensors"
+            workflow["143"]["inputs"].update(shift_video=12.0, shift_audio=3.0)
+            workflow["124"]["inputs"]["steps"] = request["steps"]
+            workflow["140"]["inputs"].update(extra_steps=1, start_at_sigma=0.7, end_at_sigma=0.0)
+            workflow["142"]["inputs"].update(extra_steps=1, start_at_sigma=0.7, end_at_sigma=0.0)
+            workflow["129"]["inputs"]["noise_seed"] = request["seed"]
+            workflow["147"]["inputs"]["noise_seed"] = request["seed"]
+            workflow["26"]["inputs"].update(
+                model_name="minimax_h3_latent_upscaler_3d_fp16.safetensors",
+                mode="target dimensions",
+                **{
+                    "mode.width": request["width"],
+                    "mode.height": request["height"],
+                },
+                align=32,
+                keep_proportion=True,
+                device="cuda",
+                precision="fp16",
+            )
+            workflow["144"]["inputs"].update(
+                tau=1.3,
+                start_percent=0.2,
+                end_percent=0.9,
+                min_tokens=4096,
+                int8_qk=True,
+                sink_conditioning="exact_kv_and_rows",
+                morton=False,
+                morton_curve="2d_frame",
+                int8_pv=True,
+                verbose=False,
+                use_tma=False,
+                tau_profile="",
+                dense_blocks="",
+            )
+            return self._build_dual_sampling_references(workflow, request, input_names)
         if execution_mode == "digital-human":
             inputs_by_type = {
                 item["type"]: input_name
@@ -580,6 +853,231 @@ class ComfyUIH3Engine:
         return workflow
 
     @staticmethod
+    def _build_dual_sampling_references(
+        workflow: dict[str, Any], request: dict[str, Any], input_names: list[str]
+    ) -> dict[str, Any]:
+        conditioning = workflow["136"]["inputs"]
+        for key in list(conditioning):
+            if key.startswith(("ref_images.", "ref_videos.", "ref_video_audios.", "ref_audios.")):
+                conditioning.pop(key)
+        for index, input_name in enumerate(input_names):
+            node_id = str(200 + index)
+            workflow[node_id] = {
+                "class_type": "LoadImage",
+                "inputs": {"image": input_name},
+                "_meta": {"title": f"Load Dual Sampling Picture {index + 1}"},
+            }
+            conditioning[f"ref_images.ref_image_{index}"] = [node_id, 0]
+        return workflow
+
+    @staticmethod
+    def _build_h3_sa_references(
+        workflow: dict[str, Any], request: dict[str, Any], input_names: list[str]
+    ) -> dict[str, Any]:
+        conditioning = workflow["136"]["inputs"]
+        for key in list(conditioning):
+            if key.startswith(("ref_images.", "ref_videos.", "ref_video_audios.", "ref_audios.")):
+                conditioning.pop(key)
+        counts = {"image": 0, "video": 0, "audio": 0}
+        for offset, (item, input_name) in enumerate(
+            zip(request["references"], input_names, strict=True), start=200
+        ):
+            kind = item["type"]
+            index = counts[kind]
+            counts[kind] += 1
+            node_id = str(offset)
+            if kind == "image":
+                workflow[node_id] = {
+                    "class_type": "LoadImage",
+                    "inputs": {"image": input_name},
+                    "_meta": {"title": f"Load H3 SA Picture {index + 1}"},
+                }
+                conditioning[f"ref_images.ref_image_{index}"] = [node_id, 0]
+            elif kind == "video":
+                workflow[node_id] = {
+                    "class_type": "VHS_LoadVideo",
+                    "inputs": {
+                        "video": input_name,
+                        "force_rate": 24,
+                        "custom_width": 0,
+                        "custom_height": 0,
+                        "frame_load_cap": 360,
+                        "skip_first_frames": 0,
+                        "select_every_nth": 1,
+                    },
+                    "_meta": {"title": f"Load H3 SA Video {index + 1}"},
+                }
+                conditioning[f"ref_videos.ref_video_{index}"] = [node_id, 0]
+                if item.get("has_audio"):
+                    conditioning[f"ref_video_audios.ref_video_audio_{index}"] = [node_id, 2]
+            elif kind == "audio":
+                workflow[node_id] = {
+                    "class_type": "LoadAudio",
+                    "inputs": {"audio": input_name},
+                    "_meta": {"title": f"Load H3 SA Audio {index + 1}"},
+                }
+                conditioning[f"ref_audios.ref_audio_{index}"] = [node_id, 0]
+        return workflow
+
+    @classmethod
+    def _split_h3_frames(cls, total_frames: int) -> list[int]:
+        """Choose legal H3 segment lengths whose delivered frames match the request."""
+        target = max(5, int(total_frames))
+        overlap = cls.H3_CONTEXT_FRAMES
+        parts: list[int] = []
+        delivered = 0
+        while delivered < target:
+            remaining = target - delivered
+            if not parts:
+                raw_frames = min(cls.H3_MAX_SEGMENT_FRAMES, remaining)
+            else:
+                raw_frames = min(cls.H3_MAX_SEGMENT_FRAMES, remaining + overlap)
+            raw_frames = max(5, raw_frames)
+            while raw_frames % 17 != 5:
+                raw_frames += 1
+            if raw_frames > cls.H3_MAX_SEGMENT_FRAMES:
+                raw_frames = cls.H3_MAX_SEGMENT_FRAMES
+            parts.append(raw_frames)
+            delivered += raw_frames if not parts[:-1] else raw_frames - overlap
+        return parts
+
+    def _upload_context_video(self, client, path: Path, subfolder: str, filename: str) -> str:
+        content_type = mimetypes.guess_type(path.name)[0] or "video/mp4"
+        with path.open("rb") as handle:
+            response = client.post(
+                "/upload/image",
+                data={"type": "input", "subfolder": subfolder, "overwrite": "true"},
+                files={"image": (filename, handle, content_type)},
+            )
+        response.raise_for_status()
+        result = response.json()
+        stored_name = str(result.get("name") or filename)
+        stored_folder = str(result.get("subfolder") or subfolder).strip("/")
+        return f"{stored_folder}/{stored_name}" if stored_folder else stored_name
+
+    @staticmethod
+    def _merge_h3_segments(segment_paths: list[Path], output: Path) -> None:
+        if not segment_paths:
+            raise ValueError("H3 Context Loop 没有可合并的片段")
+        if len(segment_paths) == 1:
+            shutil.copy2(segment_paths[0], output)
+            return
+        concat_list = output.with_suffix(".concat.txt")
+        concat_list.write_text(
+            "".join(f"file '{path.resolve().as_posix().replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'\n" for path in segment_paths),
+            encoding="utf-8",
+        )
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                    "-f", "concat", "-safe", "0", "-i", str(concat_list),
+                    "-vsync", "0",
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-movflags", "+faststart", str(output),
+                ],
+                check=True,
+            )
+        finally:
+            concat_list.unlink(missing_ok=True)
+
+    def _generate_once(
+        self,
+        job,
+        progress,
+        cancelled,
+        checkpoint=None,
+        checkpoint_callback=None,
+        *,
+        context_video_name: str | None = None,
+        context_latent_path: str | None = None,
+        context_clip_index: int = 0,
+        save_latent_prefix: str | None = None,
+        save_latent_clip_index: int = 0,
+    ):
+        """Run one ComfyUI request, optionally carrying Context Loop state."""
+        import httpx
+        from websockets.sync.client import connect
+
+        prompt_id = _remote_checkpoint_id(
+            checkpoint, "comfyui", str(self.node.id)
+        )
+        client_id = str((checkpoint or {}).get("client_id") or "")
+        client_id = client_id or f"minimax-studio-webui-{uuid.uuid4().hex}"
+        websocket_url = self.comfy_url.replace("http://", "ws://", 1).replace(
+            "https://", "wss://", 1
+        )
+        try:
+            music3 = self._variant(job) == "music3-int8"
+            tts = self._execution_mode(job) == "tts"
+            sa = self._execution_mode(job) == "h3-sa"
+            vdn = self._execution_mode(job) == "vdn-h3"
+            progress(2, "准备 ComfyUI Music3 工作流" if music3 else "准备 ComfyUI H3 TTS 工作流" if tts else "准备 ComfyUI H3 SA 工作流" if sa else "准备 ComfyUI VDN-H3 工作流" if vdn else "准备 ComfyUI FP8 工作流")
+            timeout = httpx.Timeout(30, connect=10)
+            with httpx.Client(
+                base_url=self.comfy_url,
+                headers=self.api_headers,
+                timeout=timeout,
+                trust_env=False,
+            ) as client:
+                if prompt_id:
+                    progress(5, f"正在重新连接 ComfyUI 任务 {prompt_id[:8]}")
+                    history = self._poll_until_finished(
+                        client,
+                        prompt_id,
+                        progress,
+                        cancelled,
+                        tts,
+                        recovering=True,
+                    )
+                    progress(98, "回传 ComfyUI 生成产物")
+                    output = self._copy_result(job, history, client)
+                    progress(99, "整理交付文件")
+                    return output
+                stats_response = client.get("/system_stats")
+                stats_response.raise_for_status()
+                input_names = [] if music3 else self._upload_inputs(client, job)
+                music3_device = self._comfy_cuda_device(stats_response.json()) if music3 else None
+                workflow = self._build_workflow(
+                    job, input_names, music3_device,
+                    context_video_name=context_video_name,
+                    context_latent_path=context_latent_path,
+                    context_clip_index=context_clip_index,
+                    save_latent_prefix=save_latent_prefix,
+                    save_latent_clip_index=save_latent_clip_index,
+                )
+                with connect(
+                    f"{websocket_url}/ws?clientId={client_id}",
+                    additional_headers=self.api_headers or None,
+                    open_timeout=10,
+                    max_size=None,
+                ) as socket:
+                    response = client.post("/prompt", json={"prompt": workflow, "client_id": client_id})
+                    response.raise_for_status()
+                    result = response.json()
+                    prompt_id = result.get("prompt_id")
+                    if not prompt_id:
+                        raise RuntimeError(f"ComfyUI 未返回 prompt_id：{result}")
+                    _write_remote_checkpoint(
+                        checkpoint_callback,
+                        provider="comfyui",
+                        node_id=str(self.node.id),
+                        remote_id=str(prompt_id),
+                        client_id=client_id,
+                    )
+                    progress(4, f"已提交 ComfyUI 任务 {prompt_id[:8]}")
+                    history = self._wait_for_finished(socket, client, prompt_id, progress, cancelled, tts)
+                if cancelled():
+                    self._cancel_prompt(client, prompt_id)
+                    raise InterruptedError("generation cancelled")
+                progress(98, "回传 ComfyUI 生成产物")
+                output = self._copy_result(job, history, client)
+            progress(99, "整理交付文件")
+            return output
+        finally:
+            self._release_vram()
+
+    @staticmethod
     def _prompt_ids(items: list[Any]) -> set[str]:
         ids = set()
         for item in items:
@@ -634,6 +1132,8 @@ class ComfyUIH3Engine:
         import httpx
 
         unavailable_since: float | None = None
+        missing_since: float | None = None
+        missing_grace_seconds = max(5.0, self.settings.comfy_poll_seconds * 3)
         while True:
             if cancelled():
                 self._cancel_prompt(client, prompt_id)
@@ -648,6 +1148,7 @@ class ComfyUIH3Engine:
                 unavailable_since = None
             except (httpx.HTTPError, ValueError) as exc:
                 unavailable_since = unavailable_since or time.monotonic()
+                missing_since = None
                 if (
                     time.monotonic() - unavailable_since
                     >= max(1.0, self.settings.remote_reconnect_seconds)
@@ -660,11 +1161,12 @@ class ComfyUIH3Engine:
                 continue
             running = self._prompt_ids(queue_data.get("queue_running", []))
             pending = self._prompt_ids(queue_data.get("queue_pending", []))
-            if recovering and prompt_id not in running and prompt_id not in pending:
+            if prompt_id not in running and prompt_id not in pending:
                 try:
                     history = self._history(client, prompt_id)
                 except (httpx.HTTPError, ValueError) as exc:
                     unavailable_since = unavailable_since or time.monotonic()
+                    missing_since = None
                     if (
                         time.monotonic() - unavailable_since
                         >= max(1.0, self.settings.remote_reconnect_seconds)
@@ -677,9 +1179,15 @@ class ComfyUIH3Engine:
                     continue
                 if history:
                     return history
-                raise RemoteTaskNotFoundError(
-                    f"ComfyUI 远端任务已失效，prompt_id={prompt_id}"
-                )
+                missing_since = missing_since or time.monotonic()
+                if time.monotonic() - missing_since >= missing_grace_seconds:
+                    raise RemoteTaskNotFoundError(
+                        f"ComfyUI 远端任务已失效，prompt_id={prompt_id}"
+                    )
+                progress(5, "ComfyUI 任务状态暂不可见，等待恢复")
+                time.sleep(max(0.2, self.settings.comfy_poll_seconds))
+                continue
+            missing_since = None
             stage = (
                 "ComfyUI H3 TTS 工作流执行中"
                 if audio_only and prompt_id in running
@@ -716,45 +1224,34 @@ class ComfyUIH3Engine:
                         progress,
                         cancelled,
                         audio_only,
-                        recovering=recovering,
+                        recovering=True,
                     )
                 if history:
                     return history
-                if recovering:
-                    try:
-                        queue_response = client.get("/queue")
-                        queue_response.raise_for_status()
-                        queue_data = queue_response.json()
-                    except Exception:
-                        return self._poll_until_finished(
-                            client,
-                            prompt_id,
-                            progress,
-                            cancelled,
-                            audio_only,
-                            recovering=True,
-                        )
-                    active = self._prompt_ids(queue_data.get("queue_running", []))
-                    active.update(
-                        self._prompt_ids(queue_data.get("queue_pending", []))
+                try:
+                    queue_response = client.get("/queue")
+                    queue_response.raise_for_status()
+                    queue_data = queue_response.json()
+                except Exception:
+                    return self._poll_until_finished(
+                        client,
+                        prompt_id,
+                        progress,
+                        cancelled,
+                        audio_only,
+                        recovering=True,
                     )
-                    if prompt_id not in active:
-                        try:
-                            history = self._history(client, prompt_id)
-                        except Exception:
-                            return self._poll_until_finished(
-                                client,
-                                prompt_id,
-                                progress,
-                                cancelled,
-                                audio_only,
-                                recovering=True,
-                            )
-                        if history:
-                            return history
-                        raise RemoteTaskNotFoundError(
-                            f"ComfyUI 远端任务已失效，prompt_id={prompt_id}"
-                        )
+                active = self._prompt_ids(queue_data.get("queue_running", []))
+                active.update(self._prompt_ids(queue_data.get("queue_pending", [])))
+                if prompt_id not in active:
+                    return self._poll_until_finished(
+                        client,
+                        prompt_id,
+                        progress,
+                        cancelled,
+                        audio_only,
+                        recovering=True,
+                    )
                 continue
             except Exception:
                 return self._poll_until_finished(
@@ -763,7 +1260,7 @@ class ComfyUIH3Engine:
                     progress,
                     cancelled,
                     audio_only,
-                    recovering=recovering,
+                    recovering=True,
                 )
             if isinstance(raw, bytes):
                 continue
@@ -869,118 +1366,73 @@ class ComfyUIH3Engine:
         )
         return output
 
-    def generate(
-        self,
-        job,
-        progress,
-        cancelled,
-        checkpoint=None,
-        checkpoint_callback=None,
-    ):
-        import httpx
-        from websockets.sync.client import connect
+    def _generate_h3_sa_long(self, job, progress, cancelled, checkpoint=None, checkpoint_callback=None):
+        total_frames = int(job["request"]["num_frames"])
+        segment_frames = self._split_h3_frames(total_frames)
+        segment_outputs: list[Path] = []
+        context_video_name = None
+        context_latent_path = None
+        context_subfolder = f"minimax-studio-webui/{job['id']}/context"
+        latent_prefix = f"{context_subfolder}/h3_context"
 
-        prompt_id = _remote_checkpoint_id(
-            checkpoint, "comfyui", str(self.node.id)
-        )
-        client_id = str((checkpoint or {}).get("client_id") or "")
-        client_id = client_id or f"minimax-studio-webui-{uuid.uuid4().hex}"
-        websocket_url = self.comfy_url.replace("http://", "ws://", 1).replace(
-            "https://", "wss://", 1
-        )
-        try:
-            music3 = self._variant(job) == "music3-int8"
-            tts = self._execution_mode(job) == "tts"
-            progress(2, "准备 ComfyUI Music3 工作流" if music3 else "准备 ComfyUI H3 TTS 工作流" if tts else "准备 ComfyUI FP8 工作流")
-            timeout = httpx.Timeout(30, connect=10)
-            with httpx.Client(
-                base_url=self.comfy_url,
-                headers=self.api_headers,
-                timeout=timeout,
-                trust_env=False,
-            ) as client:
-                if prompt_id:
-                    progress(5, f"正在重新连接 ComfyUI 任务 {prompt_id[:8]}")
-                    if (checkpoint or {}).get("client_id"):
-                        try:
-                            with connect(
-                                f"{websocket_url}/ws?clientId={client_id}",
-                                additional_headers=self.api_headers or None,
-                                open_timeout=10,
-                                max_size=None,
-                            ) as socket:
-                                history = self._wait_for_finished(
-                                    socket,
-                                    client,
-                                    prompt_id,
-                                    progress,
-                                    cancelled,
-                                    tts,
-                                    recovering=True,
-                                )
-                        except (RemoteTaskNotFoundError, InterruptedError):
-                            raise
-                        except Exception:
-                            history = self._poll_until_finished(
-                                client,
-                                prompt_id,
-                                progress,
-                                cancelled,
-                                tts,
-                                recovering=True,
-                            )
-                    else:
-                        history = self._poll_until_finished(
-                            client,
-                            prompt_id,
-                            progress,
-                            cancelled,
-                            tts,
-                            recovering=True,
-                        )
-                    progress(98, "回传 ComfyUI 生成产物")
-                    output = self._copy_result(job, history, client)
-                    progress(99, "整理交付文件")
-                    return output
-                stats_response = client.get("/system_stats")
-                stats_response.raise_for_status()
-                input_names = [] if music3 else self._upload_inputs(client, job)
-                music3_device = (
-                    self._comfy_cuda_device(stats_response.json()) if music3 else None
-                )
-                workflow = self._build_workflow(job, input_names, music3_device)
-                with connect(
-                    f"{websocket_url}/ws?clientId={client_id}",
-                    additional_headers=self.api_headers or None,
-                    open_timeout=10,
-                    max_size=None,
-                ) as socket:
-                    response = client.post("/prompt", json={"prompt": workflow, "client_id": client_id})
-                    response.raise_for_status()
-                    result = response.json()
-                    prompt_id = result.get("prompt_id")
-                    if not prompt_id:
-                        raise RuntimeError(f"ComfyUI 未返回 prompt_id：{result}")
-                    _write_remote_checkpoint(
-                        checkpoint_callback,
-                        provider="comfyui",
-                        node_id=str(self.node.id),
-                        remote_id=str(prompt_id),
-                        client_id=client_id,
+        for segment_index, raw_frames in enumerate(segment_frames, start=1):
+            if cancelled():
+                raise InterruptedError("generation cancelled")
+            segment_request = dict(job["request"])
+            segment_request["duration"] = raw_frames / 24.0
+            segment_request["num_frames"] = raw_frames
+            segment_request["context_loop"] = True
+            segment_job = dict(job)
+            segment_job["id"] = f"{job['id']}-segment-{segment_index}"
+            segment_job["request"] = segment_request
+            def segment_progress(value, message, index=segment_index):
+                overall = ((index - 1) + max(0, min(100, int(value))) / 100.0) / len(segment_frames)
+                progress(min(98, max(2, round(overall * 96) + 2)), f"片段 {index}/{len(segment_frames)} · {message}")
+
+            output = self._generate_once(
+                segment_job,
+                segment_progress,
+                cancelled,
+                checkpoint if segment_index == 1 else None,
+                checkpoint_callback if segment_index == 1 else None,
+                context_video_name=context_video_name,
+                context_latent_path=context_latent_path,
+                context_clip_index=segment_index - 1,
+                save_latent_prefix=latent_prefix,
+                save_latent_clip_index=segment_index,
+            )
+            segment_outputs.append(output)
+            if segment_index < len(segment_frames):
+                import httpx
+                with httpx.Client(
+                    base_url=self.comfy_url,
+                    headers=self.api_headers,
+                    timeout=httpx.Timeout(60, connect=10),
+                    trust_env=False,
+                ) as client:
+                    context_video_name = self._upload_context_video(
+                        client,
+                        output,
+                        context_subfolder,
+                        f"segment_{segment_index:03d}.mp4",
                     )
-                    progress(4, f"已提交 ComfyUI 任务 {prompt_id[:8]}")
-                    history = self._wait_for_finished(
-                        socket, client, prompt_id, progress, cancelled, tts
-                    )
-                if cancelled():
-                    self._cancel_prompt(client, prompt_id)
-                    raise InterruptedError("generation cancelled")
-                progress(98, "回传 ComfyUI 生成产物")
-                output = self._copy_result(job, history, client)
-            progress(99, "整理交付文件")
-            return output
-        finally:
-            self._release_vram()
+                context_latent_path = context_subfolder
+
+        progress(98, "合并 Context Loop 片段")
+        output = self.settings.outputs_dir / f"{job['id']}.mp4"
+        self._merge_h3_segments(segment_outputs, output)
+        output.with_suffix(".json").write_text(
+            json.dumps(job["request"], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        progress(100, f"Context Loop 完成，共 {len(segment_outputs)} 个片段")
+        return output
+
+    def generate(self, job, progress, cancelled, checkpoint=None, checkpoint_callback=None):
+        request = job.get("request", {})
+        if self._execution_mode(job) == "h3-sa" and float(request.get("duration", 0)) > 15:
+            return self._generate_h3_sa_long(job, progress, cancelled, checkpoint, checkpoint_callback)
+        return self._generate_once(job, progress, cancelled, checkpoint, checkpoint_callback)
 
 
 class RunningHubH3Engine:

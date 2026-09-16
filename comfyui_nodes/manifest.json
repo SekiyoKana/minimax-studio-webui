@@ -22,6 +22,8 @@
         "MiniMaxH3ImageToVideo",
         "MiniMaxH3ReferenceToVideo",
         "MiniMaxH3SigmaShift",
+        "LTXVConcatAVLatent",
+        "LTXVSeparateAVLatent",
         "MiniMaxMusic3TextEncode",
         "EmptyMiniMaxMusic3LatentAudio",
         "RandomNoise",
@@ -59,6 +61,46 @@
       "sha256": "a316573e223e3673ad9e76afdec83680e95c0e94974c3eb9793035b163225b80",
       "provides": ["VRGDG_MiniMaxH3AudioDrive"],
       "scope": "Minimal package containing only the node required by the digital-human workflow"
+    },
+    {
+      "file": "ComfyUI-YCNodes-MiniMax-H3-ba2ec50.zip",
+      "source": "https://github.com/yichengup/ComfyUI-YCNodes-MiniMax-H3",
+      "commit": "ba2ec50a96c60f8fdb0d3b38d0111128006e0e1a",
+      "license": "NOASSERTION",
+      "sha256": "246c3862d4ae6fe46be64d7a21a018bf12ddedb1fbd9fa59b1b35d4ede864267",
+      "provides": [
+        "H3SigmaRefiner",
+        "MiniMaxH3ImageToVideoTail"
+      ]
+    },
+    {
+      "file": "Comfyui_Minimax_h3_latent_Upscaler-52a48af.zip",
+      "source": "https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler",
+      "commit": "52a48afa6146b77aab738c26ec37b14998b6330f",
+      "license": "NOASSERTION",
+      "sha256": "dba5985f49d01c3497a36b136b5ace53ee926abaee9a2a908338ff97eec26ec7",
+      "provides": [
+        "MinimaxH3LatentUpscaler3D"
+      ]
+    },
+    {
+      "file": "ComfyUI-SolAttn_triton-842c4ea.zip",
+      "source": "https://github.com/kijai/ComfyUI-SolAttn_triton",
+      "commit": "842c4eaa7d91dbaef3fee3ccdbf36a39521e82fc",
+      "license": "NOASSERTION",
+      "sha256": "2968e53cee05670e49d95261b308164b6cccfd375080ad713e0559c2e6f265a3",
+      "provides": [
+        "SolAttnPatch"
+      ]
+    },
+    {
+      "file": "ComfyUI-VDN-H3-23470b0.zip",
+      "source": "https://github.com/Saganaki22/ComfyUI-VDN-H3",
+      "commit": "23470b0dd182c1eefe714a1809898aec020a1114",
+      "license": "Apache-2.0",
+      "sha256": "0d476d7ef88686638d33b8b893757d53a907980ee07b080257f5e11b357bf306",
+      "provides": ["ApplyVDNH3", "ApplyVDNH3Advanced"],
+      "notes": "VDN branch and adapter checkpoints are downloaded separately from OpenVDN/vdn-minimax-h3."
     }
   ]
 }

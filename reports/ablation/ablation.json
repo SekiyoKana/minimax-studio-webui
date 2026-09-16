@@ -1,0 +1,1102 @@
+{
+  "generated_at": "2026-09-16T08:15:16.977512+00:00",
+  "git_revision": "d1a6050573daf232836a5206477f1ad6d179618e",
+  "scope": "local-workflow-structure",
+  "remote_tasks_submitted": false,
+  "cases": [
+    {
+      "case": "fl2va-fp8/native/8steps",
+      "model_variant": "fl2va-fp8",
+      "execution_mode": "native",
+      "steps": 8,
+      "workflow_file": "workflows/minimax_h3_fl2va_fp8_720p_15s_api.json",
+      "workflow_exists": true,
+      "node_count": 16,
+      "class_types": [
+        "BasicGuider",
+        "BasicScheduler",
+        "CLIPLoader",
+        "CreateVideo",
+        "KSamplerSelect",
+        "LoadImage",
+        "MiniMaxH3ImageToVideo",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "SaveVideo",
+        "UNETLoader",
+        "VAEDecode",
+        "VAEDecodeAudio",
+        "VAELoader"
+      ],
+      "dynamic_reference_nodes": [],
+      "component_flags": {
+        "turbo_lora": false,
+        "nsfw_lora": false,
+        "sigma_shift": false,
+        "sol_attn": false,
+        "vdn": false,
+        "latent_upscaler": false,
+        "sigma_refiner": false,
+        "audio_drive": false,
+        "audio_output": false,
+        "video_output": true
+      },
+      "inputs": {
+        "92": {
+          "filename_prefix": "minimax-studio-webui/ablation-fl2va-fp8-native-8"
+        },
+        "124": {
+          "model": [
+            "127",
+            0
+          ],
+          "scheduler": "simple",
+          "steps": 8,
+          "denoise": 1.0
+        },
+        "127": {},
+        "136": {
+          "prompt": "固定机位，人物缓慢转身，保持身份、服装、光线和环境连续。",
+          "width": 608,
+          "height": 352,
+          "length": 73
+        }
+      }
+    },
+    {
+      "case": "fl2va-fp8/turbo-lora/8steps",
+      "model_variant": "fl2va-fp8",
+      "execution_mode": "turbo-lora",
+      "steps": 8,
+      "workflow_file": "workflows/minimax_h3_fl2va_fp8_turbo_lora_api.json",
+      "workflow_exists": true,
+      "node_count": 18,
+      "class_types": [
+        "BasicGuider",
+        "BasicScheduler",
+        "CLIPLoader",
+        "CreateVideo",
+        "KSamplerSelect",
+        "LoadImage",
+        "LoraLoaderModelOnly",
+        "MiniMaxH3ImageToVideo",
+        "MiniMaxH3SigmaShift",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "SaveVideo",
+        "UNETLoader",
+        "VAEDecode",
+        "VAEDecodeAudio",
+        "VAELoader"
+      ],
+      "dynamic_reference_nodes": [],
+      "component_flags": {
+        "turbo_lora": true,
+        "nsfw_lora": false,
+        "sigma_shift": true,
+        "sol_attn": false,
+        "vdn": false,
+        "latent_upscaler": false,
+        "sigma_refiner": false,
+        "audio_drive": false,
+        "audio_output": false,
+        "video_output": true
+      },
+      "inputs": {
+        "92": {
+          "filename_prefix": "minimax-studio-webui/ablation-fl2va-fp8-turbo-lora-8"
+        },
+        "124": {
+          "model": [
+            "143",
+            0
+          ],
+          "scheduler": "simple",
+          "steps": 8,
+          "denoise": 1.0
+        },
+        "127": {},
+        "136": {
+          "prompt": "固定机位，人物缓慢转身，保持身份、服装、光线和环境连续。",
+          "width": 608,
+          "height": 352,
+          "length": 73
+        },
+        "142": {
+          "model": [
+            "127",
+            0
+          ],
+          "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+          "strength_model": 1.0
+        },
+        "143": {
+          "model": [
+            "142",
+            0
+          ],
+          "shift_video": 12.0,
+          "shift_audio": 3.0
+        }
+      }
+    },
+    {
+      "case": "ref2va-fp8/native/8steps",
+      "model_variant": "ref2va-fp8",
+      "execution_mode": "native",
+      "steps": 8,
+      "workflow_file": "workflows/minimax_h3_ref2va_fp8_scaled_api.json",
+      "workflow_exists": true,
+      "node_count": 17,
+      "class_types": [
+        "BasicGuider",
+        "BasicScheduler",
+        "CLIPLoader",
+        "CreateVideo",
+        "KSamplerSelect",
+        "LoadAudio",
+        "LoadImage",
+        "MiniMaxH3ReferenceToVideo",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "SaveVideo",
+        "UNETLoader",
+        "VAEDecode",
+        "VAEDecodeAudio",
+        "VAELoader",
+        "VHS_LoadVideo"
+      ],
+      "dynamic_reference_nodes": [
+        "200",
+        "201",
+        "202"
+      ],
+      "component_flags": {
+        "turbo_lora": false,
+        "nsfw_lora": false,
+        "sigma_shift": false,
+        "sol_attn": false,
+        "vdn": false,
+        "latent_upscaler": false,
+        "sigma_refiner": false,
+        "audio_drive": false,
+        "audio_output": false,
+        "video_output": true
+      },
+      "inputs": {
+        "92": {
+          "filename_prefix": "minimax-studio-webui/ablation-ref2va-fp8-native-8"
+        },
+        "124": {
+          "model": [
+            "127",
+            0
+          ],
+          "scheduler": "simple",
+          "steps": 8,
+          "denoise": 1.0
+        },
+        "127": {},
+        "136": {
+          "prompt": "固定机位，人物缓慢转身，保持身份、服装、光线和环境连续。",
+          "width": 608,
+          "height": 352,
+          "length": 73,
+          "ref_image_size": "match"
+        }
+      }
+    },
+    {
+      "case": "ref2va-fp8/turbo-lora/8steps",
+      "model_variant": "ref2va-fp8",
+      "execution_mode": "turbo-lora",
+      "steps": 8,
+      "workflow_file": "workflows/minimax_h3_ref2va_fp8_turbo_lora_api.json",
+      "workflow_exists": true,
+      "node_count": 19,
+      "class_types": [
+        "BasicGuider",
+        "BasicScheduler",
+        "CLIPLoader",
+        "CreateVideo",
+        "KSamplerSelect",
+        "LoadAudio",
+        "LoadImage",
+        "LoraLoaderModelOnly",
+        "MiniMaxH3ReferenceToVideo",
+        "MiniMaxH3SigmaShift",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "SaveVideo",
+        "UNETLoader",
+        "VAEDecode",
+        "VAEDecodeAudio",
+        "VAELoader",
+        "VHS_LoadVideo"
+      ],
+      "dynamic_reference_nodes": [
+        "200",
+        "201",
+        "202"
+      ],
+      "component_flags": {
+        "turbo_lora": true,
+        "nsfw_lora": false,
+        "sigma_shift": true,
+        "sol_attn": false,
+        "vdn": false,
+        "latent_upscaler": false,
+        "sigma_refiner": false,
+        "audio_drive": false,
+        "audio_output": false,
+        "video_output": true
+      },
+      "inputs": {
+        "92": {
+          "filename_prefix": "minimax-studio-webui/ablation-ref2va-fp8-turbo-lora-8"
+        },
+        "124": {
+          "model": [
+            "143",
+            0
+          ],
+          "scheduler": "simple",
+          "steps": 8,
+          "denoise": 1.0
+        },
+        "127": {},
+        "136": {
+          "prompt": "固定机位，人物缓慢转身，保持身份、服装、光线和环境连续。",
+          "width": 608,
+          "height": 352,
+          "length": 73,
+          "ref_image_size": "match"
+        },
+        "142": {
+          "model": [
+            "127",
+            0
+          ],
+          "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+          "strength_model": 1.0
+        },
+        "143": {
+          "model": [
+            "142",
+            0
+          ],
+          "shift_video": 12.0,
+          "shift_audio": 3.0
+        }
+      }
+    },
+    {
+      "case": "ref2va-fp8/dual-sampling/8steps",
+      "model_variant": "ref2va-fp8",
+      "execution_mode": "dual-sampling",
+      "steps": 8,
+      "workflow_file": "workflows/minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json",
+      "workflow_exists": true,
+      "node_count": 32,
+      "class_types": [
+        "BasicGuider",
+        "BasicScheduler",
+        "CLIPLoader",
+        "CreateVideo",
+        "H3SigmaRefiner",
+        "KSamplerSelect",
+        "LTXVConcatAVLatent",
+        "LTXVSeparateAVLatent",
+        "LoadImage",
+        "MiniMaxH3ImageToVideoTail",
+        "MiniMaxH3ReferenceToVideo",
+        "MiniMaxH3SigmaShift",
+        "MinimaxH3LatentUpscaler3D",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "SaveVideo",
+        "SolAttnPatch",
+        "UNETLoader",
+        "VAEDecode",
+        "VAEDecodeAudio",
+        "VAELoader"
+      ],
+      "dynamic_reference_nodes": [
+        "200",
+        "201"
+      ],
+      "component_flags": {
+        "turbo_lora": false,
+        "nsfw_lora": false,
+        "sigma_shift": true,
+        "sol_attn": true,
+        "vdn": false,
+        "latent_upscaler": true,
+        "sigma_refiner": true,
+        "audio_drive": false,
+        "audio_output": false,
+        "video_output": true
+      },
+      "inputs": {
+        "92": {
+          "filename_prefix": "minimax-studio-webui/ablation-ref2va-fp8-dual-sampling-8"
+        },
+        "124": {
+          "model": [
+            "143",
+            0
+          ],
+          "scheduler": "simple",
+          "steps": 8,
+          "denoise": 1.0
+        },
+        "127": {},
+        "136": {
+          "prompt": "固定机位，人物缓慢转身，保持身份、服装、光线和环境连续。",
+          "width": 352,
+          "height": 352,
+          "length": 73,
+          "ref_image_size": "match"
+        },
+        "142": {},
+        "143": {
+          "model": [
+            "127",
+            0
+          ],
+          "shift_video": 12.0,
+          "shift_audio": 3.0
+        },
+        "144": {
+          "model": [
+            "143",
+            0
+          ],
+          "tau": 1.3,
+          "start_percent": 0.2,
+          "end_percent": 0.9,
+          "min_tokens": 4096,
+          "int8_qk": true,
+          "sink_conditioning": "exact_kv_and_rows",
+          "morton": false,
+          "morton_curve": "2d_frame",
+          "int8_pv": true,
+          "dense_blocks": ""
+        },
+        "148": {
+          "model": [
+            "144",
+            0
+          ],
+          "scheduler": "simple",
+          "steps": 8,
+          "denoise": 0.35
+        }
+      }
+    },
+    {
+      "case": "fl2va-fp8/h3-sa/8steps",
+      "model_variant": "fl2va-fp8",
+      "execution_mode": "h3-sa",
+      "steps": 8,
+      "workflow_file": "workflows/minimax_h3_fl2va_fp8_sa_api.json",
+      "workflow_exists": true,
+      "node_count": 30,
+      "class_types": [
+        "BasicGuider",
+        "BasicScheduler",
+        "CLIPLoader",
+        "CreateVideo",
+        "KSamplerSelect",
+        "LTXVConcatAVLatent",
+        "LTXVSeparateAVLatent",
+        "LoadImage",
+        "LoraLoaderModelOnly",
+        "MiniMaxH3ImageToVideo",
+        "MiniMaxH3ImageToVideoTail",
+        "MiniMaxH3SigmaShift",
+        "MinimaxH3LatentUpscaler3D",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "SaveVideo",
+        "SolAttnPatch",
+        "UNETLoader",
+        "VAEDecode",
+        "VAEDecodeAudio",
+        "VAELoader"
+      ],
+      "dynamic_reference_nodes": [],
+      "component_flags": {
+        "turbo_lora": true,
+        "nsfw_lora": false,
+        "sigma_shift": true,
+        "sol_attn": true,
+        "vdn": false,
+        "latent_upscaler": true,
+        "sigma_refiner": false,
+        "audio_drive": false,
+        "audio_output": false,
+        "video_output": true
+      },
+      "inputs": {
+        "92": {
+          "filename_prefix": "minimax-studio-webui/ablation-fl2va-fp8-h3-sa-8"
+        },
+        "124": {
+          "model": [
+            "143",
+            0
+          ],
+          "scheduler": "simple",
+          "steps": 8,
+          "denoise": 1.0
+        },
+        "127": {},
+        "136": {
+          "prompt": "固定机位，人物缓慢转身，保持身份、服装、光线和环境连续。",
+          "width": 416,
+          "height": 352,
+          "length": 73
+        },
+        "142": {
+          "model": [
+            "127",
+            0
+          ],
+          "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+          "strength_model": 1.0
+        },
+        "143": {
+          "model": [
+            "142",
+            0
+          ],
+          "shift_video": 12.0,
+          "shift_audio": 3.0
+        },
+        "144": {
+          "model": [
+            "143",
+            0
+          ],
+          "tau": 1.3,
+          "start_percent": 0.2,
+          "end_percent": 0.9,
+          "min_tokens": 4096,
+          "int8_qk": true,
+          "sink_conditioning": "exact_kv_and_rows",
+          "morton": false,
+          "morton_curve": "2d_frame",
+          "int8_pv": true,
+          "dense_blocks": "0"
+        },
+        "148": {
+          "model": [
+            "144",
+            0
+          ],
+          "scheduler": "simple",
+          "steps": 8,
+          "denoise": 0.35
+        }
+      }
+    },
+    {
+      "case": "ref2va-fp8/h3-sa/8steps",
+      "model_variant": "ref2va-fp8",
+      "execution_mode": "h3-sa",
+      "steps": 8,
+      "workflow_file": "workflows/minimax_h3_ref2va_fp8_sa_api.json",
+      "workflow_exists": true,
+      "node_count": 32,
+      "class_types": [
+        "BasicGuider",
+        "BasicScheduler",
+        "CLIPLoader",
+        "CreateVideo",
+        "KSamplerSelect",
+        "LTXVConcatAVLatent",
+        "LTXVSeparateAVLatent",
+        "LoadAudio",
+        "LoadImage",
+        "LoraLoaderModelOnly",
+        "MiniMaxH3ImageToVideoTail",
+        "MiniMaxH3ReferenceToVideo",
+        "MiniMaxH3SigmaShift",
+        "MinimaxH3LatentUpscaler3D",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "SaveVideo",
+        "SolAttnPatch",
+        "UNETLoader",
+        "VAEDecode",
+        "VAEDecodeAudio",
+        "VAELoader",
+        "VHS_LoadVideo"
+      ],
+      "dynamic_reference_nodes": [
+        "200",
+        "201",
+        "202"
+      ],
+      "component_flags": {
+        "turbo_lora": true,
+        "nsfw_lora": false,
+        "sigma_shift": true,
+        "sol_attn": true,
+        "vdn": false,
+        "latent_upscaler": true,
+        "sigma_refiner": false,
+        "audio_drive": false,
+        "audio_output": false,
+        "video_output": true
+      },
+      "inputs": {
+        "92": {
+          "filename_prefix": "minimax-studio-webui/ablation-ref2va-fp8-h3-sa-8"
+        },
+        "124": {
+          "model": [
+            "143",
+            0
+          ],
+          "scheduler": "simple",
+          "steps": 8,
+          "denoise": 1.0
+        },
+        "127": {},
+        "136": {
+          "prompt": "固定机位，人物缓慢转身，保持身份、服装、光线和环境连续。",
+          "width": 416,
+          "height": 352,
+          "length": 73,
+          "ref_image_size": "match"
+        },
+        "142": {
+          "model": [
+            "127",
+            0
+          ],
+          "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+          "strength_model": 1.0
+        },
+        "143": {
+          "model": [
+            "142",
+            0
+          ],
+          "shift_video": 12.0,
+          "shift_audio": 3.0
+        },
+        "144": {
+          "model": [
+            "143",
+            0
+          ],
+          "tau": 1.3,
+          "start_percent": 0.2,
+          "end_percent": 0.9,
+          "min_tokens": 4096,
+          "int8_qk": true,
+          "sink_conditioning": "exact_kv_and_rows",
+          "morton": false,
+          "morton_curve": "2d_frame",
+          "int8_pv": true,
+          "dense_blocks": "0"
+        },
+        "148": {
+          "model": [
+            "144",
+            0
+          ],
+          "scheduler": "simple",
+          "steps": 8,
+          "denoise": 0.35
+        }
+      }
+    },
+    {
+      "case": "fl2va-fp8/vdn-h3/8steps",
+      "model_variant": "fl2va-fp8",
+      "execution_mode": "vdn-h3",
+      "steps": 8,
+      "workflow_file": "workflows/minimax_h3_fl2va_vdn_api.json",
+      "workflow_exists": true,
+      "node_count": 17,
+      "class_types": [
+        "ApplyVDNH3",
+        "BasicGuider",
+        "BasicScheduler",
+        "CLIPLoader",
+        "CreateVideo",
+        "KSamplerSelect",
+        "LoadImage",
+        "MiniMaxH3ImageToVideo",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "SaveVideo",
+        "UNETLoader",
+        "VAEDecode",
+        "VAEDecodeAudio",
+        "VAELoader"
+      ],
+      "dynamic_reference_nodes": [],
+      "component_flags": {
+        "turbo_lora": false,
+        "nsfw_lora": false,
+        "sigma_shift": false,
+        "sol_attn": false,
+        "vdn": true,
+        "latent_upscaler": false,
+        "sigma_refiner": false,
+        "audio_drive": false,
+        "audio_output": false,
+        "video_output": true
+      },
+      "inputs": {
+        "92": {
+          "filename_prefix": "minimax-studio-webui/ablation-fl2va-fp8-vdn-h3-8"
+        },
+        "124": {
+          "model": [
+            "144",
+            0
+          ],
+          "scheduler": "beta",
+          "steps": 8,
+          "denoise": 1.0
+        },
+        "127": {},
+        "136": {
+          "prompt": "固定机位，人物缓慢转身，保持身份、服装、光线和环境连续。",
+          "width": 608,
+          "height": 352,
+          "length": 73
+        },
+        "144": {
+          "model": [
+            "127",
+            0
+          ],
+          "vdn_checkpoint": "stage-dmd-step-250",
+          "apply_turbo_adapter": true
+        }
+      }
+    },
+    {
+      "case": "fl2va-fp8/vdn-h3/50steps",
+      "model_variant": "fl2va-fp8",
+      "execution_mode": "vdn-h3",
+      "steps": 50,
+      "workflow_file": "workflows/minimax_h3_fl2va_vdn_api.json",
+      "workflow_exists": true,
+      "node_count": 17,
+      "class_types": [
+        "ApplyVDNH3",
+        "BasicGuider",
+        "BasicScheduler",
+        "CLIPLoader",
+        "CreateVideo",
+        "KSamplerSelect",
+        "LoadImage",
+        "MiniMaxH3ImageToVideo",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "SaveVideo",
+        "UNETLoader",
+        "VAEDecode",
+        "VAEDecodeAudio",
+        "VAELoader"
+      ],
+      "dynamic_reference_nodes": [],
+      "component_flags": {
+        "turbo_lora": false,
+        "nsfw_lora": false,
+        "sigma_shift": false,
+        "sol_attn": false,
+        "vdn": true,
+        "latent_upscaler": false,
+        "sigma_refiner": false,
+        "audio_drive": false,
+        "audio_output": false,
+        "video_output": true
+      },
+      "inputs": {
+        "92": {
+          "filename_prefix": "minimax-studio-webui/ablation-fl2va-fp8-vdn-h3-50"
+        },
+        "124": {
+          "model": [
+            "144",
+            0
+          ],
+          "scheduler": "beta",
+          "steps": 50,
+          "denoise": 1.0
+        },
+        "127": {},
+        "136": {
+          "prompt": "固定机位，人物缓慢转身，保持身份、服装、光线和环境连续。",
+          "width": 608,
+          "height": 352,
+          "length": 73
+        },
+        "144": {
+          "model": [
+            "127",
+            0
+          ],
+          "vdn_checkpoint": "stage-b-step-2000",
+          "apply_turbo_adapter": false
+        }
+      }
+    },
+    {
+      "case": "ref2va-fp8/vdn-h3/8steps",
+      "model_variant": "ref2va-fp8",
+      "execution_mode": "vdn-h3",
+      "steps": 8,
+      "workflow_file": "workflows/minimax_h3_ref2va_vdn_api.json",
+      "workflow_exists": true,
+      "node_count": 18,
+      "class_types": [
+        "ApplyVDNH3",
+        "BasicGuider",
+        "BasicScheduler",
+        "CLIPLoader",
+        "CreateVideo",
+        "KSamplerSelect",
+        "LoadAudio",
+        "LoadImage",
+        "MiniMaxH3ReferenceToVideo",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "SaveVideo",
+        "UNETLoader",
+        "VAEDecode",
+        "VAEDecodeAudio",
+        "VAELoader",
+        "VHS_LoadVideo"
+      ],
+      "dynamic_reference_nodes": [
+        "200",
+        "201",
+        "202"
+      ],
+      "component_flags": {
+        "turbo_lora": false,
+        "nsfw_lora": false,
+        "sigma_shift": false,
+        "sol_attn": false,
+        "vdn": true,
+        "latent_upscaler": false,
+        "sigma_refiner": false,
+        "audio_drive": false,
+        "audio_output": false,
+        "video_output": true
+      },
+      "inputs": {
+        "92": {
+          "filename_prefix": "minimax-studio-webui/ablation-ref2va-fp8-vdn-h3-8"
+        },
+        "124": {
+          "model": [
+            "144",
+            0
+          ],
+          "scheduler": "beta",
+          "steps": 8,
+          "denoise": 1.0
+        },
+        "127": {},
+        "136": {
+          "prompt": "固定机位，人物缓慢转身，保持身份、服装、光线和环境连续。",
+          "width": 608,
+          "height": 352,
+          "length": 73,
+          "ref_image_size": "match"
+        },
+        "144": {
+          "model": [
+            "127",
+            0
+          ],
+          "vdn_checkpoint": "stage-dmd-step-250",
+          "apply_turbo_adapter": true
+        }
+      }
+    },
+    {
+      "case": "ref2va-fp8/h3-nsfw/8steps",
+      "model_variant": "ref2va-fp8",
+      "execution_mode": "h3-nsfw",
+      "steps": 8,
+      "workflow_file": "workflows/minimax_h3_ref2va_fp8_nsfw_lora_api.json",
+      "workflow_exists": true,
+      "node_count": 18,
+      "class_types": [
+        "BasicGuider",
+        "BasicScheduler",
+        "CLIPLoader",
+        "CreateVideo",
+        "KSamplerSelect",
+        "LoadAudio",
+        "LoadImage",
+        "LoraLoaderBypass",
+        "MiniMaxH3ReferenceToVideo",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "SaveVideo",
+        "UNETLoader",
+        "VAEDecode",
+        "VAEDecodeAudio",
+        "VAELoader",
+        "VHS_LoadVideo"
+      ],
+      "dynamic_reference_nodes": [
+        "200",
+        "201",
+        "202"
+      ],
+      "component_flags": {
+        "turbo_lora": false,
+        "nsfw_lora": true,
+        "sigma_shift": false,
+        "sol_attn": false,
+        "vdn": false,
+        "latent_upscaler": false,
+        "sigma_refiner": false,
+        "audio_drive": false,
+        "audio_output": false,
+        "video_output": true
+      },
+      "inputs": {
+        "92": {
+          "filename_prefix": "minimax-studio-webui/ablation-ref2va-fp8-h3-nsfw-8"
+        },
+        "124": {
+          "model": [
+            "141",
+            0
+          ],
+          "scheduler": "simple",
+          "steps": 8,
+          "denoise": 1.0
+        },
+        "127": {},
+        "136": {
+          "prompt": "固定机位，人物缓慢转身，保持身份、服装、光线和环境连续。",
+          "width": 608,
+          "height": 352,
+          "length": 73,
+          "ref_image_size": "match"
+        }
+      }
+    },
+    {
+      "case": "ref2va-fp8/digital-human/20steps",
+      "model_variant": "ref2va-fp8",
+      "execution_mode": "digital-human",
+      "steps": 20,
+      "workflow_file": "workflows/minimax_h3_ref2va_fp8_digital_human_api.json",
+      "workflow_exists": true,
+      "node_count": 16,
+      "class_types": [
+        "BasicGuider",
+        "BasicScheduler",
+        "CLIPLoader",
+        "CreateVideo",
+        "KSamplerSelect",
+        "LoadAudio",
+        "LoadImage",
+        "MiniMaxH3ReferenceToVideo",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "SaveVideo",
+        "UNETLoader",
+        "VAEDecode",
+        "VAELoader",
+        "VRGDG_MiniMaxH3AudioDrive"
+      ],
+      "dynamic_reference_nodes": [],
+      "component_flags": {
+        "turbo_lora": false,
+        "nsfw_lora": false,
+        "sigma_shift": false,
+        "sol_attn": false,
+        "vdn": false,
+        "latent_upscaler": false,
+        "sigma_refiner": false,
+        "audio_drive": true,
+        "audio_output": false,
+        "video_output": true
+      },
+      "inputs": {
+        "92": {
+          "filename_prefix": "minimax-studio-webui/ablation-ref2va-fp8-digital-human-20"
+        },
+        "124": {
+          "model": [
+            "127",
+            0
+          ],
+          "scheduler": "simple",
+          "steps": 20,
+          "denoise": 1.0
+        },
+        "127": {},
+        "136": {
+          "prompt": "<Picture 1> is the sole character reference. The character speaks and lip-syncs exactly to <Audio 1>. Preserve the identity, facial structure, clothing, and source audio exactly.\n\n固定机位，人物缓慢转身，保持身份、服装、光线和环境连续。",
+          "width": 608,
+          "height": 352,
+          "length": 73,
+          "ref_image_size": "match"
+        }
+      }
+    },
+    {
+      "case": "ref2va-fp8/tts/20steps",
+      "model_variant": "ref2va-fp8",
+      "execution_mode": "tts",
+      "steps": 20,
+      "workflow_file": "workflows/minimax_h3_ref2va_fp8_tts_api.json",
+      "workflow_exists": true,
+      "node_count": 14,
+      "class_types": [
+        "BasicGuider",
+        "BasicScheduler",
+        "CLIPLoader",
+        "KSamplerSelect",
+        "LoadAudio",
+        "MiniMaxH3ReferenceToVideo",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "SaveAudio",
+        "UNETLoader",
+        "VAEDecodeAudio",
+        "VAELoader"
+      ],
+      "dynamic_reference_nodes": [
+        "200",
+        "201"
+      ],
+      "component_flags": {
+        "turbo_lora": false,
+        "nsfw_lora": false,
+        "sigma_shift": false,
+        "sol_attn": false,
+        "vdn": false,
+        "latent_upscaler": false,
+        "sigma_refiner": false,
+        "audio_drive": false,
+        "audio_output": true,
+        "video_output": false
+      },
+      "inputs": {
+        "92": {
+          "filename_prefix": "minimax-studio-webui/ablation-ref2va-fp8-tts-20"
+        },
+        "124": {
+          "model": [
+            "127",
+            0
+          ],
+          "scheduler": "simple",
+          "steps": 20,
+          "denoise": 1.0
+        },
+        "127": {},
+        "136": {
+          "prompt": "(S1) 成年女性，语速平稳，语气克制。<d>[中文] 开始录音。</d>",
+          "width": 32,
+          "height": 32,
+          "length": 73,
+          "ref_image_size": "match"
+        }
+      }
+    },
+    {
+      "case": "music3-int8/music3/30steps",
+      "model_variant": "music3-int8",
+      "execution_mode": "music3",
+      "steps": 30,
+      "workflow_file": "workflows/minimax_music3_int8_api.json",
+      "workflow_exists": true,
+      "node_count": 9,
+      "class_types": [
+        "CLIPLoaderMultiGPU",
+        "ConditioningZeroOut",
+        "EmptyMiniMaxMusic3LatentAudio",
+        "KSampler",
+        "MiniMaxMusic3TextEncode",
+        "SaveAudio",
+        "UNETLoader",
+        "VAEDecodeAudioTiled",
+        "VAELoader"
+      ],
+      "dynamic_reference_nodes": [],
+      "component_flags": {
+        "turbo_lora": false,
+        "nsfw_lora": false,
+        "sigma_shift": false,
+        "sol_attn": false,
+        "vdn": false,
+        "latent_upscaler": false,
+        "sigma_refiner": false,
+        "audio_drive": false,
+        "audio_output": true,
+        "video_output": false
+      },
+      "inputs": {
+        "3": {
+          "device": "cuda:0"
+        },
+        "9": {
+          "model": [
+            "6",
+            0
+          ],
+          "seed": 1729,
+          "steps": 30,
+          "sampler_name": "euler",
+          "scheduler": "simple",
+          "denoise": 1.0
+        },
+        "13": {
+          "caption": "Instrumental synth-pop, 112 BPM, bright analog bass, wide chorus.",
+          "seed": 1729,
+          "force_duration": true
+        },
+        "92": {
+          "filename_prefix": "minimax-studio-webui/ablation-music3-int8-music3-30"
+        }
+      }
+    }
+  ],
+  "checks": [
+    "通过：native 不包含扩展加速、放大或专用输出节点",
+    "通过：turbo-lora 包含 LoRA 与 Sigma Shift",
+    "通过：H3 SA 包含 LoRA、Sigma Shift、Sol-Attn 和潜空间放大",
+    "通过：VDN-H3 不叠加 Sol-Attn",
+    "通过：VDN-H3 8 步选择 DMD stage 并启用 turbo adapter",
+    "通过：VDN-H3 50 步选择 B stage 并关闭 turbo adapter",
+    "通过：双采包含潜空间放大、Sol-Attn 和 Sigma Refiner"
+  ],
+  "context_loop_segments": {
+    "3": [
+      73
+    ],
+    "15": [
+      362
+    ],
+    "20": [
+      362,
+      141
+    ],
+    "30": [
+      362,
+      362,
+      56
+    ]
+  }
+}

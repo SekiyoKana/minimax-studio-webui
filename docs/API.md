@@ -82,6 +82,23 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
 
 删除节点使用 `DELETE /api/v1/comfy/nodes/{node_id}`。正在执行任务、存在定向排队任务或属于最后一个启用节点时，服务拒绝停用或删除。
 
+## 创建 VDN-H3 任务
+
+VDN-H3 支持 8–50 步，支持 FL2VA 与 Ref2VA。8 步自动使用 `stage-dmd-step-250`，9–50 步自动使用 `stage-b-step-2000`：
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations \
+  -F 'prompt=固定机位，人物持续向前行走，保持连续运动和环境声音。' \
+  -F 'reference_manifest=[{"type":"image"}]' \
+  -F 'references=@first-frame.png;type=image/png' \
+  -F 'model_variant=fl2va-fp8' \
+  -F 'execution_mode=vdn-h3' \
+  -F 'width=864' \
+  -F 'height=480' \
+  -F 'duration=15' \
+  -F 'steps=8'
+```
+
 ## 创建 FL2VA Turbo 任务
 
 ```bash
@@ -122,6 +139,38 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
   -F 'duration=5' \
   -F 'steps=20'
 ```
+
+## 创建 H3 SA 任务
+
+H3 SA 支持 `fl2va-fp8` 和 `ref2va-fp8`。`ref2va-fp8` 继续支持最多 9 张图片、3 段视频和 3 段音频参考。首阶段使用低分辨率 H3，随后进行 Latent 3D 放大和 Sol-Attn 二阶段精修。`steps` 固定为 8。
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations \
+  -F 'prompt=角色在室内缓慢转身，保持参考人物身份、服装和环境连续。' \
+  -F 'reference_manifest=[{"type":"image"},{"type":"video"},{"type":"audio"}]' \
+  -F 'references=@character.png;type=image/png' \
+  -F 'references=@motion.mp4;type=video/mp4' \
+  -F 'references=@voice.wav;type=audio/wav' \
+  -F 'model_variant=ref2va-fp8' \
+  -F 'execution_mode=h3-sa' \
+  -F 'width=1344' \
+  -F 'height=768' \
+  -F 'duration=5' \
+  -F 'steps=8' \
+  -F 'sa_tau=1.3' \
+  -F 'sa_start_percent=0.2' \
+  -F 'sa_end_percent=0.9' \
+  -F 'sa_min_tokens=4096' \
+  -F 'sa_int8_qk=true' \
+  -F 'sa_int8_pv=true' \
+  -F 'sa_sink_conditioning=exact_kv_and_rows' \
+  -F 'sa_morton=false' \
+  -F 'sa_morton_curve=2d_frame' \
+  -F 'sa_dense_blocks=0' \
+  -F 'sa_stage2_denoise=0.35'
+```
+
+H3 SA 参数也可在网页的“更多设置”中调整。`sa_start_percent` 必须小于 `sa_end_percent`，`sa_dense_blocks` 使用 ComfyUI Sol-Attn 的层编号表达式。
 
 ## 创建数字人任务
 
