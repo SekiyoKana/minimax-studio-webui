@@ -967,6 +967,15 @@ class ContractTests(unittest.TestCase):
         self.assertIn('conversationPageSize: 10', app_js)
         self.assertIn('state.conversationReady && movingUp && currentTop < 72', app_js)
         self.assertIn('function openAssetDetail(jobId)', app_js)
+        self.assertIn('assetDetailWindows: new Map()', app_js)
+        self.assertIn('function toggleAssetDetailInfo(windowId)', app_js)
+        self.assertIn('function startAssetDetailDrag(event, windowId)', app_js)
+        self.assertIn('data-detail-toggle', index)
+        self.assertIn('data-detail-drag-handle', index)
+        self.assertIn('assetDetailTemplate', index)
+        self.assertIn('.asset-detail-layer', styles)
+        self.assertIn('.asset-detail-dialog:not(.details-expanded) .asset-detail-info', styles)
+        self.assertNotIn('backdrop-filter: blur(4px)', styles.split('.asset-detail-layer', 1)[-1].split('.asset-detail-dialog', 1)[0])
         self.assertIn('async function backfillJob(jobId)', app_js)
         self.assertIn('download.href = downloadable ? job.result_url : "#"', app_js)
         self.assertIn('function mediaDownloadLabel(mediaType)', app_js)
@@ -1018,6 +1027,45 @@ class ContractTests(unittest.TestCase):
             public = store.public("timed-job")
             self.assertEqual(public["request"]["execution_mode"], "native")
             self.assertEqual(public["elapsed_seconds"], 123.4)
+
+    def test_elapsed_seconds_excludes_queue_waiting_time(self):
+        with TemporaryDirectory() as temp:
+            jobs_dir = Path(temp) / "data" / "jobs"
+            jobs_dir.mkdir(parents=True)
+            store = JobStore(jobs_dir)
+            store.create(
+                {
+                    "id": "started-job",
+                    "status": "completed",
+                    "created_at": "2026-08-05T00:00:00+00:00",
+                    "started_at": "2026-08-05T00:01:30+00:00",
+                    "updated_at": "2026-08-05T00:02:03.4+00:00",
+                    "completed_at": "2026-08-05T00:02:03.4+00:00",
+                    "request": {"references": []},
+                }
+            )
+
+            public = store.public("started-job")
+
+            self.assertEqual(public["elapsed_seconds"], 33.4)
+
+    def test_queued_job_does_not_include_time_before_work_starts(self):
+        with TemporaryDirectory() as temp:
+            jobs_dir = Path(temp) / "data" / "jobs"
+            jobs_dir.mkdir(parents=True)
+            store = JobStore(jobs_dir)
+            store.create(
+                {
+                    "id": "queued-job",
+                    "status": "queued",
+                    "created_at": "2026-08-05T00:00:00+00:00",
+                    "request": {"references": []},
+                }
+            )
+
+            public = store.public("queued-job")
+
+            self.assertEqual(public["elapsed_seconds"], 0.0)
 
     def test_generation_workflows_remain_available(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -1077,13 +1125,18 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(turbo["123"]["inputs"]["sampler_name"], "res_multistep")
             self.assertEqual(turbo["124"]["inputs"]["scheduler"], "simple")
             self.assertEqual(turbo["142"]["class_type"], "LoraLoaderModelOnly")
+            expected_lora = (
+                "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors"
+                if variant == "fl2va-fp8"
+                else "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors"
+            )
             self.assertEqual(
                 turbo["142"]["inputs"]["lora_name"],
-                "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+                expected_lora,
             )
             self.assertEqual(turbo["142"]["inputs"]["strength_model"], 1.0)
             self.assertEqual(turbo["143"]["class_type"], "MiniMaxH3SigmaShift")
-            self.assertEqual(turbo["143"]["inputs"]["shift_video"], 12.0)
+            self.assertEqual(turbo["143"]["inputs"]["shift_video"], 6.0)
             self.assertEqual(turbo["143"]["inputs"]["shift_audio"], 3.0)
             self.assertEqual(turbo["143"]["inputs"]["model"], ["142", 0])
             self.assertEqual(turbo["124"]["inputs"]["model"], ["143", 0])
@@ -1099,6 +1152,9 @@ class ContractTests(unittest.TestCase):
             sa = engine._load_workflow(variant, "h3-sa")
             self.assertEqual(sa["144"]["class_type"], "SolAttnPatch")
             self.assertEqual(sa["142"]["class_type"], "LoraLoaderModelOnly")
+            self.assertEqual(sa["142"]["inputs"]["lora_name"], expected_lora)
+            self.assertEqual(sa["143"]["inputs"]["shift_video"], 6.0)
+            self.assertEqual(sa["143"]["inputs"]["shift_audio"], 3.0)
             self.assertEqual(sa["26"]["class_type"], "MinimaxH3LatentUpscaler3D")
             self.assertEqual(
                 sa["136"]["class_type"],
@@ -1435,7 +1491,7 @@ class ContractTests(unittest.TestCase):
 
         self.assertIn('option value="digital-human">数字人 · 音频驱动', index)
         self.assertIn('/assets/app.js?v=60', index)
-        self.assertIn('/assets/app.js?v=60&rev=69', index)
+        self.assertIn('/assets/app.js?v=60&rev=71', index)
         self.assertIn('return { image: 1, video: 0, audio: 1 };', app_js)
         self.assertIn('el("duration").disabled = digitalHuman;', app_js)
         self.assertIn('durationControl.classList.toggle("digital-human", digitalHuman);', app_js)

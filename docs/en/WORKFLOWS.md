@@ -10,10 +10,10 @@ See the [official ComfyUI MiniMax H3 tutorial](https://docs.comfy.org/tutorials/
 |---|---|---|---|
 | `minimax_h3_fl2va_fp8_720p_15s_api.json` | FL2VA FP8 Scaled | Native | `b8fa94ef488d2b923e17562d79e23bde4bd997d2ec0d7ba158ece76d0b5a5b64` |
 | `minimax_h3_ref2va_fp8_scaled_api.json` | Ref2VA FP8 Scaled | Native | `dcd2db8828bb631abd6ff3707d545037047815dc54743d1fab2f98ac53749561` |
-| `minimax_h3_fl2va_fp8_turbo_lora_api.json` | FL2VA FP8 Scaled + 8-step LoRA v1.0 | `res_multistep`, 8 steps | `e5ce3e5640424a8427f467ee9a27d9e30278a6f11b46193d14ec9841af92c3e0` |
-| `minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA FP8 Scaled + FL2VA 8-step LoRA v1.0 | `res_multistep`, 8 steps | `138ea319f489b545b075196cf5ff1bc3ef73fe918d82f0a5d31e80a73a10f586` |
-| `minimax_h3_fl2va_fp8_sa_api.json` | FL2VA FP8 + 8-step LoRA + Sol-Attn + Latent 3D Upscaler | H3 SA, two 8-step stages | `9e7c0b48a6d5f603c8c011711d83aafa7f1e772d75f9d2824465825c1c1554e2` |
-| `minimax_h3_ref2va_fp8_sa_api.json` | Ref2VA FP8 + 8-step LoRA + Sol-Attn + Latent 3D Upscaler | H3 SA, two 8-step stages | `ed19681db53c34620cf50a9cd57269b4d74d355476664dad4000fc6c7fc8f070` |
+| `minimax_h3_fl2va_fp8_turbo_lora_api.json` | FL2VA FP8 Scaled + FL2VA 8-step v1.0 768p LoRA | `res_multistep`, 8 steps, video shift 6 / audio shift 3 | `5e87d9516fd32d922258c14332a00724d99223633575c5f06d778fe6177afe6c` |
+| `minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA FP8 Scaled + Ref2VA 8-step v1.0 768p LoRA | `res_multistep`, 8 steps, video shift 6 / audio shift 3 | `be1cc430fe8274f18a4263620d2371e34e73d38c2464590e081be64e1d3e0a51` |
+| `minimax_h3_fl2va_fp8_sa_api.json` | FL2VA FP8 + FL2VA 8-step v1.0 768p LoRA + Sol-Attn + Latent 3D Upscaler | H3 SA, two 8-step stages | `8d6b3d4165877d1cf2046712c5f7b4ceb48d352e0dbade149a25406e7df68e6d` |
+| `minimax_h3_ref2va_fp8_sa_api.json` | Ref2VA FP8 + Ref2VA 8-step v1.0 768p LoRA + Sol-Attn + Latent 3D Upscaler | H3 SA, two 8-step stages | `fa5930a90671514e3b468927b6d5175c80cf36106db8a8282e90b12e1e3a4121` |
 | `minimax_h3_fl2va_vdn_api.json` | FL2VA FP8 + VDN-H3 Video Delta Net | VDN-H3, automatic stage selection for 8–50 steps | `42db673ea1927d17e43e0687017f1f33765e8d5da6446c74b717141314cfaa93` |
 | `minimax_h3_ref2va_vdn_api.json` | Ref2VA FP8 + VDN-H3 Video Delta Net | VDN-H3, automatic stage selection for 8–50 steps | `937d67a67c6c5d79b23a27650442e295559251eb6e8911c8ec6aa38628328919` |
 | `minimax_h3_ref2va_fp8_nsfw_lora_api.json` | Ref2VA FP8 Scaled | NaughtyTimes LoRA | `4fbdcb94d6014fedfd6af50d081feaae891ca97867f888a00673563891e9dad7` |
@@ -52,8 +52,8 @@ Turbo workflows add:
 |---|---|---|
 | `123` | `KSamplerSelect` | `res_multistep` |
 | `124` | `BasicScheduler` | `simple`, 8 steps |
-| `142` | `LoraLoaderModelOnly` | FL2VA 8-step LoRA v1.0, model strength 1.0 |
-| `143` | `MiniMaxH3SigmaShift` | Video shift 12.0, audio shift 3.0 |
+| `142` | `LoraLoaderModelOnly` | Corresponding FL2VA or Ref2VA 768p 8-step v1.0 LoRA, model strength 1.0 |
+| `143` | `MiniMaxH3SigmaShift` | Video shift 6.0, audio shift 3.0 |
 
 H3 SA adds a low-resolution first H3 stage, Latent 3D upscaling, and a high-resolution Sol-Attn refinement stage. The first-stage size is approximately two thirds of the requested target, and the second stage uses the requested size. Ref2VA image, video, and audio references are injected dynamically into the first stage, then its joint latent is passed to the second stage.
 
@@ -76,7 +76,7 @@ The digital human workflow adds:
 
 The API dynamically creates `VHS_LoadVideo` nodes for Ref2VA video references, so [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) is required. A pinned source package is available under [`comfyui_nodes/`](../../comfyui_nodes/).
 
-The 8-step LoRA workflows use ComfyUI's built-in LoRA loader and sampling nodes, with no Turbo custom node dependency. Ref2VA acceleration temporarily reuses the FL2VA 8-step LoRA.
+The 8-step LoRA workflows use ComfyUI's built-in LoRA loader and sampling nodes, with no Turbo custom node dependency. FL2VA and Ref2VA use their corresponding 768p 8-step v1.0 LoRAs.
 
 The digital-human workflow requires `VRGDG_MiniMaxH3AudioDrive`. The minimal archive in this repository contains only that node and its upstream license notice. The service reads driving-audio duration with server-side `ffprobe`; the current API workflow does not depend on ComfyUI-SoundFlow or `SoundFlow_GetLength`.
 

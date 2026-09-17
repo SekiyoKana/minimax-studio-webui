@@ -4,12 +4,14 @@ import asyncio
 import json
 import math
 import mimetypes
+import re
 import secrets
 import shutil
 import subprocess
 import time
 from contextlib import asynccontextmanager
 from copy import deepcopy
+from datetime import UTC, datetime, timedelta
 from email.message import Message
 from pathlib import Path
 from typing import Annotated, Any, AsyncIterator, Literal
@@ -23,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from .engine import create_engine, probe_node
-from .jobs import JobManager, JobStore, TERMINAL_STATES, utc_now
+from .jobs import JobManager, JobStore, ROOT_FOLDER_ID, TERMINAL_STATES, UNFILED_FOLDER_ID, create_video_preview, output_file_name, output_file_stem, utc_now
 from .local_state import LocalStateStore
 from .music_prompts import MUSIC3_ARRANGEMENT_SYSTEM_PROMPT, MUSIC3_LYRICS_SYSTEM_PROMPT
 from .nodes import NodeRegistry
@@ -88,7 +90,10 @@ async def desktop_network_boundary(request: Request, call_next):
     if settings.desktop_mode and not is_loopback_client(request.client.host if request.client else None):
         path = request.url.path
         remote_allowed = (
-            path == "/api/v1/peering/pair"
+            path == "/AGENT.md"
+            or path == "/docs"
+            or path == "/openapi.json"
+            or path == "/api/v1/peering/pair"
             or path == "/api/v1/peering/revoke"
             or path.startswith("/api/v1/peering/export/")
             or path.startswith("/api/v1/peering/proxy/")
@@ -124,6 +129,27 @@ class GenerationPatch(BaseModel):
     lyrics: str | None = Field(None, max_length=12000)
     comfy_node: str | None = Field(None, min_length=1, max_length=200)
     runninghub_parameters: dict[str, object] | None = None
+
+
+class RegenerateRequest(BaseModel):
+    folder_id: str | None = Field(default=None, max_length=100)
+
+
+class AssetFolderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+
+class AssetFolderUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+
+class AssetFolderMove(BaseModel):
+    job_ids: list[str] = Field(min_length=1, max_length=500)
+    folder_id: str | None = Field(default=None, max_length=100)
+
+
+class GenerationRename(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
 
 
 class OptimizePromptRequest(BaseModel):
@@ -1117,6 +1143,158 @@ def public_local_job(item: dict[str, Any]) -> dict[str, Any]:
     return item
 
 
+def normalize_folder_id(folder_id: str | None) -> str | None:
+    value = str(folder_id or "").strip()
+    if not value or value == UNFILED_FOLDER_ID:
+        return None
+    if not local_state.asset_folder(value):
+        raise HTTPException(status_code=404, detail="素材文件夹不存在")
+    return value
+
+
+def local_job_is_owned(job: dict[str, Any]) -> bool:
+    request_data = job.get("request", {})
+    if request_data.get("remote_proxy"):
+        return False
+    owner_device_id = str(
+        job.get("owner_device_id")
+        or request_data.get("proxy_source_device_id")
+        or local_state.device_id
+    )
+    return owner_device_id == local_state.device_id
+
+
+def local_folder_is_owned(folder_id: str) -> bool:
+    return bool(local_state.asset_folder(folder_id))
+
+
+def job_folder_name(folder_id: str | None) -> str:
+    return str(local_state.asset_folder(folder_id or "").get("name") or "") if folder_id else ""
+
+
+def prepare_job_output_name(job: dict[str, Any]) -> dict[str, Any]:
+    job["folder_name"] = job_folder_name(job.get("folder_id"))
+    job["output_stem"] = output_file_stem(job)
+    return job
+
+
+def rename_job_output(job: dict[str, Any], name: str) -> dict[str, Any]:
+    clean_name = name.strip()
+    if not clean_name:
+        raise HTTPException(status_code=422, detail="文件名不能为空")
+    safe_stem = re.sub(r"[^\w\-.\u0080-\uffff]+", "_", clean_name, flags=re.UNICODE).strip("._")
+    if not safe_stem:
+        raise HTTPException(status_code=422, detail="文件名无有效字符")
+    old_path = Path(str(job.get("result_path") or ""))
+    if not old_path.is_file():
+        raise HTTPException(status_code=410, detail="生成产物不存在")
+    new_path = old_path.with_name(f"{safe_stem}{old_path.suffix.lower()}")
+    preview_path = old_path.with_name(f"{old_path.stem}.preview.jpg")
+    new_preview_path = new_path.with_name(f"{new_path.stem}.preview.jpg")
+    if new_path != old_path and new_path.exists():
+        raise HTTPException(status_code=409, detail="同名文件已存在")
+    old_path.rename(new_path)
+    sidecar = old_path.with_suffix(".json")
+    if sidecar.is_file():
+        sidecar.rename(new_path.with_suffix(".json"))
+    if preview_path.is_file():
+        preview_path.rename(new_preview_path)
+    return store.update(
+        str(job["id"]),
+        title=clean_name,
+        output_stem=safe_stem,
+        result_path=str(new_path),
+        preview_path=str(new_preview_path) if new_preview_path.is_file() else None,
+        preview_url=f"/api/v1/generations/{job['id']}/preview" if new_preview_path.is_file() else None,
+        event_message="生成文件名已更新",
+    )
+
+
+def folder_filter_value(folder_id: str | None) -> str | None:
+    value = str(folder_id or "").strip()
+    if not value or value == "all":
+        return None
+    if value == UNFILED_FOLDER_ID:
+        return UNFILED_FOLDER_ID
+    if value == ROOT_FOLDER_ID:
+        return ROOT_FOLDER_ID
+    return normalize_folder_id(value)
+
+
+def public_remote_job(item: dict[str, Any]) -> dict[str, Any]:
+    item.pop("folder_id", None)
+    item.pop("preview_path", None)
+    item.pop("preview_url", None)
+    return item
+
+
+@app.get("/api/v1/asset-folders", dependencies=[Depends(authorize)])
+async def list_asset_folders():
+    counts = store.folder_counts()
+    folders = [
+        {**folder, "count": counts.get(str(folder["id"]), 0)}
+        for folder in local_state.asset_folders()
+    ]
+    return {
+        "data": folders,
+        "unfiled": {"id": UNFILED_FOLDER_ID, "name": "未分组", "count": counts.get(None, 0)},
+        "total": sum(counts.values()),
+    }
+
+
+@app.post("/api/v1/asset-folders", status_code=201, dependencies=[Depends(authorize)])
+async def create_asset_folder(payload: AssetFolderCreate):
+    try:
+        return local_state.create_asset_folder(payload.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.patch("/api/v1/asset-folders/{folder_id}", dependencies=[Depends(authorize)])
+async def rename_asset_folder(folder_id: str, payload: AssetFolderUpdate):
+    try:
+        return local_state.rename_asset_folder(folder_id, payload.name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="素材文件夹不存在") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/asset-folders/move", dependencies=[Depends(authorize)])
+async def move_asset_folder_items(payload: AssetFolderMove):
+    folder_id = normalize_folder_id(payload.folder_id)
+    jobs: list[dict[str, Any]] = []
+    for job_id in payload.job_ids:
+        if job_id.startswith("peer::"):
+            raise HTTPException(status_code=403, detail="远端素材保持只读")
+        job = store.get(job_id)
+        if not job or job.get("request", {}).get("incognito") or job.get("request", {}).get("remote_proxy"):
+            raise HTTPException(status_code=404, detail="本机素材不存在")
+        jobs.append(job)
+    for job in jobs:
+        store.update(job["id"], folder_id=folder_id, event_message="素材文件夹已更新")
+    return {"moved": [job["id"] for job in jobs], "folder_id": folder_id}
+
+
+@app.delete("/api/v1/asset-folders/{folder_id}", dependencies=[Depends(authorize)])
+async def delete_asset_folder(folder_id: str):
+    if not local_folder_is_owned(folder_id):
+        raise HTTPException(status_code=404, detail="素材文件夹不存在")
+    jobs = store.jobs_in_folder(folder_id)
+    if any(not local_job_is_owned(job) for job in jobs):
+        raise HTTPException(status_code=403, detail="文件夹包含非本机创建的素材，无法删除")
+    active = [job["id"] for job in jobs if job.get("status") not in TERMINAL_STATES]
+    if active:
+        raise HTTPException(
+            status_code=409,
+            detail="文件夹包含进行中任务，请先取消或等待任务结束",
+        )
+    for job in jobs:
+        await delete_generation(job["id"])
+    local_state.delete_asset_folder(folder_id)
+    return {"id": folder_id, "status": "deleted", "deleted_jobs": [job["id"] for job in jobs]}
+
+
 def proxy_remote_job_id(job: dict[str, Any]) -> str:
     request_data = job.get("request") or {}
     return str(
@@ -1221,6 +1399,7 @@ async def export_peer_assets(
     items, total, revision = store.list_with_revision(
         page, page_size, status="completed", query=query, scope="normal"
     )
+    items = [public_remote_job(item) for item in items]
     return {"data": items, "page": page, "page_size": page_size, "total": total, "pages": max(1, math.ceil(total / page_size)), "store_revision": revision}
 
 
@@ -1236,6 +1415,7 @@ async def export_peer_generations(
     items, total, revision = store.list_with_revision(
         page, page_size, status=status_filter, query=query, scope="normal"
     )
+    items = [public_remote_job(item) for item in items]
     return {
         "data": items,
         "page": page,
@@ -1253,7 +1433,7 @@ async def export_peer_generation(request: Request, job_id: str):
     if not job or job.get("request", {}).get("incognito"):
         raise HTTPException(status_code=404, detail="共享任务不存在")
     local_state.mark_seen(peer["device_id"])
-    return public_peer_asset(store.public(job_id) or {}, local_state.machine_name, local_state.device_id)
+    return public_peer_asset(public_remote_job(store.public(job_id) or {}), local_state.machine_name, local_state.device_id)
 
 
 @app.get("/api/v1/peering/export/generations/{job_id}/result")
@@ -1534,9 +1714,17 @@ async def list_shared_library(
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
     status_filter: Annotated[str | None, Query(alias="status")] = None,
     query: Annotated[str | None, Query(max_length=200)] = None,
+    folder_id: Annotated[str | None, Query(max_length=100)] = None,
 ):
+    resolved_folder_id = folder_filter_value(folder_id)
+    local_folder_id = UNFILED_FOLDER_ID if resolved_folder_id == ROOT_FOLDER_ID else resolved_folder_id
     local_items, local_total, local_revision = store.list_with_revision(
-        page, page_size, status=status_filter, query=query, scope="normal"
+        page,
+        page_size,
+        status=status_filter,
+        query=query,
+        scope="normal",
+        folder_id=local_folder_id,
     )
     for item in local_items:
         public_local_job(item)
@@ -1545,7 +1733,7 @@ async def list_shared_library(
     remote_total = 0
     remote_pages = 1
     peer_errors: list[dict[str, str]] = []
-    if local_state.sharing_enabled and status_filter in {None, "", "completed"}:
+    if resolved_folder_id is None and local_state.sharing_enabled and status_filter in {None, "", "completed"}:
         for peer in local_state.peers(include_secrets=True):
             try:
                 timeout = httpx.Timeout(20, connect=5)
@@ -1941,7 +2129,11 @@ async def list_generations(
     query: Annotated[str | None, Query(max_length=200)] = None,
     include_incognito: Annotated[bool, Query()] = False,
     scope: Annotated[Literal["normal", "incognito", "all"] | None, Query()] = None,
+    folder_id: Annotated[str | None, Query(max_length=100)] = None,
 ):
+    resolved_folder_id = folder_filter_value(folder_id) if scope != "incognito" else None
+    if scope == "incognito" and folder_id:
+        raise HTTPException(status_code=422, detail="无痕任务不支持文件夹")
     items, total, snapshot_revision = store.list_with_revision(
         page,
         page_size,
@@ -1949,6 +2141,7 @@ async def list_generations(
         query,
         include_incognito=include_incognito,
         scope=scope,
+        folder_id=resolved_folder_id,
     )
     for item in items:
         position = manager.queue_position(item["id"])
@@ -1997,11 +2190,15 @@ async def create_generation(
     runninghub_parameters: Annotated[
         str, Form(description="JSON object keyed by RunningHub schema field keys.")
     ] = "{}",
+    folder_id: Annotated[str | None, Form(max_length=100)] = None,
     incognito: Annotated[bool, Form()] = False,
     incognito_code: Annotated[str | None, Header(alias="X-H3-Incognito-Code")] = None,
     proxy_source_device_id: Annotated[str | None, Form()] = None,
 ):
     prompt = prompt.strip()
+    normalized_folder_id = normalize_folder_id(folder_id)
+    if incognito and normalized_folder_id:
+        raise HTTPException(status_code=422, detail="无痕任务不支持文件夹")
     if len(prompt) > 12000:
         raise HTTPException(status_code=422, detail="提示词不能超过 12000 个字符")
     if incognito and not secrets.compare_digest(incognito_code or "", settings.incognito_code):
@@ -2039,6 +2236,7 @@ async def create_generation(
             peer_device_id=remote_target[0],
             proxy_node_id=remote_target[1],
             proxy_source_device_id=proxy_source_device_id,
+            folder_id=normalized_folder_id,
         )
     if comfy_node == "auto" and not manager.node_ids:
         raise HTTPException(status_code=422, detail="当前没有可用推理节点，请添加推理节点")
@@ -2166,6 +2364,7 @@ async def create_generation(
     job = {
         "id": job_id,
         "title": (title or (prompt.splitlines()[0] if prompt else workflow_name))[:120],
+        "folder_id": normalized_folder_id,
         "status": "queued",
         "stage": "等待推理节点执行",
         "progress": 0,
@@ -2223,6 +2422,7 @@ async def create_generation(
         },
         "input_paths": input_paths,
     }
+    prepare_job_output_name(job)
     store.create(job)
     manager.submit(job_id)
     response = store.public(job_id, manager.queue_position(job_id))
@@ -2262,6 +2462,7 @@ async def submit_proxy_generation(
     peer_device_id: str,
     proxy_node_id: str,
     proxy_source_device_id: str | None,
+    folder_id: str | None,
 ) -> dict[str, Any]:
     peer = local_state.peer(peer_device_id, include_secrets=True)
     if not peer:
@@ -2373,6 +2574,7 @@ async def submit_proxy_generation(
     job = {
         "id": local_id,
         "title": remote.get("title") or title or prompt[:120],
+        "folder_id": folder_id,
         "status": remote.get("status") or "queued",
         "stage": "已提交远程代理节点",
         "progress": int(remote.get("progress") or 0),
@@ -2388,6 +2590,7 @@ async def submit_proxy_generation(
         "owner_device_id": peer_device_id,
         "assigned_node": assigned_node,
     }
+    prepare_job_output_name(job)
     store.create(job)
     schedule_proxy_poll(local_id)
     result = store.public(local_id)
@@ -2628,6 +2831,7 @@ async def cancel_generation(job_id: str):
 )
 async def regenerate_generation(
     job_id: str,
+    payload: RegenerateRequest,
     incognito_code: Annotated[str | None, Header(alias="X-H3-Incognito-Code")] = None,
 ):
     source_job = store.get(job_id)
@@ -2635,6 +2839,7 @@ async def regenerate_generation(
         raise HTTPException(status_code=404, detail="任务不存在")
     if source_job["status"] not in TERMINAL_STATES:
         raise HTTPException(status_code=409, detail="任务结束后才能重新生成")
+    folder_id = normalize_folder_id(payload.folder_id)
 
     request_data = deepcopy(source_job.get("request", {}))
     model_variant = request_data.get("model_variant", "fl2va-fp8")
@@ -2643,6 +2848,8 @@ async def regenerate_generation(
     incognito = bool(request_data.get("incognito"))
     if incognito and not secrets.compare_digest(incognito_code or "", settings.incognito_code):
         raise HTTPException(status_code=403, detail="无痕模式授权已失效")
+    if incognito and folder_id:
+        raise HTTPException(status_code=422, detail="无痕任务不支持文件夹")
     if not manager.accepts_node(comfy_node):
         raise HTTPException(status_code=422, detail="原任务指定的推理节点不存在")
     workflow_profile = manager.workflow_profile(comfy_node)
@@ -2739,6 +2946,7 @@ async def regenerate_generation(
     regenerated_job = {
         "id": new_job_id,
         "title": source_job.get("title") or request_data.get("prompt", "")[:120],
+        "folder_id": folder_id,
         "status": "queued",
         "stage": "等待推理节点执行",
         "progress": 0,
@@ -2748,6 +2956,7 @@ async def regenerate_generation(
         "request": request_data,
         "input_paths": cloned_paths,
     }
+    prepare_job_output_name(regenerated_job)
     store.create(regenerated_job)
     manager.submit(new_job_id)
     response = store.public(new_job_id, manager.queue_position(new_job_id))
@@ -2825,6 +3034,7 @@ def _local_asset_entry(job: dict[str, Any]) -> dict[str, Any]:
     if not owner_name:
         owner_name = local_state.machine_name
     available = bool(job.get("result_path") and result_path.is_file())
+    preview_path = Path(str(job.get("preview_path") or ""))
     return {
         "id": f"job::{job['id']}",
         "job_id": str(job["id"]),
@@ -2835,10 +3045,13 @@ def _local_asset_entry(job: dict[str, Any]) -> dict[str, Any]:
         "owner_name": owner_name,
         "owner_device_id": owner_device_id,
         "created_at": str(job.get("created_at") or ""),
-        "preview_url": f"/api/v1/generations/{quote(str(job['id']), safe='')}/result" if available else "",
+        "preview_url": f"/api/v1/generations/{quote(str(job['id']), safe='')}/preview" if preview_path.is_file() else "",
         "encrypted": False,
         "locked": False,
         "asset_deleted": bool(job.get("asset_deleted")) or not available,
+        "folder_id": job.get("folder_id"),
+        "size": result_path.stat().st_size if available else 0,
+        "can_delete": local_job_is_owned(job),
     }
 
 
@@ -2852,6 +3065,13 @@ def _protected_asset_entry(metadata: dict[str, Any]) -> dict[str, Any]:
     )
     locked = not bool(local_state.unlocked_peer_key(peer_device_id, key_id))
     deleted = bool(metadata.get("asset_deleted"))
+    result_size = 0
+    for item in metadata.get("result_files", []) or []:
+        if item.get("kind") != "result":
+            continue
+        path = _safe_local_data_path(str(item.get("encrypted_path") or ""))
+        if path and path.is_file():
+            result_size += path.stat().st_size
     return {
         "id": f"protected::{peer_device_id}::{job_id}",
         "job_id": job_id,
@@ -2871,6 +3091,8 @@ def _protected_asset_entry(metadata: dict[str, Any]) -> dict[str, Any]:
         "locked": locked,
         "asset_deleted": deleted,
         "key_id": key_id,
+        "size": result_size,
+        "can_delete": False,
     }
 
 
@@ -2889,26 +3111,117 @@ def _find_protected_asset(peer_device_id: str, job_id: str) -> dict[str, Any] | 
 async def list_local_assets(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 24,
+    folder_id: Annotated[str | None, Query(max_length=100)] = None,
 ):
+    resolved_folder_id = folder_filter_value(folder_id)
+    local_folder_id = (
+        UNFILED_FOLDER_ID
+        if resolved_folder_id in {None, ROOT_FOLDER_ID}
+        else resolved_folder_id
+    )
     items = [
+        entry
+        for job in store.local_asset_jobs()
+        if not local_folder_id or (
+            not job.get("folder_id")
+            if local_folder_id == UNFILED_FOLDER_ID
+            else job.get("folder_id") == local_folder_id
+        )
+        if not (entry := _local_asset_entry(job))["asset_deleted"]
+    ]
+    if resolved_folder_id in {None, ROOT_FOLDER_ID, UNFILED_FOLDER_ID}:
+        items.extend(
+            entry
+            for item in _protected_asset_metadata()
+            if not (entry := _protected_asset_entry(item))["asset_deleted"]
+        )
+    items.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+    total = len(items)
+    start = (page - 1) * page_size
+    total_size = sum(int(item.get("size") or 0) for item in items)
+    all_local_items = [
         entry
         for job in store.local_asset_jobs()
         if not (entry := _local_asset_entry(job))["asset_deleted"]
     ]
-    items.extend(
+    all_local_items.extend(
         entry
         for item in _protected_asset_metadata()
         if not (entry := _protected_asset_entry(item))["asset_deleted"]
     )
-    items.sort(key=lambda item: item.get("created_at") or "", reverse=True)
-    total = len(items)
-    start = (page - 1) * page_size
     return {
         "data": items[start : start + page_size],
         "page": page,
         "page_size": page_size,
         "total": total,
         "pages": max(1, math.ceil(total / page_size)),
+        "folder_id": resolved_folder_id or ROOT_FOLDER_ID,
+        "total_size": total_size,
+        "library_total": len(all_local_items),
+        "library_total_size": sum(int(item.get("size") or 0) for item in all_local_items),
+    }
+
+
+def old_video_asset_candidates() -> list[dict[str, Any]]:
+    cutoff = datetime.now(UTC) - timedelta(days=30)
+    candidates: list[dict[str, Any]] = []
+    for job in store.local_asset_jobs():
+        if not local_job_is_owned(job):
+            continue
+        if str(job.get("request", {}).get("media_type") or "") != "video":
+            continue
+        try:
+            created_at = datetime.fromisoformat(str(job.get("created_at") or ""))
+        except ValueError:
+            continue
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        if created_at > cutoff:
+            continue
+        result_path = Path(str(job.get("result_path") or ""))
+        if not result_path.is_file():
+            continue
+        candidates.append(
+            {
+                "asset_id": f"job::{job['id']}",
+                "job_id": str(job["id"]),
+                "name": str(job.get("title") or result_path.name),
+                "file_name": result_path.name,
+                "size": result_path.stat().st_size,
+                "created_at": str(job.get("created_at") or ""),
+                "folder_id": job.get("folder_id"),
+            }
+        )
+    return sorted(candidates, key=lambda item: item.get("created_at") or "")
+
+
+@app.get("/api/v1/assets/local/clear-old-video/preview", dependencies=[Depends(authorize)])
+async def preview_old_video_assets():
+    items = old_video_asset_candidates()
+    return {
+        "items": items,
+        "count": len(items),
+        "total_size": sum(int(item.get("size") or 0) for item in items),
+        "cutoff_days": 30,
+    }
+
+
+@app.post("/api/v1/assets/local/clear-old-video", dependencies=[Depends(authorize)])
+async def clear_old_video_assets():
+    candidates = old_video_asset_candidates()
+    deleted: list[str] = []
+    for item in candidates:
+        if store.delete_artifacts(item["job_id"]):
+            deleted.append(item["asset_id"])
+    return {
+        "deleted": deleted,
+        "count": len(deleted),
+        "total_size": sum(
+            int(item.get("size") or 0)
+            for item in candidates
+            if item["asset_id"] in deleted
+        ),
+        "cutoff_days": 30,
     }
 
 
@@ -2919,39 +3232,14 @@ async def delete_local_assets(payload: LocalAssetsDeleteRequest):
     for asset_id in dict.fromkeys(payload.asset_ids):
         if asset_id.startswith("job::"):
             job_id = asset_id.removeprefix("job::")
-            if job_id and store.delete_artifacts(job_id):
+            job = store.get(job_id) if job_id else None
+            if job and local_job_is_owned(job) and store.delete_artifacts(job_id):
                 deleted.append(asset_id)
             else:
                 rejected.append(asset_id)
             continue
         if asset_id.startswith("protected::"):
-            parts = asset_id.split("::", 2)
-            if len(parts) != 3:
-                rejected.append(asset_id)
-                continue
-            peer_device_id, job_id = parts[1], parts[2]
-            metadata = _find_protected_asset(peer_device_id, job_id)
-            if not metadata:
-                rejected.append(asset_id)
-                continue
-            for item in metadata.get("result_files", []) or []:
-                if item.get("kind") not in {"result", "sidecar"}:
-                    continue
-                encrypted_path = _safe_local_data_path(str(item.get("encrypted_path") or ""))
-                if encrypted_path:
-                    encrypted_path.unlink(missing_ok=True)
-            metadata["result_files"] = []
-            metadata["asset_deleted"] = True
-            metadata["asset_deleted_at"] = utc_now()
-            metadata.pop("_meta_record_id", None)
-            local_state.put_remote_record(
-                record_id=f"job-snapshot-meta:{peer_device_id}:{job_id}",
-                peer_device_id=peer_device_id,
-                record_type="job_snapshot_meta",
-                value=metadata,
-                encrypted=False,
-            )
-            deleted.append(asset_id)
+            rejected.append(asset_id)
             continue
         rejected.append(asset_id)
     return {"deleted": deleted, "rejected": rejected}
@@ -3069,7 +3357,7 @@ async def get_result(job_id: str):
                         headers={"Authorization": f"Bearer {peer['access_token']}"},
                     )
                     response.raise_for_status()
-                output_path = output_dir / f"{job_id}{remote_output_suffix(response, str(job.get('request', {}).get('media_type') or 'file'))}"
+                output_path = output_dir / output_file_name(job, remote_output_suffix(response, str(job.get('request', {}).get('media_type') or 'file')))
                 output_path.write_bytes(response.content)
                 store.update(job_id, result_path=str(output_path), result_url=f"/api/v1/generations/{job_id}/result")
                 job = store.get(job_id) or job
@@ -3082,6 +3370,37 @@ async def get_result(job_id: str):
         raise HTTPException(status_code=410, detail="结果文件已不存在")
     media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return FileResponse(path, media_type=media_type, filename=path.name)
+
+
+@app.get("/api/v1/generations/{job_id}/preview", dependencies=[Depends(authorize)])
+async def get_generation_preview(job_id: str):
+    job = store.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    preview = Path(str(job.get("preview_path") or ""))
+    result = Path(str(job.get("result_path") or ""))
+    if not preview.is_file() and result.is_file():
+        preview = create_video_preview(result) or Path("")
+        if preview.is_file():
+            store.update(job_id, preview_path=str(preview), preview_url=f"/api/v1/generations/{job_id}/preview")
+    if not preview.is_file():
+        raise HTTPException(status_code=410, detail="视频封面不存在")
+    return FileResponse(
+        preview,
+        media_type="image/jpeg",
+        filename=preview.name,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
+@app.patch("/api/v1/generations/{job_id}/name", dependencies=[Depends(authorize)])
+async def rename_generation(job_id: str, payload: GenerationRename):
+    job = store.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    if job.get("status") != "completed" or not job.get("result_path"):
+        raise HTTPException(status_code=409, detail="仅已完成且存在产物的任务支持重命名")
+    return store.public(rename_job_output(job, payload.name)["id"])
 
 
 @app.get("/api/v1/generations/{job_id}/references/{index}", dependencies=[Depends(authorize)])
@@ -3363,6 +3682,24 @@ async def assist_music(payload: MusicAssistRequest):
 
 static_dir = Path(__file__).resolve().parents[1] / "static"
 app.mount("/assets", StaticFiles(directory=static_dir), name="assets")
+
+
+@app.get("/AGENT.md", include_in_schema=False)
+async def agent_documentation():
+    document_path = Path(__file__).resolve().parents[1] / "AGENT.md"
+    try:
+        content = document_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail="AGENT.md 暂不可用") from exc
+    return Response(
+        content=content,
+        media_type="text/markdown",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @app.get("/", include_in_schema=False)

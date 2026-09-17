@@ -6,9 +6,9 @@
     <meta name="description" content="基于 ComfyUI 与 RunningHub API 的 MiniMax H3 视频与 Music3 音乐生成工作台">
     <meta name="theme-color" content="#f4f5f2">
     <title>MiniMax Studio</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=44&rev=51">
+    <link rel="stylesheet" href="/assets/styles.css?v=44&rev=54">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
-    <script src="/assets/app.js?v=60&rev=69" defer></script>
+    <script src="/assets/app.js?v=60&rev=71" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -25,7 +25,7 @@
 
         <div class="library-heading">
           <div><h2>素材库</h2><span id="assetTotal">0</span></div>
-          <div class="library-heading-actions"><button class="icon-button" id="refreshAssets" type="button" title="刷新素材库" aria-label="刷新素材库"><i data-lucide="refresh-cw"></i></button><button class="icon-button" id="newTaskButton" type="button" title="新建生成" aria-label="新建生成"><i data-lucide="square-pen"></i></button></div>
+          <div class="library-heading-actions"><button class="icon-button" id="refreshAssets" type="button" title="刷新素材库" aria-label="刷新素材库"><i data-lucide="refresh-cw"></i></button><button class="icon-button" id="editAssetsButton" type="button" title="编辑素材" aria-label="编辑素材" aria-pressed="false"><i data-lucide="square-check"></i></button><button class="icon-button" id="newTaskButton" type="button" title="新建生成" aria-label="新建生成"><i data-lucide="square-pen"></i></button></div>
         </div>
 
         <div class="library-tools">
@@ -43,8 +43,18 @@
           </select>
         </div>
 
+        <section class="asset-folders" id="assetFoldersPanel" aria-label="素材文件夹">
+          <header class="asset-folders-header"><span>文件夹</span><button class="icon-button" id="newAssetFolder" type="button" title="新建文件夹" aria-label="新建文件夹"><i data-lucide="folder-plus"></i></button></header>
+          <div class="asset-edit-toolbar" id="assetEditToolbar" hidden>
+            <span id="assetSelectionCount">未选择素材</span>
+            <button type="button" id="moveSelectedAssets" disabled><i data-lucide="folder-input"></i><span>移动到</span></button>
+          </div>
+        </section>
+
         <section class="asset-grid" id="assetGrid" aria-label="生成素材"></section>
       </aside>
+
+      <div class="sidebar-resizer" id="sidebarResizer" role="separator" tabindex="0" aria-label="调整素材库宽度" aria-valuemin="220" aria-valuemax="480" aria-valuenow="276"></div>
 
       <main class="conversation-column">
         <header class="conversation-header">
@@ -305,17 +315,35 @@
       </section>
     </div>
 
-    <div class="modal-overlay asset-detail-modal" id="assetDetailModal" hidden>
-      <section class="asset-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="assetDetailTitle">
-        <header class="asset-detail-header">
+    <div class="asset-detail-layer asset-detail-modal" id="assetDetailModal" hidden aria-live="polite"></div>
+    <template id="assetDetailTemplate">
+      <section class="asset-detail-dialog" role="dialog" aria-modal="false" aria-labelledby="assetDetailTitle">
+        <header class="asset-detail-header" data-detail-drag-handle>
           <div><span class="asset-detail-mark"><i data-lucide="file-video-2"></i></span><div><h2 id="assetDetailTitle">素材详情</h2><p id="assetDetailMeta"></p></div></div>
-          <button class="icon-button" id="closeAssetDetail" type="button" title="关闭" aria-label="关闭素材详情"><i data-lucide="x"></i></button>
+          <div class="asset-detail-window-actions"><button class="detail-toggle" type="button" data-detail-toggle aria-expanded="false" title="显示详情" aria-label="显示详情"><i data-lucide="panel-right-open"></i><span>详情</span></button><button class="icon-button" id="closeAssetDetail" type="button" data-detail-close title="关闭" aria-label="关闭素材详情"><i data-lucide="x"></i></button></div>
         </header>
         <div class="asset-detail-body" id="assetDetailBody"><div class="feed-loading"><span></span><span></span><span></span></div></div>
         <footer class="asset-detail-footer">
           <p class="asset-detail-error" id="assetDetailError" role="alert"></p>
-          <div><button class="detail-delete" id="deleteAssetDetail" type="button"><i data-lucide="trash-2"></i><span>删除记录</span></button><a class="detail-download" id="downloadAssetDetail" href="#" download hidden><i data-lucide="download"></i><span>下载 MP4</span></a><button class="detail-output-input" id="reuseOutputAssetDetail" type="button" disabled><i data-lucide="file-input"></i><span>作为输入</span></button><button class="detail-regenerate" id="regenerateAssetDetail" type="button"><i data-lucide="rotate-ccw"></i><span>重新生成</span></button><button class="detail-reuse" id="reuseAssetDetail" type="button"><i data-lucide="corner-down-left"></i><span>回填到发送区</span></button></div>
+          <div><button class="detail-delete" id="deleteAssetDetail" type="button" data-detail-action="delete"><i data-lucide="trash-2"></i><span>删除记录</span></button><button class="detail-rename" id="renameAssetDetail" type="button" data-detail-action="rename" hidden><i data-lucide="pencil"></i><span>重命名文件</span></button><a class="detail-download" id="downloadAssetDetail" data-detail-download href="#" download hidden><i data-lucide="download"></i><span>下载 MP4</span></a><button class="detail-output-input" id="reuseOutputAssetDetail" type="button" data-detail-action="input" disabled><i data-lucide="file-input"></i><span>作为输入</span></button><button class="detail-regenerate" id="regenerateAssetDetail" type="button" data-detail-action="regenerate"><i data-lucide="rotate-ccw"></i><span>重新生成</span></button><button class="detail-reuse" id="reuseAssetDetail" type="button" data-detail-action="reuse"><i data-lucide="corner-down-left"></i><span>回填到发送区</span></button></div>
         </footer>
+      </section>
+    </template>
+
+    <div class="modal-overlay asset-folder-modal" id="assetFolderNameModal" hidden>
+      <form class="asset-folder-dialog asset-folder-name-dialog" id="assetFolderNameForm" role="dialog" aria-modal="true" aria-labelledby="assetFolderNameTitle">
+        <header class="asset-folder-dialog-header"><div><span class="asset-folder-dialog-mark"><i data-lucide="folder"></i></span><div><h2 id="assetFolderNameTitle">新建文件夹</h2><p id="assetFolderNameHint">用于归类短剧生成任务</p></div></div><button class="icon-button" id="closeAssetFolderName" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
+        <label class="asset-folder-name-field">文件夹名称<input id="assetFolderName" type="text" maxlength="80" autocomplete="off" required></label>
+        <p class="asset-folder-error" id="assetFolderNameError" role="alert"></p>
+        <footer class="asset-folder-dialog-actions"><button type="button" id="cancelAssetFolderName">取消</button><button class="primary" type="submit">保存</button></footer>
+      </form>
+    </div>
+
+    <div class="modal-overlay asset-folder-modal" id="assetFolderPickerModal" hidden>
+      <section class="asset-folder-dialog asset-folder-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="assetFolderPickerTitle">
+        <header class="asset-folder-dialog-header"><div><span class="asset-folder-dialog-mark"><i data-lucide="folder-input"></i></span><div><h2 id="assetFolderPickerTitle">选择文件夹</h2><p id="assetFolderPickerHint">选择素材的目标文件夹</p></div></div><button class="icon-button" id="closeAssetFolderPicker" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
+        <div class="asset-folder-picker-list" id="assetFolderPickerList"></div>
+        <p class="asset-folder-error" id="assetFolderPickerError" role="alert"></p>
       </section>
     </div>
 
@@ -382,9 +410,18 @@
     <div class="modal-overlay local-assets-modal" id="localAssetsModal" hidden>
       <section class="local-assets-dialog" role="dialog" aria-modal="true" aria-labelledby="localAssetsTitle">
         <header class="settings-header"><div><span class="settings-mark"><i data-lucide="folder-cog"></i></span><div><h2 id="localAssetsTitle">管理本地素材</h2><p>删除产物文件，保留任务与工作流记录</p></div></div><button class="icon-button" id="closeLocalAssets" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
-        <div class="local-assets-toolbar"><label><input id="localAssetsSelectAll" type="checkbox"><span>全选已加载素材</span></label><span id="localAssetsCount">0 项</span></div>
+        <div class="local-assets-toolbar"><label><input id="localAssetsSelectAll" type="checkbox"><span>全选已加载素材</span></label><span id="localAssetsCount">0 项</span><span id="localAssetsSize">0 B</span><button type="button" id="clearOldVideos" title="清除 30 天前视频素材"><i data-lucide="calendar-minus"></i><span>清除 30 天前视频</span></button></div>
         <div class="local-assets-grid" id="localAssetsList" tabindex="0"></div>
         <footer class="local-assets-footer"><p id="localAssetsError" role="alert"></p><button class="danger" id="deleteLocalArtifacts" type="button"><i data-lucide="trash-2"></i><span>删除选中产物</span></button></footer>
+      </section>
+    </div>
+
+    <div class="modal-overlay old-video-cleanup-modal" id="oldVideoCleanupModal" hidden>
+      <section class="old-video-cleanup-dialog" role="dialog" aria-modal="true" aria-labelledby="oldVideoCleanupTitle">
+        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="calendar-minus"></i></span><div><h2 id="oldVideoCleanupTitle">清除 30 天前视频</h2><p>以下项目将在确认后删除，任务记录会保留</p></div></div><button class="icon-button" id="closeOldVideoCleanup" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
+        <div class="old-video-cleanup-summary" id="oldVideoCleanupSummary">0 项 · 0 B</div>
+        <div class="old-video-cleanup-list" id="oldVideoCleanupList"></div>
+        <footer class="old-video-cleanup-footer"><button type="button" id="cancelOldVideoCleanup">取消</button><button class="danger" type="button" id="confirmOldVideoCleanup"><i data-lucide="trash-2"></i><span>确认清除</span></button></footer>
       </section>
     </div>
 

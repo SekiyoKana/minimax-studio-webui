@@ -23,7 +23,7 @@ H3_DESKTOP_PORT=38193
 | macOS | `~/Library/Application Support/MiniMax H3 Studio` |
 | Windows | `%LOCALAPPDATA%\\MiniMax H3 Studio` |
 
-目录中的 `data/config.db` 使用 SQLite 保存节点配置、AI 服务配置、API Key、本机名称、互联设备和持久授权。API Key 不写入网页存储、任务 JSON 或素材文件。
+目录中的 `data/config.db` 使用 SQLite 保存节点配置、AI 服务配置、API Key、本机名称、互联设备、持久授权和本机素材文件夹。API Key 不写入网页存储、任务 JSON 或素材文件。任务 JSON 使用可选 `folder_id` 保存本机任务的文件夹归属。
 
 ## 本地运行
 

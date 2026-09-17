@@ -13,183 +13,174 @@ MiniMax H3 视频、语音、Music3 与 ComfyUI 工作流控制服务
 
 [中文](README.md) | [English](README.en.md)
 
-[功能](#功能) · [生成方案](#生成方案) · [远端部署](#远端部署) · [任务恢复](#任务恢复) · [API](#api) · [工作流](#工作流) · [验证](#验证)
+[功能](#功能) · [数据流程](#数据流程) · [更新日志](#更新日志) · [部署](#部署) · [API](#api) · [验证](#验证)
 
 </div>
 
-MiniMax H3 Studio 为 MiniMax H3 和 Music3 提供统一的网页、HTTP API 与桌面入口。服务端负责素材上传、参数校验、持久化任务队列、节点调度、实时事件和产物管理，ComfyUI 负责模型加载与 GPU 推理。
+MiniMax H3 Studio 为 MiniMax H3、H3 TTS、数字人、Music3 和通用 RunningHub 工作流提供统一的网页界面、HTTP API 与桌面入口。服务负责请求校验、参考文件上传、持久化队列、推理节点调度、实时事件、任务恢复、素材管理和产物交付。
 
-![MiniMax H3 Studio 工作台](docs/images/h3-studio-overview.jpg)
+![工作台](docs/images/h3-studio-overview.jpg)
 
 > [!IMPORTANT]
-> 仓库不包含模型权重。部署前请阅读 MiniMax H3、MiniMax Music3、VDN-H3、相关 LoRA、ComfyUI 和自定义节点的许可条件。
+> 仓库不包含模型权重。部署前请确认 MiniMax H3、Music3、相关 LoRA、ComfyUI 和自定义节点的许可条件。
 
 ## 功能
 
 | 模块 | 能力 |
 |---|---|
-| 视频生成 | FL2VA、Ref2VA、8-step LoRA、H3 SA、VDN-H3、数字人和 H3 TTS |
-| 长视频 | H3 SA 超过 15 秒时自动按合法帧网格拆分、Context Loop 连续生成、裁切重复帧并合并 MP4 |
-| VDN-H3 | 8–50 步可调，默认 50 步，根据步数自动选择官方 DMD 或 B stage |
-| 音乐生成 | Music3 INT8，支持结构化曲风描述、歌词和 1–300 秒时长 |
-| 对话流 | 任务记录、实时进度、取消、重新生成、参数回填和产物下载 |
-| 任务恢复 | ComfyUI 断线检测、checkpoint 恢复、任务丢失后的重新提交和节点迁移 |
-| 素材库 | 搜索、状态筛选、预览、详情、下载和本地产物管理 |
-| 节点管理 | ComfyUI 与 RunningHub 节点新增、启停、健康检查和并发配置 |
-| 提示词工具 | H3、Ref2VA、TTS、Music3 曲风和歌词提示词优化 |
-| 多端互联 | 局域网或 Tailscale 配对、授权撤销和素材共享 |
+| 视频生成 | FL2VA、Ref2VA、8 步 LoRA、双阶段采样、H3 SA、VDN H3、数字人和 H3 NSFW |
+| 音频生成 | Music3 INT8 和 H3 TTS，支持歌词、曲风描述和音频参考 |
+| 长视频 | H3 SA 按合法帧网格拆分、传递上下文、裁切重复帧并合并视频 |
+| VDN H3 | 8 至 50 步，自动选择 DMD 或 B stage 路径 |
+| 任务队列 | 持久化排队、节点调度、取消、重新生成、checkpoint 恢复和实时进度 |
+| 总体耗时 | 从任务开始由推理节点处理起计算，排队等待时间不计入 |
+| 素材库 | 搜索、分页、状态筛选、视频首帧封面缓存、预览、下载和重命名 |
+| 文件夹 | 单层文件夹、双击进入、批量移动、未分组根目录和删除保护 |
+| 本地素材管理 | 容量统计、30 天前视频预览清理、素材所有权校验和产物删除 |
+| 详情窗口 | 无背景模糊、窗口阴影、多个窗口同时打开、独立拖拽和详情侧栏收起 |
+| 节点管理 | ComfyUI 与 RunningHub 节点配置、健康检查、启停和并发设置 |
+| 多端互联 | 局域网或 Tailscale 配对、授权撤销、本机代理任务和远端素材只读访问 |
+| Agent 接入 | Swagger UI、OpenAPI JSON、公开 `AGENT.md` 和 Skill 创建规范 |
+
+前端还包括素材库宽度拖拽、宽度 `localStorage` 持久化、最大 50% 宽度、固定素材卡片尺寸、隐藏滚动条、调整宽度后的补页加载、日志产物定位和实时日志尾部跟随控制。
+
+## 界面截图
+
+| 工作台 | 数字人工作流 |
+|---|---|
+| ![工作台](docs/images/h3-studio-overview.jpg) | ![数字人](docs/images/h3-studio-digital-human.jpg) |
+
+## 数据流程
+
+```mermaid
+flowchart LR
+    A[网页或 Agent 请求] --> B[FastAPI 参数校验]
+    B --> C[保存上传文件与任务 JSON]
+    C --> D[JobStore 持久化队列]
+    D --> E[节点健康检查与调度]
+    E --> F{推理后端}
+    F --> G[ComfyUI]
+    F --> H[RunningHub]
+    G --> I[checkpoint、进度和事件]
+    H --> I
+    I --> J[生成产物与视频首帧封面]
+    J --> K[素材库、文件夹和下载接口]
+```
+
+任务目录和配置数据保存在 `data/`：
+
+| 路径 | 数据 |
+|---|---|
+| `data/config.db` | 节点、文件夹、桌面设置和互联设备 |
+| `data/jobs/` | 任务 JSON、任务日志和 checkpoint |
+| `data/uploads/` | 任务参考文件 |
+| `data/outputs/` | API 管理的生成产物、sidecar 和视频封面 |
+
+任务进入终态后，`elapsed_seconds` 使用 `started_at` 到终态时间的差值。旧任务缺少 `started_at` 时使用创建时间兼容显示。
+
+## 更新日志
+
+更新记录同时包含代码、工作流、文档、测试和云端发布过程。当前工作区状态截至 2026-09-17。
+
+### 2026-08-07 至 2026-08-13：基础服务与视频方案
+
+- 建立 FastAPI 服务、ComfyUI 引擎适配、任务队列和网页工作台。
+- 增加 FL2VA、Ref2VA、8 步 LoRA 和数字人工作流。
+- 增加驱动音频时长读取、视频产物回传和基础 API 文档。
+- 加入项目 Logo、工作台截图和英文文档。
+
+### 2026-08-14：Music3 与多节点调度
+
+- 增加 Music3 INT8 工作流、曲风和歌词辅助接口。
+- 增加多 ComfyUI 节点配置、健康检查、容量和任务调度。
+- 增加 Music3 强制时长补丁、FLAC 输出和余额状态保存。
+- 增加消融测试脚本、模型清单和安装校验流程。
+
+### 2026-08-17：RunningHub 动态工作流
+
+- 支持 RunningHub 工作流和 AI App 资源地址解析。
+- 根据远端 schema 动态生成文本、数值、枚举、开关和媒体字段。
+- 保存工作流 schema、账户余额、当前任务和单次调用费用。
+- 在远端参数或账户查询失败时保留最近一次可用运行信息。
+
+### 2026-08-19 至 2026-08-20：桌面应用与多端互联
+
+- 增加 macOS 和 Windows 桌面应用入口。
+- 增加设备配对、持久授权、授权撤销、远端任务代理和共享素材库。
+- 增加运行日志浮窗、日志启动器拖拽和触控拖拽。
+- 增加 `AGENT.md` 安装指南和固定版本节点包清单。
+
+### 2026-09-16：H3 SA、VDN H3 与部署包完善
+
+- 增加 H3 SA 两阶段采样、Latent 3D Upscaler、Sol-Attn 和 Context Loop。
+- 增加 VDN H3 的 8 步 DMD 与 9 至 50 步 B stage 自动选择。
+- 增加 checkpoint、断线恢复、任务重新提交和节点迁移。
+- 补充 VDN H3 节点包、工作流、模型清单和云 GPU 安装脚本。
+
+### 2026-09-17：素材库、Agent 文档与界面交互
+
+- 增加 `asset_folders` 单层文件夹、旧任务迁移和 `folder_id` 归属。
+- 根目录只显示未分类本机任务，远端素材保持只读。
+- 增加新建、重命名、删除、批量移动和文件夹拖拽归类。
+- 删除文件夹前阻止进行中任务，确认后清理任务记录、参考文件、产物、sidecar、封面和日志。
+- 增加本地素材容量统计、30 天前视频清理预览、总大小展示和非本机素材删除保护。
+- 生成文件使用目录名称前缀和时间戳，已完成产物支持用户重命名。
+- 视频首帧封面落盘缓存，重复刷新时直接使用缓存。
+- 增加 `/AGENT.md` 公共路由，返回 Markdown 并禁用缓存；同步 OpenAPI、鉴权、任务、素材和 Skill 创建说明。
+- 将总体耗时改为从任务开始执行起计算，排队时间不计入。
+- 素材库增加固定卡片布局、宽度持久化、隐藏滚动条、调整宽度后的补页加载和目录式文件夹卡片。
+- 详情窗口改为无模糊浮动窗口，支持多开、独立拖拽、窗口置顶和默认收起的详情侧栏。
+
+### 更新数据的发布流程
+
+每次更新遵循以下流程：
+
+1. 扫描后端、前端、工作流、测试和文档，确认数据结构与接口影响范围。
+2. 修改代码和静态资源，涉及 SQLite 时保留迁移和旧数据兼容逻辑。
+3. 增加后端接口契约、前端静态契约和行为回归测试。
+4. 执行 Python 语法检查、JavaScript 语法检查、完整 unittest 和差异检查。
+5. 更新静态资源版本参数，避免浏览器缓存旧的 HTML、CSS 和 JavaScript。
+6. 发布前检查云 GPU 的任务队列、GPU 状态、磁盘空间和 ComfyUI 健康状态。
+7. 在 `/home/tapcash/ssd2/backups/` 创建远端备份，排除 `data/`、模型、虚拟环境和用户产物。
+8. 分目录同步源码、静态资源、工作流、测试和文档，校验本地与远端 SHA-256。
+9. 有执行中任务时只同步可热加载的静态资源；API 重启前确认 checkpoint 可恢复，避免中断生成。
+10. 重启 API 后验证 `/health`、`/AGENT.md`、`/docs`、`/openapi.json`、任务恢复、ComfyUI 和完整远端测试。
 
 ## 生成方案
 
-| 方案 | 输入 | 时长 | 步数 | 输出 |
+| 方案 | 参考输入 | 时长 | 步数 | 产物 |
 |---|---|---:|---:|---|
-| 普通 FL2VA | 1 张首帧，可选 1 张尾帧 | 1–15 秒 | 4–50 | MP4 |
-| 普通 Ref2VA | 最多 9 张图片、3 段视频、3 段音频 | 1–15 秒 | 4–50 | MP4 |
-| 8-step LoRA | FL2VA 或 Ref2VA 参考素材 | 1–15 秒 | 固定 8 | MP4 |
-| MiniMax H3 SA | FL2VA 或 Ref2VA 参考素材 | 1–300 秒 | 固定 8 | MP4 |
-| VDN-H3 | FL2VA 或 Ref2VA 参考素材 | 1–15 秒 | 8–50 | MP4 |
-| 数字人 | 1 张人物图片和 1 段驱动音频 | 由音频决定 | 固定 20 | MP4 |
-| H3 TTS | 人物特征、对白、0–3 段音频参考 | 1–15 秒 | 4–50 | FLAC |
-| Music3 | 曲风描述和可选歌词 | 1–300 秒 | 固定 30 | FLAC |
-| RunningHub | 目标工作流定义的字段 | 由工作流决定 | 由工作流决定 | 由工作流决定 |
+| FL2VA | 首帧图片，可选尾帧图片 | 1 至 15 秒 | 4 至 50 | MP4 |
+| Ref2VA | 最多 9 张图片、3 段视频、3 段音频 | 1 至 15 秒 | 4 至 50 | MP4 |
+| H3 SA | FL2VA 或 Ref2VA 参考素材 | 1 至 300 秒 | 固定 8 | MP4 |
+| VDN H3 | FL2VA 或 Ref2VA 参考素材 | 1 至 15 秒 | 8 至 50 | MP4 |
+| 数字人 | 人物图片和驱动音频 | 由音频决定 | 固定 20 | MP4 |
+| H3 TTS | 人物特征、对白和音频参考 | 1 至 15 秒 | 4 至 50 | FLAC |
+| Music3 | 曲风描述和可选歌词 | 1 至 300 秒 | 固定 30 | FLAC |
+| RunningHub | 目标工作流定义的字段 | 由工作流定义 | 由工作流定义 | 由工作流定义 |
 
-### H3 SA Context Loop
+## 快速开始
 
-H3 SA 使用低分辨率首阶段、Latent 3D 放大和高分辨率 Sol-Attn 二阶段。时长超过 15 秒时，服务按 H3 合法帧网格拆分，每段最多 362 帧，后续段自动携带 22 帧音视频上下文和上一段 AV latent checkpoint。重复前缀会在输出前裁切，最终片段通过 FFmpeg 合并。
-
-### VDN-H3
-
-VDN-H3 使用 `ApplyVDNH3` 模型补丁节点，不与 Sol-Attn 叠加：
-
-| 步数 | 检查点 | Turbo adapter | 适用路径 |
-|---:|---|---|---|
-| 8 | `stage-dmd-step-250` | 启用 | 官方 8-step DMD |
-| 9–50 | `stage-b-step-2000` | 关闭 | 官方 B stage，推荐 50 步 |
-
-两条路径均使用 `merge` LoRA、`stream` 分支权重和 `grouped` 注意力后端。官方 B stage 的目录名为 `stage-b-step-2000`，项目按此目录加载检查点。
-
-## 远端部署
-
-项目默认面向云 GPU 服务器运行。当前已验证环境为 Ubuntu 22.04、2 张 RTX 4090、Python 3.11、PyTorch 2.6.0 + CUDA 12.4。
-
-验证环境目录和端口：
-
-| 服务 | 地址 | GPU | 目录 |
-|---|---|---|---|
-| API 与网页 | `http://SERVER_IP:8193` | 调度服务 | `/home/tapcash/ssd2/minimax-h3-api` |
-| ComfyUI GPU 1 | `127.0.0.1:8188` | RTX 4090，GPU 1 | `/home/tapcash/ssd2/ComfyUI` |
-| ComfyUI GPU 0 | `100.77.224.102:8189` | RTX 4090，GPU 0 | `/home/tapcash/ssd2/ComfyUI` |
-
-只向外部开放 API 端口。ComfyUI 端口应限制为 API 服务或受信任网络访问。
-
-验证环境中，API 使用 `8193`，ComfyUI 节点使用 `8188` 和 `8189`。部署完成后，应通过 `/health` 和两个 ComfyUI 的 `/system_stats` 检查实际状态。
-
-### 一键安装
-
-在 GPU 服务器执行：
+### API 服务
 
 ```bash
-git clone https://github.com/SekiyoKana/minimax-studio-webui.git
-cd minimax-studio-webui
+python3.11 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements-api.txt
 
-INSTALL_ROOT=/data/minimax-h3-stack \
-GPU_ID=0 \
-MODEL_PROVIDER=modelscope \
-bash scripts/install.sh
+export H3_ROOT="$PWD"
+export H3_COMFY_URL="http://127.0.0.1:8188"
+export H3_PORT=8193
+./run.sh
 ```
 
-安装脚本负责基础 ComfyUI、API 环境、核心模型、Music3 补丁和 systemd 服务。VDN-H3 使用独立脚本安装节点以及两个官方 stage：
+没有 ComfyUI 时可以使用测试引擎：
 
 ```bash
-INSTALL_ROOT=/data/minimax-h3-stack \
-bash scripts/install_vdn_h3.sh
+H3_FAKE_ENGINE=1 H3_ENGINE=fake ./run.sh
 ```
 
-脚本会安装：
-
-- `ComfyUI/custom_nodes/ComfyUI-VDN-H3`
-- `ComfyUI/models/vdn/stage-dmd-step-250/`
-- `ComfyUI/models/vdn/stage-b-step-2000/`
-
-模型默认优先从 ModelScope 下载，也可以通过项目安装脚本选择 Hugging Face。模型文件应使用 [`scripts/verify_install.sh`](scripts/verify_install.sh) 和 [`scripts/download_models.py`](scripts/download_models.py) 校验。
-
-> [!WARNING]
-> 高分辨率、长时长和 VDN-H3 任务的显存和内存需求高于普通短片段。RTX 4090 上应先使用较低分辨率和较短时长验证工作流。
-
-### 启动后端
-
-登录 GPU 服务器后，在项目目录执行以下命令：
-
-```bash
-cd /home/tapcash/ssd2/minimax-h3-api
-
-# 当前验证服务器的 API 服务
-systemctl --user enable --now minimax-h3-api.service
-
-# 当前验证服务器的 ComfyUI 服务
-sudo systemctl enable --now comfyui.service
-sudo systemctl enable --now comfyui_gpu_0.service
-```
-
-使用 `scripts/install.sh` 进行标准安装时，API 服务名为 `minimax-studio-webui.service`，启动命令为：
-
-```bash
-systemctl --user enable --now comfyui.service
-systemctl --user enable --now minimax-studio-webui.service
-```
-
-启动完成后，API 与网页地址为：
-
-```text
-http://SERVER_IP:8193
-```
-
-### 查看服务状态
-
-```bash
-systemctl --user status minimax-h3-api.service --no-pager
-sudo systemctl status comfyui.service --no-pager
-sudo systemctl status comfyui_gpu_0.service --no-pager
-```
-
-查看 API 日志：
-
-```bash
-journalctl --user -u minimax-h3-api.service -f
-```
-
-健康检查：
-
-```bash
-curl http://127.0.0.1:8193/health
-```
-
-### 服务管理
-
-```bash
-systemctl --user restart minimax-h3-api.service
-sudo systemctl restart comfyui.service
-sudo systemctl restart comfyui_gpu_0.service
-```
-
-标准安装对应的 API 服务名为 `minimax-studio-webui.service`。
-
-### 任务恢复
-
-API 将任务状态保存在 `data/jobs/<job_id>.json`，ComfyUI 返回 `prompt_id` 后写入远端任务 checkpoint。API 服务重启后会优先查询原任务，并保留原任务进度和节点信息。
-
-ComfyUI WebSocket 断开后，API 使用 HTTP `/history` 和 `/queue` 查询任务状态。原 `prompt_id` 同时从 ComfyUI 队列和历史中消失约 5–6 秒后，API 会清除旧 checkpoint 并重新提交任务，最多重新提交 3 次。原节点不可用时，任务改用自动调度选择健康节点。
-
-查看恢复日志：
-
-```bash
-journalctl --user -u minimax-h3-api.service --no-pager \
-  | grep -E '任务状态暂不可见|远端任务已丢失|重新提交|重新连接'
-```
-
-## 桌面应用
-
-桌面应用支持 macOS 和 Windows。本机保存任务记录、素材、生成结果、节点配置和 AI 配置，远端 ComfyUI 执行 GPU 推理。
+### 桌面应用
 
 ```bash
 python3 -m venv .venv-desktop
@@ -198,7 +189,7 @@ pip install -r requirements-desktop.txt
 python scripts/run_desktop.py
 ```
 
-指定远端节点：
+指定远端 ComfyUI：
 
 ```bash
 H3_DEFAULT_COMFY_URL=http://192.168.1.20:8188 \
@@ -206,181 +197,179 @@ H3_DEFAULT_COMFY_NAME="远端 ComfyUI" \
 python scripts/run_desktop.py
 ```
 
-桌面应用数据目录：
+### API 入口
 
-| 系统 | 目录 |
+| 地址 | 作用 |
 |---|---|
-| macOS | `~/Library/Application Support/MiniMax H3 Studio` |
-| Windows | `%LOCALAPPDATA%\\MiniMax H3 Studio` |
+| `/` | Web 工作台 |
+| `/health` | 服务、节点和队列状态 |
+| `/docs` | Swagger UI |
+| `/openapi.json` | OpenAPI JSON |
+| `/AGENT.md` | AI Agent 和 Skill 接入说明 |
 
-打包命令：
+设置 `H3_API_KEY` 后，普通 API 请求使用：
 
-```bash
-python scripts/build_desktop.py
+```http
+Authorization: Bearer YOUR_H3_API_KEY
 ```
 
 ## API
 
-API 文档地址：`http://SERVER_IP:8193/docs`
-
-### VDN-H3 50 步任务
-
-`execution_mode=vdn-h3` 开启 VDN-H3。选择 `steps=50` 时服务自动使用 `stage-b-step-2000`。
+创建视频任务：
 
 ```bash
 curl -X POST http://127.0.0.1:8193/api/v1/generations \
-  -F 'prompt=固定机位，人物持续向前行走，保持身份、光线和环境声音连续。' \
+  -F 'prompt=固定机位，人物持续向前行走，保持人物身份和环境连续。' \
   -F 'reference_manifest=[{"type":"image"}]' \
   -F 'references=@first-frame.png;type=image/png' \
   -F 'model_variant=fl2va-fp8' \
-  -F 'execution_mode=vdn-h3' \
+  -F 'execution_mode=turbo-lora' \
   -F 'width=864' \
   -F 'height=480' \
-  -F 'duration=15' \
-  -F 'steps=50' \
-  -F 'seed=1234' \
+  -F 'duration=5' \
+  -F 'steps=8' \
   -F 'comfy_node=auto'
 ```
 
-### VDN-H3 8 步任务
+任务查询和产物下载：
 
 ```bash
-curl -X POST http://127.0.0.1:8193/api/v1/generations \
-  -F 'prompt=连续电影镜头，人物完成一个自然转身。' \
-  -F 'reference_manifest=[{"type":"image"}]' \
-  -F 'references=@first-frame.png;type=image/png' \
-  -F 'model_variant=fl2va-fp8' \
-  -F 'execution_mode=vdn-h3' \
-  -F 'width=608' \
-  -F 'height=352' \
-  -F 'duration=5' \
-  -F 'steps=8'
+curl http://127.0.0.1:8193/api/v1/generations/JOB_ID
+curl http://127.0.0.1:8193/api/v1/generations/JOB_ID/result -o output.mp4
 ```
 
-### 常用接口
+常用接口：
 
-| 方法 | 路径 | 功能 |
+| 方法 | 路径 | 作用 |
 |---|---|---|
-| `GET` | `/health` | 服务、节点、队列和 GPU 状态 |
+| `GET` | `/health` | 服务、节点和队列状态 |
 | `GET` | `/api/v1/comfy/nodes` | 查询推理节点 |
-| `POST` | `/api/v1/generations` | 创建生成任务 |
-| `GET` | `/api/v1/generations/{job_id}` | 查询任务状态和日志 |
+| `POST` | `/api/v1/generations` | 创建任务 |
+| `GET` | `/api/v1/generations/{job_id}` | 查询任务 |
 | `POST` | `/api/v1/generations/{job_id}/cancel` | 取消任务 |
 | `POST` | `/api/v1/generations/{job_id}/regenerate` | 重新生成 |
-| `GET` | `/api/v1/generations/{job_id}/result` | 下载生成产物 |
-| `GET` | `/api/v1/events` | SSE 实时事件流 |
-| `POST` | `/api/v1/prompts/optimize` | 优化 H3 提示词 |
+| `GET` | `/api/v1/generations/{job_id}/result` | 下载产物 |
+| `GET` | `/api/v1/events` | SSE 事件流 |
+| `POST` | `/api/v1/prompts/optimize` | H3 提示词优化 |
 | `POST` | `/api/v1/music/assist` | Music3 曲风或歌词辅助 |
 
-设置 `H3_API_KEY` 后，`/api/v1/*` 需要使用：
+完整字段、错误码、RunningHub 动态参数、多端互联和素材接口见 [API 参考](docs/API.md)。面向自动化 Agent 的调用顺序、工具封装和验收要求见 [`AGENT.md`](AGENT.md)。
+
+## 素材管理
+
+### 文件夹与归属
+
+文件夹为单层结构，名称长度为 1 至 80 个字符，同级名称按大小写折叠后判重。新任务可以指定 `folder_id`，选择根目录或未分组时归入未分组。
 
 ```text
-Authorization: Bearer YOUR_API_KEY
+GET    /api/v1/asset-folders
+POST   /api/v1/asset-folders
+PATCH  /api/v1/asset-folders/{folder_id}
+POST   /api/v1/asset-folders/move
+DELETE /api/v1/asset-folders/{folder_id}
 ```
 
-完整请求字段、Ref2VA 素材顺序和错误码见 [`docs/API.md`](docs/API.md)。
+外层素材列表只显示未分类本机任务。双击文件夹进入后显示其中的视频素材。移动使用任务归属关系，不复制文件。远端素材保持只读，不接受移动、重命名和删除。
 
-## 工作流
+删除文件夹前会检查排队中和执行中的任务。检查通过后删除文件夹内已结束任务的记录、参考文件、生成产物、sidecar、封面和日志。
 
-所有 JSON 文件均为 ComfyUI API 格式，可直接提交给 ComfyUI `/prompt` 接口。服务端会在提交前注入提示词、素材、分辨率、帧数、步数、随机种子和输出前缀。
+### 本地素材管理
 
-| 文件 | 方案 |
-|---|---|
-| `minimax_h3_fl2va_fp8_720p_15s_api.json` | 普通 FL2VA |
-| `minimax_h3_ref2va_fp8_scaled_api.json` | 普通 Ref2VA |
-| `minimax_h3_fl2va_fp8_turbo_lora_api.json` | FL2VA 8-step LoRA |
-| `minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA 8-step LoRA |
-| `minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json` | Ref2VA 双阶段采样与 Latent 3D 放大 |
-| `minimax_h3_fl2va_fp8_sa_api.json` | H3 SA FL2VA |
-| `minimax_h3_ref2va_fp8_sa_api.json` | H3 SA Ref2VA |
-| `minimax_h3_fl2va_vdn_api.json` | VDN-H3 FL2VA，8–50 步动态 stage |
-| `minimax_h3_ref2va_vdn_api.json` | VDN-H3 Ref2VA，8–50 步动态 stage |
-| `minimax_h3_ref2va_fp8_digital_human_api.json` | 数字人音频驱动 |
-| `minimax_h3_ref2va_fp8_tts_api.json` | H3 TTS |
-| `minimax_music3_int8_api.json` | Music3 INT8 |
+```text
+GET  /api/v1/assets/local
+GET  /api/v1/assets/local/clear-old-video/preview
+POST /api/v1/assets/local/clear-old-video
+POST /api/v1/assets/local/delete
+```
 
-VDN-H3 节点不与 `SolAttnPatch` 叠加。VDN-H3 节点安装包和来源记录见 [`comfyui_nodes/README.md`](comfyui_nodes/README.md) 与 [`comfyui_nodes/manifest.json`](comfyui_nodes/manifest.json)。
+清理 30 天前视频前，客户端应展示所有项目、创建时间、单项大小和总大小，再执行确认。非本机创建的文件和文件夹不可删除。
 
-### ComfyUI 节点包
+## 工作流与节点包
 
-固定版本源码包位于 [`comfyui_nodes/`](comfyui_nodes/)。
+API 格式工作流位于 [`workflows/`](workflows/)，固定版本节点包和 SHA-256 清单位于 [`comfyui_nodes/`](comfyui_nodes/)。主要工作流包括：
 
-| 节点包 | 用途 |
-|---|---|
-| `ComfyUI-VDN-H3-23470b0.zip` | VDN-H3 的 `ApplyVDNH3` 和高级节点 |
-| `ComfyUI-SolAttn_triton-842c4ea.zip` | H3 SA 的 Sol-Attn |
-| `Comfyui_Minimax_h3_latent_Upscaler-52a48af.zip` | H3 SA 的 Latent 3D Upscaler |
-| `ComfyUI-VideoHelperSuite-993082e.zip` | Ref2VA 视频参考的 `VHS_LoadVideo` |
-| `ComfyUI-MultiGPU-62f98ed.zip` | Music3 的多 GPU 文本编码器 |
-| `comfyui-minimax-h3-audio-drive-de65ec5.zip` | 数字人的音频驱动节点 |
+- `minimax_h3_fl2va_fp8_720p_15s_api.json`
+- `minimax_h3_ref2va_fp8_scaled_api.json`
+- `minimax_h3_fl2va_fp8_turbo_lora_api.json`
+- `minimax_h3_ref2va_fp8_turbo_lora_api.json`
+- `minimax_h3_fl2va_fp8_sa_api.json`
+- `minimax_h3_ref2va_fp8_sa_api.json`
+- `minimax_h3_fl2va_vdn_api.json`
+- `minimax_h3_ref2va_vdn_api.json`
+- `minimax_h3_ref2va_fp8_digital_human_api.json`
+- `minimax_h3_ref2va_fp8_tts_api.json`
+- `minimax_music3_int8_api.json`
 
-各压缩包的来源、提交、许可和 SHA-256 见 [`comfyui_nodes/manifest.json`](comfyui_nodes/manifest.json)。
+服务提交前会注入提示词、参考文件、分辨率、帧数、步数、随机种子、文件夹名称前缀和输出路径。
 
-## 配置
+## 部署
 
-复制 `.env.example` 后按部署目录修改：
+安装脚本：
+
+```bash
+INSTALL_ROOT=/data/minimax-h3-stack \
+PYTHON_BIN=python3.11 \
+GPU_ID=0 \
+MODEL_PROVIDER=modelscope \
+bash scripts/install.sh
+```
+
+常用环境变量：
 
 | 变量 | 作用 |
 |---|---|
-| `H3_ROOT` | API 项目根目录 |
-| `H3_ENGINE` | 推理后端，默认 `comfyui` |
-| `H3_HOST` | API 监听地址，默认 `0.0.0.0` |
-| `H3_PORT` | API 与网页端口，默认 `8193` |
-| `H3_COMFY_URL` | 默认 ComfyUI 地址 |
-| `H3_COMFY_POLL_SECONDS` | ComfyUI 状态轮询间隔，默认 2 秒 |
-| `H3_COMFY_VDN_WORKFLOW` | VDN-H3 FL2VA 工作流路径 |
-| `H3_COMFY_REF2VA_VDN_WORKFLOW` | VDN-H3 Ref2VA 工作流路径 |
-| `H3_COMFY_OUTPUT_DIR` | ComfyUI 输出目录 |
-| `H3_API_KEY` | 可选 Bearer Token |
-| `H3_MAX_UPLOAD_MB` | 上传文件大小上限，默认 512 MB |
-| `H3_REMOTE_RECONNECT_SECONDS` | 远端任务重连时间窗口 |
+| `INSTALL_ROOT` | ComfyUI、API 和模型根目录 |
+| `PYTHON_BIN` | API 和 ComfyUI 使用的 Python |
+| `GPU_ID` | ComfyUI 使用的 GPU 编号 |
+| `MODEL_PROVIDER` | `modelscope` 或 `huggingface` |
+| `COMFY_PORT` | ComfyUI 端口，默认 8188 |
+| `API_PORT` | API 端口，默认 8193 |
+| `SKIP_MODELS` | 已有模型且校验通过时跳过下载 |
+| `START_SERVICES` | 安装后启动服务 |
+| `DRY_RUN` | 只打印安装计划 |
 
-节点地址、启用状态、健康检查间隔和 RunningHub 配置保存在 `data/config.db`。
+部署文档见 [云 GPU 部署](docs/DEPLOYMENT.md)。运行维护、任务恢复和备份规则见 [运行维护](docs/OPERATIONS.md)。
 
 ## 验证
-
-运行项目测试：
 
 ```bash
 python3 -m unittest discover -s tests -p 'test_*.py'
 node --check static/app.js
+python3 -m py_compile app/main.py app/jobs.py
 git diff --check
 ```
 
-当前本地契约测试覆盖 API、工作流动态参数、VDN-H3 8/50 步 stage 选择、桌面应用和节点包清单。
-
-远端检查：
+部署目录验证：
 
 ```bash
-curl http://SERVER_IP:8193/health
-curl http://COMFY_IP:8188/object_info/ApplyVDNH3
-curl http://COMFY_IP:8189/object_info/ApplyVDNH3
+INSTALL_ROOT=/data/minimax-h3-stack bash scripts/verify_install.sh
 ```
 
 ## 项目结构
 
 ```text
-app/                  FastAPI、任务队列、节点调度和 ComfyUI 客户端
+app/                  FastAPI、任务队列、节点调度和推理客户端
 static/               中英文响应式网页
-workflows/            H3、H3 SA、VDN-H3、双阶段采样和 Music3 API 工作流
+workflows/            H3、H3 SA、VDN H3 和 Music3 API 工作流
 comfyui_nodes/        固定版本节点源码包和校验清单
-scripts/              安装、模型下载、验证、桌面打包和生成测试
+scripts/              安装、下载、验证、桌面打包和生成测试
 deploy/               systemd 服务模板
 patches/              ComfyUI 兼容补丁
-docs/                 API、部署、模型、工作流和运行维护文档
-data/                 SQLite 配置、任务状态、上传素材和 API 产物
+docs/                 API、部署、模型、工作流和运维文档
+data/                 SQLite 配置、任务状态、上传素材和产物
 tests/                API 契约与桌面功能测试
-model-manifest.json   核心模型来源、大小和 SHA-256
+AGENT.md              AI Agent 接口调用和 Skill 创建指南
 ```
 
 ## 文档
 
-- [云 GPU 部署](docs/DEPLOYMENT.md)
 - [API 参考](docs/API.md)
+- [云 GPU 部署](docs/DEPLOYMENT.md)
+- [运行维护](docs/OPERATIONS.md)
 - [模型清单](docs/MODELS.md)
 - [工作流清单](docs/WORKFLOWS.md)
 - [桌面应用](docs/DESKTOP.md)
-- [运行维护](docs/OPERATIONS.md)
 - [ComfyUI 节点包](comfyui_nodes/README.md)
+- [AI Agent 指南](AGENT.md)
 - [安全说明](SECURITY.md)
 - [第三方项目与许可](THIRD_PARTY_NOTICES.md)

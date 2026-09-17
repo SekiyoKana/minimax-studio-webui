@@ -1,6 +1,13 @@
 const state = {
   references: [],
   assets: [],
+  assetFolders: [],
+  assetUnfiledFolder: { id: "__unfiled__", name: "未分组", count: 0 },
+  assetFolderId: "",
+  assetEditMode: false,
+  assetSelectedIds: new Set(),
+  assetFolderNameEditId: null,
+  assetFolderPickerResolve: null,
   sharedAssets: [],
   assetPage: 0,
   assetPages: 1,
@@ -12,10 +19,17 @@ const state = {
   assetLoadError: "",
   sharedAssetErrors: [],
   assetDetailJob: null,
+  assetDetailWindows: new Map(),
+  assetDetailWindowOrder: [],
+  assetDetailActiveWindowId: null,
+  assetDetailDrag: null,
   localAssets: [],
   localAssetPage: 0,
   localAssetPages: 1,
   localAssetTotal: 0,
+  localAssetSize: 0,
+  localAssetLibrarySize: 0,
+  localAssetFolderId: "__root__",
   localAssetLoading: false,
   localAssetSelected: new Set(),
   localAssetChanged: false,
@@ -54,6 +68,7 @@ const state = {
   runningHubParameters: {},
   pendingRunningHubMediaField: "",
   logs: [],
+  logFollowTail: true,
   runtimeRevision: "",
   localRuntime: { logs: [], queue: [], nodes: [] },
   peerRuntime: {},
@@ -77,6 +92,9 @@ const promptInput = el("prompt");
 const referenceInput = el("referenceInput");
 const MUSIC3_DURATIONS = [30, 60, 120, 180, 240, 300];
 const RUNNINGHUB_TARGET_PREFIX = "rh:";
+const SIDEBAR_WIDTH_STORAGE_KEY = "h3-asset-sidebar-width";
+const SIDEBAR_WIDTH_MIN = 220;
+const SIDEBAR_WIDTH_MAX_RATIO = 0.5;
 
 const COPY = {
   "zh-CN": {
@@ -84,7 +102,7 @@ const COPY = {
     conversation: "H3 对话", switchLanguage: "Switch to English", apiDocs: "API 文档", newGeneration: "新建生成", close: "关闭", assets: "素材库",
     connectEngine: "连接推理节点", offline: "服务离线", autoSchedule: "自动调度", nodePending: "节点待分配", online: "在线", available: "可用", nodeOffline: "离线", disabled: "已停用", busy: "执行中",
     balance: "余额", credits: "点数", recentCost: "最近调用消耗", accountUnavailable: "账户信息不可用", workflowUnavailable: "工作流信息不可用", balancePending: "余额读取中", accountTasks: "账户任务", balanceUpdated: "余额更新", balanceFailed: "余额读取失败",
-    noAssets: "暂无素材", loading: "加载中", allLoaded: "已加载全部", loadFailed: "加载失败", startCreating: "开始创作", you: "你",
+    noAssets: "暂无素材", loading: "加载中", allLoaded: "已加载全部", loadFailed: "加载失败", startCreating: "开始创作", you: "你", allAssets: "全部素材", unfiled: "未分组", folders: "文件夹", editAssets: "编辑素材", exitAssetEdit: "退出编辑", selectedAssets: "已选择", newFolder: "新建文件夹", renameFolder: "重命名文件夹", deleteFolder: "删除文件夹", moveTo: "移动到", noSelection: "未选择素材", folderName: "文件夹名称", folderPurpose: "用于归类短剧生成任务", folderDeleteConfirm: "删除文件夹后，其中的任务记录、参考文件和生成产物都会被删除。确认继续？", activeFolderDelete: "文件夹包含进行中任务，请先取消或等待任务结束", regenerateFolder: "选择重新生成任务的文件夹",
     native: "普通流 · 原生 H3", turbo: "8-step LoRA · 强度 1.0", dualSampling: "双采 · Sigma + 潜空间放大", h3Sa: "MiniMax H3 SA · Sol-Attn", vdnH3: "VDN-H3 · Video Delta Net", digitalHuman: "数字人 · 音频驱动", tts: "H3 TTS · 人物语音", music3: "Music3 · 30 步", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache（已停用）",
     reuse: "回填到发送区", useAsInput: "作为输入", regenerate: "重新生成", edit: "修改", cancel: "取消", delete: "删除", deleteRecord: "删除记录", downloadVideo: "下载视频", downloadAudio: "下载音频", downloadImage: "下载图片", downloadFile: "下载文件", videoReady: "视频已生成", musicReady: "音频已生成", imageReady: "图片已生成", fileReady: "文件已生成", peering: "多端互联", peerConnected: "已连接设备", peerRevoked: "已撤销设备访问", peerConnectNotice: "设备已完成互联", localPeerKey: "本机互联密钥",
     aiKeySaved: "API Key 已保存到本机数据库", aiKeyEmpty: "尚未保存 API Key", aiKeyReplace: "输入新值可覆盖已保存密钥", noPeers: "暂无已连接设备", revokeAccess: "撤销访问", owner: "归属方", pairingRefresh: "秒后刷新", connectPeer: "建立互联",
@@ -97,7 +115,7 @@ const COPY = {
     conversation: "H3 Chat", switchLanguage: "切换为中文", apiDocs: "API documentation", newGeneration: "New generation", close: "Close", assets: "Assets",
     connectEngine: "Connecting to inference nodes", offline: "Service offline", autoSchedule: "Auto", nodePending: "Awaiting node", online: "Online", available: "available", nodeOffline: "Offline", disabled: "Disabled", busy: "Running",
     balance: "Balance", credits: "credits", recentCost: "Recent call cost", accountUnavailable: "Account unavailable", workflowUnavailable: "Workflow information unavailable", balancePending: "Loading balance", accountTasks: "Account tasks", balanceUpdated: "balance updated", balanceFailed: "balance read failed",
-    noAssets: "No assets", loading: "Loading", allLoaded: "All assets loaded", loadFailed: "Load failed", startCreating: "Start creating", you: "You",
+    noAssets: "No assets", loading: "Loading", allLoaded: "All assets loaded", loadFailed: "Load failed", startCreating: "Start creating", you: "You", allAssets: "All assets", unfiled: "Unfiled", folders: "Folders", editAssets: "Edit assets", exitAssetEdit: "Exit editing", selectedAssets: "Selected", newFolder: "New folder", renameFolder: "Rename folder", deleteFolder: "Delete folder", moveTo: "Move to", noSelection: "No assets selected", folderName: "Folder name", folderPurpose: "Organize short-drama generation tasks", folderDeleteConfirm: "Deleting this folder also deletes its task records, source files, and generated outputs. Continue?", activeFolderDelete: "This folder contains active tasks. Cancel or wait for them first.", regenerateFolder: "Choose a folder for the regenerated task",
     native: "Native H3", turbo: "8-step LoRA · 1.0", dualSampling: "Dual sampling · Sigma + latent upscale", h3Sa: "MiniMax H3 SA · Sol-Attn", vdnH3: "VDN-H3 · Video Delta Net", digitalHuman: "Digital human · audio driven", tts: "H3 TTS · Character voice", music3: "Music3 · 30 steps", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache (disabled)",
     reuse: "Fill composer", useAsInput: "Use as input", regenerate: "Regenerate", edit: "Edit", cancel: "Cancel", delete: "Delete", deleteRecord: "Delete record", downloadVideo: "Download video", downloadAudio: "Download audio", downloadImage: "Download image", downloadFile: "Download file", videoReady: "Video generated", musicReady: "Audio generated", imageReady: "Image generated", fileReady: "File generated", peering: "Device sharing", peerConnected: "Connected device", peerRevoked: "Device access revoked", peerConnectNotice: "Device pairing completed", localPeerKey: "Local pairing key",
     aiKeySaved: "API Key saved in the local database", aiKeyEmpty: "No API Key saved", aiKeyReplace: "Enter a new value to replace the saved key", noPeers: "No connected devices", revokeAccess: "Revoke access", owner: "Owner", pairingRefresh: "s until refresh", connectPeer: "Connect",
@@ -149,20 +167,26 @@ function setControlTitle(id, value) {
 function applyStaticLocale() {
   document.documentElement.lang = state.locale;
   setText(".library-heading h2", t("assetLibrary"));
+  setText(".asset-folders-header > span", t("folders"));
   el("assetSearch").placeholder = t("assetSearch");
   setText('#assetStatusFilter option[value=""]', t("allStatuses"));
   ["queued", "running", "completed", "failed", "cancelled"].forEach((status) => setText(`#assetStatusFilter option[value="${status}"]`, t(status)));
   setText(".conversation-header h1", t("conversation"));
   setTitle("#newTaskButton", t("newGeneration"));
+  setTitle("#editAssetsButton", state.assetEditMode ? t("exitAssetEdit") : t("editAssets"));
+  setTitle("#newAssetFolder", t("newFolder"));
   setTitle("#openAssets", t("assets"));
   setTitle("#languageToggle", t("switchLanguage"));
   setTitle("#openPeering", t("peering"));
-  setTitle("#closeAssetDetail", t("close"));
-  setText("#assetDetailTitle", t("assetDetail"));
+    setTitle("#closeAssetDetail", t("close"));
   setText("#deleteAssetDetail span", t("deleteRecord"));
   setText("#reuseOutputAssetDetail span", t("useAsInput"));
   setText("#regenerateAssetDetail span", t("regenerate"));
   setText("#reuseAssetDetail span", t("reuse"));
+  setText("#assetFolderNameTitle", state.assetFolderNameEditId ? t("renameFolder") : t("newFolder"));
+  setText("#assetFolderNameHint", t("folderPurpose"));
+  setLeadingText(".asset-folder-name-field", t("folderName"));
+  setText("#moveSelectedAssets span", t("moveTo"));
   el("apiDocsLink").title = t("apiDocs");
   el("apiDocsLink").setAttribute("aria-label", t("apiDocs"));
   syncNodeProviderFields();
@@ -1561,10 +1585,172 @@ async function checkHealth() {
   }
 }
 
+function renderAssetFolders() {
+  el("assetEditToolbar").hidden = !state.assetEditMode;
+  updateAssetSelectionChrome();
+  renderAssets();
+  refreshIcons();
+}
+
+function folderGlyph(kind = "folder") {
+  return `<span class="folder-glyph ${escapeHtml(kind)}" aria-hidden="true"></span>`;
+}
+
+function folderBackGlyph() {
+  return `<span class="folder-back-glyph" aria-hidden="true">${icon("corner-up-left")}</span>`;
+}
+
+function renderAssetFolderCard(folder) {
+  const actions = `<span class="asset-actions asset-folder-actions"><button type="button" data-folder-action="rename" data-folder-id="${escapeHtml(folder.id)}" title="${t("renameFolder")}" aria-label="${t("renameFolder")}">${icon("pencil")}</button><button type="button" data-folder-action="delete" data-folder-id="${escapeHtml(folder.id)}" title="${t("deleteFolder")}" aria-label="${t("deleteFolder")}">${icon("trash-2")}</button></span>`;
+  return `<article class="asset-card asset-folder-card${state.assetFolderId === folder.id ? " active" : ""}" data-asset-folder-card="${escapeHtml(folder.id)}" data-folder-drop-id="${escapeHtml(folder.id)}" tabindex="0" role="button" aria-label="${escapeHtml(folder.name)}">
+    <div class="asset-folder-preview">${folderGlyph("folder")}${actions}</div>
+    <div class="asset-folder-meta"><strong title="${escapeHtml(folder.name)}">${escapeHtml(folder.name)}</strong><small>${Number(folder.count || 0)} 项素材</small></div>
+  </article>`;
+}
+
+function renderAssetFolderCards() {
+  if (state.assetFolderId) {
+    return `<article class="asset-folder-card back" data-asset-folder-back="true" tabindex="0" role="button" aria-label="${localized("返回上一级", "Back")}">
+      ${folderBackGlyph()}<span>${localized("返回上一级", "Back")}</span>
+    </article>`;
+  }
+  return state.assetFolders.map(renderAssetFolderCard).join("");
+}
+
+async function loadAssetFolders() {
+  if (state.incognito) {
+    state.assetFolders = [];
+    state.assetUnfiledFolder = { id: "__unfiled__", name: t("unfiled"), count: 0 };
+    state.assetFolderId = "";
+    renderAssetFolders();
+    return;
+  }
+  const payload = await api("/api/v1/asset-folders");
+  state.assetFolders = payload.data || [];
+  state.assetUnfiledFolder = payload.unfiled || { id: "__unfiled__", name: t("unfiled"), count: 0 };
+  if (state.assetFolderId && state.assetFolderId !== "__unfiled__" && !state.assetFolders.some((folder) => folder.id === state.assetFolderId)) {
+    state.assetFolderId = "";
+  }
+  renderAssetFolders();
+}
+
+function updateAssetSelectionChrome() {
+  const count = state.assetSelectedIds.size;
+  const label = count ? `${t("selectedAssets")} ${count}` : t("noSelection");
+  if (el("assetSelectionCount")) el("assetSelectionCount").textContent = label;
+  if (el("moveSelectedAssets")) el("moveSelectedAssets").disabled = count === 0;
+  if (el("editAssetsButton")) {
+    el("editAssetsButton").setAttribute("aria-pressed", String(state.assetEditMode));
+    el("editAssetsButton").title = state.assetEditMode ? t("exitAssetEdit") : t("editAssets");
+    el("editAssetsButton").setAttribute("aria-label", el("editAssetsButton").title);
+  }
+}
+
+function setAssetEditMode(enabled) {
+  state.assetEditMode = Boolean(enabled);
+  if (!state.assetEditMode) state.assetSelectedIds.clear();
+  renderAssetFolders();
+  renderAssets();
+}
+
+function selectAssetFolder(folderId) {
+  if (state.assetFolderId === folderId) return;
+  state.assetFolderId = folderId;
+  state.assetSelectedIds.clear();
+  renderAssetFolders();
+  loadAssets({ reset: true }).catch((error) => showError(error.message));
+}
+
+function openAssetFolderName(folderId = null) {
+  state.assetFolderNameEditId = folderId;
+  const folder = folderId ? state.assetFolders.find((item) => item.id === folderId) : null;
+  el("assetFolderNameTitle").textContent = folder ? t("renameFolder") : t("newFolder");
+  el("assetFolderNameHint").textContent = t("folderPurpose");
+  el("assetFolderName").value = folder?.name || "";
+  el("assetFolderNameError").textContent = "";
+  el("assetFolderNameModal").hidden = false;
+  document.body.classList.add("modal-open");
+  refreshIcons();
+  requestAnimationFrame(() => el("assetFolderName").focus());
+}
+
+function closeAssetFolderName() {
+  el("assetFolderNameModal").hidden = true;
+  state.assetFolderNameEditId = null;
+  if (el("assetFolderPickerModal").hidden && el("assetDetailModal").hidden) document.body.classList.remove("modal-open");
+}
+
+function renderAssetFolderPicker() {
+  const folders = [{ id: "__unfiled__", name: t("unfiled"), icon: "inbox" }, ...state.assetFolders.map((folder) => ({ ...folder, icon: "folder" }))];
+  el("assetFolderPickerList").innerHTML = folders.map((folder) => `<button type="button" class="asset-folder-picker-row" data-picker-folder-id="${escapeHtml(folder.id)}">${folderGlyph(folder.id === "__unfiled__" ? "unfiled" : "folder")}<span>${escapeHtml(folder.name)}</span></button>`).join("");
+  refreshIcons();
+}
+
+function pickAssetFolder(title = t("moveTo"), hint = "") {
+  el("assetFolderPickerTitle").textContent = title;
+  el("assetFolderPickerHint").textContent = hint || localized("选择素材的目标文件夹", "Choose the destination folder");
+  el("assetFolderPickerError").textContent = "";
+  renderAssetFolderPicker();
+  el("assetFolderPickerModal").hidden = false;
+  document.body.classList.add("modal-open");
+  return new Promise((resolve) => {
+    state.assetFolderPickerResolve = resolve;
+  });
+}
+
+function resolveAssetFolderPicker(value) {
+  const resolve = state.assetFolderPickerResolve;
+  state.assetFolderPickerResolve = null;
+  el("assetFolderPickerModal").hidden = true;
+  if (el("assetFolderNameModal").hidden && el("assetDetailModal").hidden) document.body.classList.remove("modal-open");
+  if (resolve) resolve(value);
+}
+
+function closeAssetFolderPicker() {
+  if (!el("assetFolderPickerModal").hidden) resolveAssetFolderPicker(undefined);
+}
+
+async function moveSelectedAssets() {
+  const jobIds = Array.from(state.assetSelectedIds);
+  if (!jobIds.length) return;
+  const folderId = await pickAssetFolder(t("moveTo"));
+  if (folderId === undefined) return;
+  await moveJobsToFolder(jobIds, folderId === "__unfiled__" ? null : folderId);
+}
+
+async function moveJobsToFolder(jobIds, folderId) {
+  try {
+    await api("/api/v1/asset-folders/move", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_ids: jobIds, folder_id: folderId || null }),
+    });
+    state.assetSelectedIds.clear();
+    await Promise.all([loadAssetFolders(), loadAssets({ reset: true })]);
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+async function deleteAssetFolder(folderId) {
+  if (!window.confirm(t("folderDeleteConfirm"))) return;
+  try {
+    await api(`/api/v1/asset-folders/${encodeURIComponent(folderId)}`, { method: "DELETE" });
+    if (state.assetFolderId === folderId) state.assetFolderId = "";
+    if (state.localAssetFolderId === folderId) state.localAssetFolderId = "__root__";
+    await Promise.all([loadAssetFolders(), loadAssets({ reset: true }), refreshConversation(true)]);
+  } catch (error) {
+    if (el("localAssetsError")) el("localAssetsError").textContent = error.message;
+    showToast(error.message, "error");
+  }
+}
+
 async function loadAssets({ reset = false } = {}) {
   if (state.assetLoading || (!reset && !state.assetHasMore)) return;
   const requestedPage = reset ? 1 : state.assetPage + 1;
   const params = new URLSearchParams({ page: requestedPage, page_size: state.assetPageSize, scope: jobScope() });
+  if (state.assetFolderId) params.set("folder_id", state.assetFolderId);
+  else if (!state.incognito) params.set("folder_id", "__root__");
   const filter = el("assetStatusFilter").value;
   const query = el("assetSearch").value.trim();
   if (filter) params.set("status", filter);
@@ -1582,7 +1768,8 @@ async function loadAssets({ reset = false } = {}) {
   try {
     const endpoint = state.incognito ? "/api/v1/generations" : "/api/v1/peering/library";
     const payload = await api(`${endpoint}?${params}`);
-    state.assets = reset ? payload.data : dedupeJobs([...state.assets, ...payload.data]);
+    const filteredData = (payload.data || []).filter(assetMatchesCurrentView);
+    state.assets = reset ? filteredData : dedupeJobs([...state.assets, ...filteredData]);
     state.sharedAssetErrors = payload.peer_errors || [];
     state.assetRevision = payload.store_revision || state.assetRevision;
     state.assetPages = payload.pages;
@@ -1598,6 +1785,13 @@ async function loadAssets({ reset = false } = {}) {
     state.assetLoading = false;
     renderAssets();
   }
+}
+
+async function ensureAssetGridFilled() {
+  const grid = el("assetGrid");
+  if (!grid || state.assetLoading || !state.assetHasMore) return;
+  if (grid.scrollHeight - grid.scrollTop - grid.clientHeight >= 180) return;
+  await loadAssets();
 }
 
 function assetAction(job) {
@@ -1632,13 +1826,21 @@ function renderAssetCard(job) {
         ? `<img src="${escapeHtml(job.result_url)}" alt="${escapeHtml(modelLabel(job))}" loading="lazy">`
         : mediaType === "file"
           ? `<span class="asset-audio-icon" aria-hidden="true">${icon("file")}</span>`
-          : `<video src="${escapeHtml(job.result_url)}" muted playsinline preload="metadata" aria-label="${escapeHtml(modelLabel(job))} 生成视频"></video><span class="asset-play">${icon("play")}</span>`
+        : `<video src="${escapeHtml(job.preview_url || job.result_url)}" muted playsinline preload="none" aria-label="${escapeHtml(modelLabel(job))} 生成视频"></video><span class="asset-play">${icon("play")}</span>`
     : `<span class="asset-placeholder ${job.status}">${icon(job.status === "running" ? "loader-circle" : job.status === "queued" ? "clock-3" : job.status === "failed" ? "triangle-alert" : "circle-slash-2")}${job.status === "running" ? `<b>${job.progress || 0}%</b>` : ""}</span>`;
-  const draggable = job.status === "completed" && job.result_url ? "true" : "false";
+  const editable = state.assetEditMode && !job.peer_asset && !job.request?.incognito;
+  const draggable = editable ? "true" : job.status === "completed" && job.result_url ? "true" : "false";
+  const selected = state.assetSelectedIds.has(job.id);
+  const select = editable
+    ? `<label class="asset-select" data-asset-select><input type="checkbox" value="${escapeHtml(job.id)}" aria-label="选择 ${escapeHtml(shortTitle(job))}" ${selected ? "checked" : ""}></label>`
+    : "";
   const owner = job.owner_name ? `<span class="asset-owner" title="${t("owner")}: ${escapeHtml(job.owner_name)}">${icon("tag")}<span>${escapeHtml(job.owner_name)}</span></span>` : "";
-  return `<article class="asset-card" data-asset-job="${escapeHtml(job.id)}" data-asset-output="${draggable}" draggable="${draggable}" tabindex="0" aria-label="${escapeHtml(executionModeLabel(job))}, ${escapeHtml(modelLabel(job))}, ${escapeHtml(statusLabel(job.status))}">
-    <div class="asset-preview${audio || mediaType === "file" ? " music" : ""}">${preview}${assetAction(job)}</div>
-    <div class="asset-meta"><span class="task-status ${job.status}"></span><strong>${escapeHtml(modelLabel(job))}</strong><small class="asset-plan ${executionModeClass(job)}">${escapeHtml(executionModeLabel(job))}</small>${owner}<time>${escapeHtml(nodeLabel(job))}</time><time>${t("overallTime")} ${formatElapsed(job.elapsed_seconds)}</time></div>
+  const renameAction = !job.peer_asset && job.status === "completed" && job.result_url
+    ? `<button type="button" data-job-action="rename" data-job-id="${escapeHtml(job.id)}" title="重命名生成文件" aria-label="重命名生成文件">${icon("pencil")}</button>`
+    : "";
+  return `<article class="asset-card${editable ? " editable" : ""}${selected ? " selected" : ""}" data-asset-job="${escapeHtml(job.id)}" data-asset-output="${editable ? "false" : draggable}" data-asset-editable="${editable}" draggable="${draggable}" tabindex="0" aria-label="${escapeHtml(executionModeLabel(job))}, ${escapeHtml(modelLabel(job))}, ${escapeHtml(statusLabel(job.status))}">
+    <div class="asset-preview${audio || mediaType === "file" ? " music" : ""}">${select}${preview}${assetAction(job)}</div>
+    <div class="asset-meta"><span class="task-status ${job.status}"></span><strong title="${escapeHtml(job.title || modelLabel(job))}">${escapeHtml(shortTitle(job))}</strong><small class="asset-plan ${executionModeClass(job)}">${escapeHtml(executionModeLabel(job))}</small>${owner}<time>${escapeHtml(nodeLabel(job))}</time><time>${t("overallTime")} ${formatElapsed(job.elapsed_seconds)}</time>${renameAction}</div>
   </article>`;
 }
 
@@ -1646,8 +1848,19 @@ function updateAssetChrome() {
   el("assetTotal").textContent = state.assetTotal;
 }
 
+function renderAssetDirectoryHeader() {
+  if (!state.assetFolderId) return "";
+  const folder = state.assetFolderId === "__unfiled__"
+    ? state.assetUnfiledFolder
+    : state.assetFolders.find((item) => item.id === state.assetFolderId);
+  if (!folder) return "";
+  const kind = state.assetFolderId === "__unfiled__" ? "unfiled" : "folder";
+  return `<div class="asset-directory-header" data-directory-folder-id="${escapeHtml(state.assetFolderId)}">${folderGlyph(kind)}<span class="asset-directory-copy"><strong>${escapeHtml(folder.name)}</strong><small>${Number(folder.count || state.assetTotal)} 项素材</small></span></div>`;
+}
+
 function renderAssets(total = state.assetTotal) {
   state.assetTotal = total;
+  const folderCards = renderAssetFolderCards();
   const cards = state.assets.map(renderAssetCard).join("");
   const empty = !state.assets.length && !state.assetLoading && !state.assetLoadError ? `<div class="library-empty">${icon("images")}<span>${t("noAssets")}</span></div>` : "";
   const error = state.assetLoadError ? `<p class="list-error">${escapeHtml(state.assetLoadError)}</p>` : "";
@@ -1656,8 +1869,9 @@ function renderAssets(total = state.assetTotal) {
     : state.assets.length && !state.assetHasMore
       ? `<div class="asset-load-state">${icon("check")}<span>${t("allLoaded")}</span></div>`
       : "";
-  el("assetGrid").innerHTML = `${cards}${empty}${error}${loadState}`;
+  el("assetGrid").innerHTML = `${folderCards}${renderAssetDirectoryHeader()}${cards}${empty}${error}${loadState}`;
   updateAssetChrome();
+  updateAssetSelectionChrome();
   refreshIcons();
 }
 
@@ -1743,6 +1957,10 @@ function jobElement(container, attribute, jobId) {
 
 function assetMatchesCurrentView(job) {
   if (Boolean(job.request?.incognito) !== state.incognito) return false;
+  if (!state.assetFolderId && job.peer_asset) return false;
+  if (!state.assetFolderId && !job.peer_asset && job.folder_id) return false;
+  if (state.assetFolderId === "__unfiled__" && (job.peer_asset || job.folder_id)) return false;
+  if (state.assetFolderId && state.assetFolderId !== "__unfiled__" && (job.peer_asset || job.folder_id !== state.assetFolderId)) return false;
   const filter = el("assetStatusFilter").value;
   if (filter && job.status !== filter) return false;
   const query = el("assetSearch").value.trim().toLocaleLowerCase();
@@ -1812,6 +2030,12 @@ function conversationMatchesCurrentView(job) {
 }
 
 function applyJobUpsert(job) {
+  if (!state.assetFolderId && !job.peer_asset && job.folder_id) {
+    const staleIndex = state.assets.findIndex((item) => item.id === job.id);
+    if (staleIndex >= 0) state.assets.splice(staleIndex, 1);
+    jobElement(el("assetGrid"), "data-asset-job", job.id)?.remove();
+    return upsertConversation(job);
+  }
   upsertAsset(job);
   upsertConversation(job);
 }
@@ -2026,7 +2250,7 @@ function renderJobExchange(job) {
       <div class="message-avatar user-avatar">${t("you")}</div>
       <div class="message-body">${referenceSummary(job)}<div class="message-text">${escapeHtml(request.prompt || request.runninghub_workflow_name || "")}${audio && request.lyrics ? `\n\n${escapeHtml(request.lyrics)}` : ""}</div><div class="message-meta">${sourceLabel}${executionMode}<span>${modelLabel(job)}</span><span>${escapeHtml(nodeLabel(job))}</span>${runningHub || audio ? "" : `<span>${request.width} × ${request.height}</span>`}${runningHub ? "" : `<span>${request.duration}${t("seconds")}</span><span>${request.steps} ${t("steps")}</span><span>${t("seed")} ${request.seed}</span>`}${elapsed}${incognito}</div></div>
     </article>
-    <article class="message assistant-message">
+    <article class="message assistant-message" data-output-job-id="${escapeHtml(job.id)}">
       <div class="message-avatar assistant-avatar">H3</div>
       <div class="message-body"><div class="assistant-heading"><strong>${statusLabel(job.status)}</strong><span>${formatTime(job.updated_at || job.created_at, true)}</span></div>${assistantBody}${messageActions(job)}</div>
     </article>
@@ -2059,16 +2283,19 @@ function renderConversationFeed(mode = "preserve") {
   });
 }
 
-async function scrollToJob(jobId) {
+async function scrollToGeneratedOutput(jobId) {
   closeAssetDrawer();
-  let target = el(`job-${jobId}`);
+  let target = jobElement(el("conversationFeed"), "data-output-job-id", jobId);
   while (!target && state.conversationPage < state.conversationPages) {
     const previousPage = state.conversationPage;
     await loadOlderMessages();
-    target = el(`job-${jobId}`);
+    target = jobElement(el("conversationFeed"), "data-output-job-id", jobId);
     if (state.conversationPage === previousPage) break;
   }
-  target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  target.classList.add("output-focus");
+  setTimeout(() => target.classList.remove("output-focus"), 1800);
 }
 
 function assetDetailFile(item, index, job) {
@@ -2094,14 +2321,16 @@ function runningHubParameterFacts(request) {
     });
 }
 
-function renderAssetDetail(job) {
+function renderAssetDetail(job, windowNode = el("assetDetailModal")) {
   const request = job.request || {};
   const peerAsset = Boolean(job.peer_asset);
   const localAsset = Boolean(job.local_asset);
   const mediaType = jobMediaType(job);
   const audio = mediaType === "audio";
   const runningHub = request.provider === "runninghub";
-  const download = el("downloadAssetDetail");
+  const get = (id) => windowNode.querySelector(`#${id}`);
+  const body = get("assetDetailBody");
+  const download = get("downloadAssetDetail");
   const downloadable = job.status === "completed" && Boolean(job.result_url);
   const references = request.references || [];
   const preview = job.asset_deleted
@@ -2129,60 +2358,166 @@ function renderAssetDetail(job) {
       ...runningHubParameterFacts(request),
       `${t("overallTime")} ${formatElapsed(job.elapsed_seconds)}`,
     ]).filter(Boolean).map((value) => `<span>${escapeHtml(value)}</span>`).join("");
-  el("assetDetailTitle").textContent = shortTitle(job);
+  get("assetDetailTitle").textContent = shortTitle(job);
   const ownerMeta = job.owner_name ? ` · ${t("owner")} ${job.owner_name}` : "";
-  el("assetDetailMeta").textContent = `${statusLabel(job.status)} · ${formatTime(job.created_at, true)}${ownerMeta} · ${job.source_job_id || job.id}`;
-  el("assetDetailBody").innerHTML = `<div class="asset-detail-preview">${preview}</div><div class="asset-detail-info">
+  get("assetDetailMeta").textContent = `${statusLabel(job.status)} · ${formatTime(job.created_at, true)}${ownerMeta} · ${job.source_job_id || job.id}`;
+  body.innerHTML = `<div class="asset-detail-preview">${preview}</div><aside class="asset-detail-info">
     <section class="asset-detail-section"><h3>${t("prompt")}</h3><pre>${escapeHtml(request.prompt || "")}</pre></section>
     ${request.lyrics ? `<section class="asset-detail-section"><h3>${t("lyrics")}</h3><pre>${escapeHtml(request.lyrics)}</pre></section>` : ""}
     <section class="asset-detail-section"><h3>${t("sourceFiles")}</h3>${files}</section>
     <section class="asset-detail-section"><h3>${t("parameters")}</h3><div class="asset-detail-facts">${facts}</div></section>
   </div>`;
-  el("deleteAssetDetail").hidden = peerAsset || localAsset;
-  el("deleteAssetDetail").disabled = peerAsset || localAsset || isActive(job);
+  get("deleteAssetDetail").hidden = peerAsset || localAsset;
+  get("deleteAssetDetail").disabled = peerAsset || localAsset || isActive(job);
+  get("renameAssetDetail").hidden = peerAsset || localAsset || job.status !== "completed" || !downloadable;
+  get("renameAssetDetail").disabled = peerAsset || localAsset || job.status !== "completed" || !downloadable;
   download.hidden = !downloadable;
   download.href = downloadable ? job.result_url : "#";
   download.download = job.source_job_id || job.id;
   download.querySelector("span").textContent = mediaDownloadLabel(mediaType);
-  el("regenerateAssetDetail").hidden = peerAsset || localAsset;
-  el("regenerateAssetDetail").disabled = peerAsset || localAsset || isActive(job);
-  el("reuseAssetDetail").hidden = peerAsset || localAsset;
-  el("reuseAssetDetail").disabled = peerAsset || localAsset;
-  el("reuseOutputAssetDetail").hidden = localAsset;
-  el("reuseOutputAssetDetail").disabled = localAsset || !downloadable;
+  get("regenerateAssetDetail").hidden = peerAsset || localAsset;
+  get("regenerateAssetDetail").disabled = peerAsset || localAsset || isActive(job);
+  get("reuseAssetDetail").hidden = peerAsset || localAsset;
+  get("reuseAssetDetail").disabled = peerAsset || localAsset;
+  get("reuseOutputAssetDetail").hidden = localAsset;
+  get("reuseOutputAssetDetail").disabled = localAsset || !downloadable;
   refreshIcons();
+}
+
+function activeAssetDetailRecord() {
+  return state.assetDetailActiveWindowId
+    ? state.assetDetailWindows.get(state.assetDetailActiveWindowId) || null
+    : null;
+}
+
+function detailElement(record, id) {
+  return record?.node?.querySelector(`#${id}`) || null;
 }
 
 async function openAssetDetail(jobId) {
-  el("assetDetailModal").hidden = false;
+  const windowId = `asset-detail-${jobId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const layer = el("assetDetailModal");
+  const windowNode = el("assetDetailTemplate").content.cloneNode(true).firstElementChild;
+  const cascade = Math.min(state.assetDetailWindowOrder.length * 28, 168);
+  windowNode.querySelector("#assetDetailTitle").textContent = t("assetDetail");
+  windowNode.querySelector("[data-detail-toggle] span").textContent = localized("详情", "Details");
+  windowNode.querySelector("[data-detail-toggle]").title = localized("显示详情", "Show details");
+  windowNode.querySelector("[data-detail-toggle]").setAttribute("aria-label", localized("显示详情", "Show details"));
+  windowNode.querySelector("#deleteAssetDetail span").textContent = t("deleteRecord");
+  windowNode.querySelector("#renameAssetDetail span").textContent = localized("重命名文件", "Rename file");
+  windowNode.querySelector("#reuseOutputAssetDetail span").textContent = t("useAsInput");
+  windowNode.querySelector("#regenerateAssetDetail span").textContent = t("regenerate");
+  windowNode.querySelector("#reuseAssetDetail span").textContent = t("reuse");
+  windowNode.dataset.detailWindowId = windowId;
+  windowNode.dataset.detailJobId = jobId;
+  windowNode.style.setProperty("--detail-window-index", String(state.assetDetailWindowOrder.length));
+  windowNode.style.left = `calc(50% + ${cascade}px)`;
+  windowNode.style.top = `calc(50% + ${cascade}px)`;
+  layer.hidden = false;
+  layer.append(windowNode);
+  state.assetDetailWindows.set(windowId, { id: windowId, jobId, node: windowNode, job: null, expanded: false });
+  state.assetDetailWindowOrder.push(windowId);
+  state.assetDetailActiveWindowId = windowId;
+  bringAssetDetailToFront(windowId);
   document.body.classList.add("modal-open");
-  el("assetDetailError").textContent = "";
-  el("downloadAssetDetail").hidden = true;
-  el("downloadAssetDetail").href = "#";
-  el("deleteAssetDetail").hidden = false;
-  el("regenerateAssetDetail").hidden = false;
-  el("reuseAssetDetail").hidden = false;
-  el("reuseOutputAssetDetail").hidden = false;
-  el("regenerateAssetDetail").disabled = true;
-  el("reuseOutputAssetDetail").disabled = true;
-  el("assetDetailBody").innerHTML = `<div class="feed-loading"><span></span><span></span><span></span></div>`;
+  const get = (id) => windowNode.querySelector(`#${id}`);
+  get("assetDetailError").textContent = "";
+  get("downloadAssetDetail").hidden = true;
+  get("downloadAssetDetail").href = "#";
+  get("deleteAssetDetail").hidden = false;
+  get("regenerateAssetDetail").hidden = false;
+  get("reuseAssetDetail").hidden = false;
+  get("reuseOutputAssetDetail").hidden = false;
+  get("regenerateAssetDetail").disabled = true;
+  get("reuseOutputAssetDetail").disabled = true;
+  get("assetDetailBody").innerHTML = `<div class="feed-loading"><span></span><span></span><span></span></div>`;
   refreshIcons();
   try {
     const job = await fetchAssetDetail(jobId);
+    const record = state.assetDetailWindows.get(windowId);
+    if (!record) return;
+    record.job = job;
     state.assetDetailJob = job;
-    renderAssetDetail(job);
+    renderAssetDetail(job, windowNode);
   } catch (error) {
-    state.assetDetailJob = null;
-    el("assetDetailBody").innerHTML = `<p class="list-error">${escapeHtml(error.message)}</p>`;
+    const record = state.assetDetailWindows.get(windowId);
+    if (!record) return;
+    get("assetDetailBody").innerHTML = `<p class="list-error">${escapeHtml(error.message)}</p>`;
   }
 }
 
-function closeAssetDetail() {
-  el("assetDetailBody").querySelectorAll("video, audio").forEach((item) => item.pause());
-  state.assetDetailJob = null;
-  el("assetDetailModal").hidden = true;
-  el("assetDetailError").textContent = "";
-  if (el("nodeModal").hidden && el("peeringModal").hidden && el("localAssetsModal").hidden && el("localAssetPreviewModal").hidden) document.body.classList.remove("modal-open");
+function bringAssetDetailToFront(windowId) {
+  const record = state.assetDetailWindows.get(windowId);
+  if (!record) return;
+  state.assetDetailWindowOrder = state.assetDetailWindowOrder.filter((id) => id !== windowId);
+  state.assetDetailWindowOrder.push(windowId);
+  state.assetDetailActiveWindowId = windowId;
+  state.assetDetailWindowOrder.forEach((id, index) => {
+    const item = state.assetDetailWindows.get(id);
+    if (item) item.node.style.zIndex = String(101 + index);
+  });
+}
+
+function closeAssetDetail(windowId) {
+  const id = windowId || state.assetDetailWindowOrder.at(-1);
+  const record = id ? state.assetDetailWindows.get(id) : null;
+  if (!record) return;
+  record.node.querySelectorAll("video, audio").forEach((item) => { item.pause(); item.removeAttribute("src"); item.load(); });
+  record.node.remove();
+  state.assetDetailWindows.delete(id);
+  state.assetDetailWindowOrder = state.assetDetailWindowOrder.filter((item) => item !== id);
+  state.assetDetailActiveWindowId = state.assetDetailWindowOrder.at(-1) || null;
+  state.assetDetailJob = state.assetDetailWindows.size ? state.assetDetailWindows.get(state.assetDetailWindowOrder.at(-1))?.job || null : null;
+  if (!state.assetDetailWindows.size) {
+    el("assetDetailModal").hidden = true;
+    if (el("nodeModal").hidden && el("peeringModal").hidden && el("localAssetsModal").hidden && el("localAssetPreviewModal").hidden) document.body.classList.remove("modal-open");
+  }
+}
+
+function toggleAssetDetailInfo(windowId) {
+  const record = state.assetDetailWindows.get(windowId);
+  if (!record) return;
+  record.expanded = !record.expanded;
+  record.node.classList.toggle("details-expanded", record.expanded);
+  const button = record.node.querySelector("[data-detail-toggle]");
+  button.setAttribute("aria-expanded", String(record.expanded));
+  button.title = record.expanded ? localized("隐藏详情", "Hide details") : localized("显示详情", "Show details");
+  button.setAttribute("aria-label", button.title);
+  button.querySelector("span").textContent = record.expanded ? localized("收起", "Hide") : localized("详情", "Details");
+  button.querySelector("svg")?.replaceWith(document.createRange().createContextualFragment(icon(record.expanded ? "panel-right-close" : "panel-right-open")));
+  refreshIcons();
+}
+
+function startAssetDetailDrag(event, windowId) {
+  if (event.button !== undefined && event.button !== 0) return;
+  const record = state.assetDetailWindows.get(windowId);
+  if (!record) return;
+  bringAssetDetailToFront(windowId);
+  const rect = record.node.getBoundingClientRect();
+  state.assetDetailDrag = { windowId, startX: event.clientX, startY: event.clientY, originX: rect.left, originY: rect.top };
+  record.node.classList.add("dragging");
+  event.preventDefault();
+}
+
+function moveAssetDetailDrag(event) {
+  const drag = state.assetDetailDrag;
+  if (!drag) return;
+  const record = state.assetDetailWindows.get(drag.windowId);
+  if (!record) return;
+  const maxX = Math.max(8, window.innerWidth - record.node.offsetWidth - 8);
+  const maxY = Math.max(8, window.innerHeight - record.node.offsetHeight - 8);
+  const x = Math.min(maxX, Math.max(8, drag.originX + event.clientX - drag.startX));
+  const y = Math.min(maxY, Math.max(8, drag.originY + event.clientY - drag.startY));
+  record.node.style.left = `${x}px`;
+  record.node.style.top = `${y}px`;
+  record.node.style.transform = "none";
+}
+
+function stopAssetDetailDrag() {
+  if (!state.assetDetailDrag) return;
+  const record = state.assetDetailWindows.get(state.assetDetailDrag.windowId);
+  record?.node.classList.remove("dragging");
+  state.assetDetailDrag = null;
 }
 
 function assetFromLibrary(jobId) {
@@ -2217,8 +2552,9 @@ async function restoredReferences(job) {
 }
 
 async function useGeneratedOutputAsInput(jobId) {
-  const detailOpen = !el("assetDetailModal").hidden;
-  const target = detailOpen ? el("assetDetailError") : el("formError");
+  const detailRecord = activeAssetDetailRecord();
+  const detailOpen = Boolean(detailRecord);
+  const target = detailOpen ? detailElement(detailRecord, "assetDetailError") : el("formError");
   const job = await fetchAssetDetail(jobId);
   if (job.status !== "completed" || !job.result_url) {
     throw new Error(t("outputUnavailable"));
@@ -2238,7 +2574,7 @@ async function useGeneratedOutputAsInput(jobId) {
   }
   updateModelUi();
   target.textContent = "";
-  if (detailOpen) closeAssetDetail();
+  if (detailOpen) closeAssetDetail(detailRecord.id);
 }
 
 function composerNodeForJob(job) {
@@ -2257,9 +2593,10 @@ function composerNodeForJob(job) {
 }
 
 async function backfillJob(jobId) {
-  const detailOpen = !el("assetDetailModal").hidden;
-  const reuseButton = el("reuseAssetDetail");
-  if (detailOpen) el("assetDetailError").textContent = t("fillLoading");
+  const detailRecord = activeAssetDetailRecord();
+  const detailOpen = Boolean(detailRecord);
+  const reuseButton = detailElement(detailRecord, "reuseAssetDetail") || el("reuseAssetDetail");
+  if (detailOpen) detailElement(detailRecord, "assetDetailError").textContent = t("fillLoading");
   reuseButton.disabled = true;
   try {
     const job = await fetchAssetDetail(jobId);
@@ -2283,13 +2620,13 @@ async function backfillJob(jobId) {
     el("seed").value = job.request?.seed == null ? "" : String(job.request.seed);
     state.references = references;
     renderReferences();
-    closeAssetDetail();
+    if (detailOpen) closeAssetDetail(detailRecord.id);
     closeAssetDrawer();
     el("conversationFeed").scrollTop = el("conversationFeed").scrollHeight;
     promptInput.focus();
     showError("");
   } catch (error) {
-    if (detailOpen) el("assetDetailError").textContent = error.message;
+    if (detailOpen) detailElement(detailRecord, "assetDetailError").textContent = error.message;
     else showError(error.message);
   } finally {
     reuseButton.disabled = false;
@@ -2368,6 +2705,32 @@ async function deleteJob(jobId) {
     await api(`/api/v1/generations/${jobId}`, { method: "DELETE" });
     if (state.editingJobId === jobId) resetComposer();
     applyJobDelete(jobId);
+    loadAssetFolders().catch(() => {});
+    return true;
+  } catch (error) {
+    showError(error.message);
+    return false;
+  }
+}
+
+async function renameJobOutput(jobId) {
+  const job = assetFromLibrary(jobId) || state.assetDetailJob;
+  const current = job?.title || "";
+  const name = window.prompt(localized("输入生成文件名", "Enter output file name"), current);
+  if (name === null || !name.trim()) return false;
+  try {
+    const renamed = await api(`/api/v1/generations/${encodeURIComponent(jobId)}/name`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    applyJobUpsert(renamed);
+    const detailRecord = [...state.assetDetailWindows.values()].find((item) => item.jobId === jobId);
+    if (detailRecord) {
+      detailRecord.job = renamed;
+      if (state.assetDetailActiveWindowId === detailRecord.id) state.assetDetailJob = renamed;
+      renderAssetDetail(renamed, detailRecord.node);
+    }
     return true;
   } catch (error) {
     showError(error.message);
@@ -2377,23 +2740,34 @@ async function deleteJob(jobId) {
 
 async function regenerateJob(jobId) {
   if (!window.confirm(t("regenerateConfirm"))) return false;
-  const detailOpen = !el("assetDetailModal").hidden && state.assetDetailJob?.id === jobId;
+  const folderId = await pickAssetFolder(t("regenerate"), t("regenerateFolder"));
+  if (folderId === undefined) return false;
+  const detailRecord = [...state.assetDetailWindows.values()].find((item) => item.jobId === jobId);
+  const detailOpen = Boolean(detailRecord);
   const actionButtons = Array.from(document.querySelectorAll('[data-job-action="regenerate"]'))
     .filter((button) => button.dataset.jobId === jobId);
   if (detailOpen) {
-    actionButtons.push(el("regenerateAssetDetail"));
-    el("assetDetailError").textContent = localized("正在创建新的生成任务", "Creating a new generation");
+    actionButtons.push(detailElement(detailRecord, "regenerateAssetDetail"));
+    detailElement(detailRecord, "assetDetailError").textContent = localized("正在创建新的生成任务", "Creating a new generation");
   }
   actionButtons.forEach((button) => { button.disabled = true; });
   try {
-    const headers = state.incognito ? { "X-H3-Incognito-Code": state.incognitoCode } : {};
-    const job = await api(`/api/v1/generations/${encodeURIComponent(jobId)}/regenerate`, { method: "POST", headers });
+    const headers = {
+      "Content-Type": "application/json",
+      ...(state.incognito ? { "X-H3-Incognito-Code": state.incognitoCode } : {}),
+    };
+    const job = await api(`/api/v1/generations/${encodeURIComponent(jobId)}/regenerate`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ folder_id: folderId === "__unfiled__" ? null : folderId }),
+    });
     applyJobUpsert(job);
-    if (detailOpen) closeAssetDetail();
+    loadAssetFolders().catch(() => {});
+    if (detailOpen) closeAssetDetail(detailRecord.id);
     showError("");
     return true;
   } catch (error) {
-    if (detailOpen) el("assetDetailError").textContent = error.message;
+    if (detailOpen) detailElement(detailRecord, "assetDetailError").textContent = error.message;
     else showError(error.message);
     return false;
   } finally {
@@ -2408,6 +2782,7 @@ async function handleJobAction(action, jobId) {
   if (action === "edit") return startEdit(jobId);
   if (action === "cancel") return cancelJob(jobId);
   if (action === "delete") return deleteJob(jobId);
+  if (action === "rename") return renameJobOutput(jobId);
 }
 
 form.addEventListener("submit", async (event) => {
@@ -2468,6 +2843,7 @@ form.addEventListener("submit", async (event) => {
         data.append("execution_mode", selectedExecutionMode());
       }
       data.append("comfy_node", el("comfyNode").value);
+      if (state.assetFolderId && state.assetFolderId !== "__unfiled__") data.append("folder_id", state.assetFolderId);
       data.append("incognito", state.incognito ? "true" : "false");
       data.append("reference_manifest", JSON.stringify(state.references.map((item) => ({ type: item.kind, ...(item.field_key ? { field_key: item.field_key } : {}) }))));
       state.references.forEach((item) => data.append("references", item.file, item.file.name));
@@ -2476,6 +2852,7 @@ form.addEventListener("submit", async (event) => {
     }
     if (state.editingJobId) resetComposer();
     applyJobUpsert(payload);
+    loadAssetFolders().catch(() => {});
   } catch (error) {
     showError(error.message);
   } finally {
@@ -2525,6 +2902,8 @@ function renderLogs(logs) {
   state.logs = logs;
   const visible = logs.filter((item) => new Date(item.timestamp).getTime() >= state.logFloor);
   const container = el("logList");
+  const previousTop = container.scrollTop;
+  const followTail = state.logFollowTail;
   container.innerHTML = visible.length ? visible.map((item) => {
     const jobLink = item.job_id
       ? `<button type="button" data-scroll-job="${item.job_id}">${item.job_id.slice(0, 6)}</button>`
@@ -2538,7 +2917,9 @@ function renderLogs(logs) {
       <p>${source}${node}${escapeHtml(item.message)}${progress}</p>
     </div>`;
   }).join("") : `<p class="quiet">${state.locale === "en" ? "Waiting for events" : "等待事件"}</p>`;
-  container.scrollTop = container.scrollHeight;
+  requestAnimationFrame(() => {
+    container.scrollTop = followTail ? container.scrollHeight : previousTop;
+  });
 }
 
 function renderCombinedRuntime() {
@@ -2782,14 +3163,30 @@ function closeLocalAssetPreview() {
 }
 
 function syncLocalAssetSelectAll() {
-  const selectable = state.localAssets.filter((asset) => !asset.asset_deleted);
+  const selectable = state.localAssets.filter((asset) => !asset.asset_deleted && asset.can_delete);
   const selectedCount = selectable.filter((asset) => state.localAssetSelected.has(asset.id)).length;
   el("localAssetsSelectAll").checked = selectable.length > 0 && selectedCount === selectable.length;
   el("localAssetsSelectAll").indeterminate = selectedCount > 0 && selectedCount < selectable.length;
 }
 
+async function loadLocalAssetFolders() {
+  const payload = await api("/api/v1/asset-folders");
+  state.assetFolders = payload.data || [];
+  renderLocalAssetManager();
+}
+
+function selectLocalAssetFolder(folderId) {
+  state.localAssetFolderId = folderId;
+  state.localAssetSelected.clear();
+  renderLocalAssetManager();
+  loadLocalAssets({ reset: true }).catch((error) => { el("localAssetsError").textContent = error.message; });
+}
+
 function renderLocalAssetManager() {
   const list = el("localAssetsList");
+  const folderCards = state.localAssetFolderId === "__root__"
+    ? state.assetFolders.map((folder) => `<article class="asset-card local-asset-folder-card" data-local-folder-card="${escapeHtml(folder.id)}" tabindex="0" role="button" aria-label="${escapeHtml(folder.name)}"><div class="asset-folder-preview">${folderGlyph("folder")}</div><div class="asset-folder-meta"><strong>${escapeHtml(folder.name)}</strong><small>${Number(folder.count || 0)} 项素材</small><button type="button" data-local-folder-delete="${escapeHtml(folder.id)}" title="删除文件夹" aria-label="删除文件夹">${icon("trash-2")}</button></div></article>`).join("")
+    : `<article class="asset-card local-asset-folder-card back" data-local-folder-back="true" tabindex="0" role="button" aria-label="返回根目录"><div class="asset-folder-preview">${folderBackGlyph()}</div><div class="asset-folder-meta"><strong>返回根目录</strong></div></article>`;
   const cards = state.localAssets.map((asset) => {
     const encryptedMessage = asset.locked
       ? `文件被加密，所属设备：${asset.owner_name}`
@@ -2800,9 +3197,7 @@ function renderLocalAssetManager() {
     const audioOrFile = mediaType === "audio" || mediaType === "file";
     return `<article class="asset-card local-asset-card" data-local-asset-id="${escapeHtml(asset.id)}" tabindex="0" aria-label="${escapeHtml(asset.name)}">
       <div class="asset-preview${audioOrFile ? " music" : ""}">
-        <label class="local-asset-select" data-local-asset-select>
-          <input type="checkbox" value="${escapeHtml(asset.id)}" aria-label="选择 ${escapeHtml(asset.name)}" ${state.localAssetSelected.has(asset.id) ? "checked" : ""} ${asset.asset_deleted ? "disabled" : ""}>
-        </label>
+        ${asset.can_delete ? `<label class="local-asset-select" data-local-asset-select><input type="checkbox" value="${escapeHtml(asset.id)}" aria-label="选择 ${escapeHtml(asset.name)}" ${state.localAssetSelected.has(asset.id) ? "checked" : ""}></label>` : ""}
         ${localAssetPreviewMarkup(asset)}
       </div>
       <div class="asset-meta"><span class="task-status completed"></span><strong title="${escapeHtml(asset.name)}">${escapeHtml(asset.name)}</strong><small class="asset-plan">${escapeHtml(localAssetTypeLabel(mediaType))}</small><span class="asset-owner" title="来源：${escapeHtml(asset.owner_name)}">${icon("tag")}<span>${escapeHtml(asset.owner_name)}</span></span><time title="${escapeHtml(encryptedMessage)}">${escapeHtml(encryptedMessage)}</time></div>
@@ -2813,10 +3208,15 @@ function renderLocalAssetManager() {
     : state.localAssetPage >= state.localAssetPages && state.localAssets.length
       ? `<p class="local-assets-loading">${t("allLoaded")}</p>`
       : "";
-  list.innerHTML = (cards || state.localAssetLoading) ? `${cards}${loading}` : `<p class="quiet">${t("noAssets")}</p>`;
+  list.innerHTML = (folderCards || cards || state.localAssetLoading) ? `${folderCards}${cards}${loading}` : `<p class="quiet">${t("noAssets")}</p>`;
   el("localAssetsCount").textContent = `${state.localAssetTotal} 项`;
+  el("localAssetsSize").textContent = formatBytes(state.localAssetLibrarySize || state.localAssetSize);
   syncLocalAssetSelectAll();
   refreshIcons();
+}
+
+function localAssetCanDelete(asset) {
+  return Boolean(asset.can_delete);
 }
 
 async function loadLocalAssets({ reset = false } = {}) {
@@ -2827,17 +3227,23 @@ async function loadLocalAssets({ reset = false } = {}) {
     state.localAssetPage = 0;
     state.localAssetPages = 1;
     state.localAssetTotal = 0;
+    state.localAssetSize = 0;
+    state.localAssetLibrarySize = 0;
     state.localAssetSelected.clear();
   }
   state.localAssetLoading = true;
   renderLocalAssetManager();
   try {
     const page = state.localAssetPage + 1;
-    const payload = await api(`/api/v1/assets/local?page=${page}&page_size=24`);
+    const params = new URLSearchParams({ page, page_size: 24 });
+    if (state.localAssetFolderId) params.set("folder_id", state.localAssetFolderId);
+    const payload = await api(`/api/v1/assets/local?${params}`);
     state.localAssets.push(...(payload.data || []));
     state.localAssetPage = Number(payload.page || page);
     state.localAssetPages = Number(payload.pages || 1);
     state.localAssetTotal = Number(payload.total || state.localAssets.length);
+    state.localAssetSize = Number(payload.total_size || state.localAssetSize || 0);
+    state.localAssetLibrarySize = Number(payload.library_total_size || state.localAssetLibrarySize || state.localAssetSize);
     el("localAssetsError").textContent = "";
   } catch (error) {
     el("localAssetsError").textContent = error.message;
@@ -2851,6 +3257,7 @@ async function openLocalAssets() {
   el("localAssetsModal").hidden = false;
   el("localAssetsError").textContent = "";
   document.body.classList.add("modal-open");
+  await loadLocalAssetFolders();
   await loadLocalAssets({ reset: true });
 }
 
@@ -2860,7 +3267,7 @@ function closeLocalAssets() {
 }
 
 async function deleteLocalArtifacts() {
-  const ids = Array.from(state.localAssetSelected);
+  const ids = Array.from(state.localAssetSelected).filter((assetId) => localAssetCanDelete(state.localAssets.find((asset) => asset.id === assetId) || {}));
   if (!ids.length) return;
   if (!window.confirm(`确认删除选中的 ${ids.length} 项本地产物？任务与工作流记录会保留。`)) return;
   try {
@@ -2873,6 +3280,46 @@ async function deleteLocalArtifacts() {
   } catch (error) {
     el("localAssetsError").textContent = error.message;
   }
+}
+
+async function clearOldVideos() {
+  try {
+    const preview = await api("/api/v1/assets/local/clear-old-video/preview");
+    renderOldVideoCleanupPreview(preview);
+    el("oldVideoCleanupModal").hidden = false;
+    document.body.classList.add("modal-open");
+    refreshIcons();
+  } catch (error) {
+    el("localAssetsError").textContent = error.message;
+  }
+}
+
+function renderOldVideoCleanupPreview(payload) {
+  const items = payload.items || [];
+  el("oldVideoCleanupSummary").textContent = `${items.length} 项 · ${formatBytes(payload.total_size || 0)}`;
+  el("oldVideoCleanupList").innerHTML = items.length
+    ? items.map((item) => `<div class="old-video-cleanup-row"><span><strong>${escapeHtml(item.name || item.file_name)}</strong><small>${escapeHtml(item.file_name || "")} · ${formatTime(item.created_at, true)}</small></span><b>${formatBytes(item.size || 0)}</b></div>`).join("")
+    : `<p class="quiet">${localized("没有符合条件的视频素材", "No video assets match the cleanup rule")}</p>`;
+  el("confirmOldVideoCleanup").disabled = items.length === 0;
+}
+
+async function confirmOldVideoCleanup() {
+  const summary = el("oldVideoCleanupSummary").textContent;
+  if (!window.confirm(`确认清除以下 ${summary} 的视频素材？任务记录会保留。`)) return;
+  try {
+    const result = await api("/api/v1/assets/local/clear-old-video", { method: "POST" });
+    closeOldVideoCleanup();
+    showToast(`已清除 ${result.count || 0} 项视频素材`);
+    await loadLocalAssets({ reset: true });
+    await refreshSharedData();
+  } catch (error) {
+    el("localAssetsError").textContent = error.message;
+  }
+}
+
+function closeOldVideoCleanup() {
+  el("oldVideoCleanupModal").hidden = true;
+  if (el("localAssetsModal").hidden) document.body.classList.remove("modal-open");
 }
 
 function openUnlockAssets(ownerDeviceId, ownerName) {
@@ -3056,6 +3503,7 @@ function updateIncognitoUi() {
     el("executionMode").value = "native";
   }
   el("incognitoStatus").hidden = !state.incognito;
+  el("assetFoldersPanel").hidden = state.incognito;
   document.body.classList.toggle("incognito-active", state.incognito);
   updateModelUi();
   refreshIcons();
@@ -3071,9 +3519,13 @@ async function reloadModeData() {
   state.conversationPages = 1;
   state.conversationReady = false;
   state.conversationScrollTop = 0;
+  state.assetSelectedIds.clear();
+  state.assetEditMode = false;
+  if (state.incognito) state.assetFolderId = "";
   renderAssets(0);
+  renderAssetFolders();
   renderConversationFeed("bottom");
-  await Promise.all([loadAssets({ reset: true }), refreshConversation(true)]);
+  await Promise.all([loadAssetFolders(), loadAssets({ reset: true }), refreshConversation(true)]);
 }
 
 async function requestIncognitoMode() {
@@ -3155,6 +3607,50 @@ function closeAssetDrawer() {
   el("mobileScrim").hidden = true;
 }
 
+function sidebarWidthLimit() {
+  return Math.max(SIDEBAR_WIDTH_MIN, Math.floor(window.innerWidth * SIDEBAR_WIDTH_MAX_RATIO));
+}
+
+function setSidebarWidth(value, persist = false) {
+  const shell = document.querySelector(".app-shell");
+  const resizer = el("sidebarResizer");
+  if (!shell || window.innerWidth <= 860) return;
+  const width = Math.round(Math.min(sidebarWidthLimit(), Math.max(SIDEBAR_WIDTH_MIN, Number(value) || 276)));
+  shell.style.setProperty("--asset-sidebar-width", `${width}px`);
+  resizer?.setAttribute("aria-valuemax", String(sidebarWidthLimit()));
+  resizer?.setAttribute("aria-valuenow", String(width));
+  if (persist) localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(width));
+}
+
+function restoreSidebarWidth() {
+  const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
+  setSidebarWidth(Number.isFinite(stored) && stored > 0 ? stored : 276);
+}
+
+let sidebarResizeState = null;
+function startSidebarResize(event) {
+  if (window.innerWidth <= 860 || event.button !== 0) return;
+  event.preventDefault();
+  const shell = document.querySelector(".app-shell");
+  const width = shell?.getBoundingClientRect().width ? el("assetSidebar").getBoundingClientRect().width : 276;
+  sidebarResizeState = { startX: event.clientX, startWidth: width };
+  document.body.classList.add("sidebar-resizing");
+}
+
+function moveSidebarResize(event) {
+  if (!sidebarResizeState) return;
+  setSidebarWidth(sidebarResizeState.startWidth + event.clientX - sidebarResizeState.startX);
+}
+
+function stopSidebarResize() {
+  if (!sidebarResizeState) return;
+  const width = el("assetSidebar").getBoundingClientRect().width;
+  setSidebarWidth(width, true);
+  sidebarResizeState = null;
+  document.body.classList.remove("sidebar-resizing");
+  ensureAssetGridFilled().catch((error) => showError(error.message));
+}
+
 function showToast(message, type = "") {
   if (!message) return;
   const toast = document.createElement("div");
@@ -3218,6 +3714,7 @@ function applyPeeringStatus(payload, notifyEvents = false) {
 async function refreshSharedData() {
   if (state.incognito) return;
   await Promise.all([
+    loadAssetFolders(),
     loadAssets({ reset: true }),
     refreshConversation(true),
     refreshSharedRuntime(),
@@ -3394,6 +3891,25 @@ promptInput.addEventListener("click", () => {
 promptInput.addEventListener("scroll", positionMentionMenu, { passive: true });
 
 el("assetGrid").addEventListener("click", (event) => {
+  const folderAction = event.target.closest("[data-folder-action]");
+  if (folderAction) {
+    event.stopPropagation();
+    if (folderAction.dataset.folderAction === "rename") openAssetFolderName(folderAction.dataset.folderId);
+    if (folderAction.dataset.folderAction === "delete") deleteAssetFolder(folderAction.dataset.folderId);
+    return;
+  }
+  const back = event.target.closest("[data-asset-folder-back]");
+  if (back) {
+    selectAssetFolder("");
+    return;
+  }
+  const folderCard = event.target.closest("[data-asset-folder-card]");
+  if (folderCard) {
+    folderCard.focus();
+    return;
+  }
+  const selection = event.target.closest("[data-asset-select]");
+  if (selection) return;
   const inputAction = event.target.closest("[data-asset-input]");
   if (inputAction) {
     event.stopPropagation();
@@ -3407,9 +3923,47 @@ el("assetGrid").addEventListener("click", (event) => {
     return;
   }
   const card = event.target.closest("[data-asset-job]");
-  if (card) openAssetDetail(card.dataset.assetJob);
+  if (!card) return;
+  if (state.assetEditMode && card.dataset.assetEditable === "true") {
+    if (state.assetSelectedIds.has(card.dataset.assetJob)) state.assetSelectedIds.delete(card.dataset.assetJob);
+    else state.assetSelectedIds.add(card.dataset.assetJob);
+    renderAssets();
+    return;
+  }
+  openAssetDetail(card.dataset.assetJob);
+});
+el("assetGrid").addEventListener("dblclick", (event) => {
+  if (event.target.closest("[data-folder-action]")) return;
+  const folderCard = event.target.closest("[data-asset-folder-card]");
+  if (folderCard) selectAssetFolder(folderCard.dataset.assetFolderCard);
+});
+el("assetGrid").addEventListener("change", (event) => {
+  const checkbox = event.target.closest("[data-asset-select] input");
+  if (!checkbox) return;
+  if (checkbox.checked) state.assetSelectedIds.add(checkbox.value);
+  else state.assetSelectedIds.delete(checkbox.value);
+  renderAssets();
 });
 el("assetGrid").addEventListener("dragstart", (event) => {
+  const sourceCard = event.target.closest("[data-asset-job]");
+  if (state.assetEditMode) {
+    if (!sourceCard || sourceCard.dataset.assetEditable !== "true") {
+      event.preventDefault();
+      return;
+    }
+    const jobId = sourceCard.dataset.assetJob;
+    if (!state.assetSelectedIds.has(jobId)) {
+      state.assetSelectedIds.clear();
+      state.assetSelectedIds.add(jobId);
+      renderAssets();
+    }
+    const jobIds = Array.from(state.assetSelectedIds);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/x-h3-asset-jobs", JSON.stringify(jobIds));
+    event.dataTransfer.setData("text/plain", jobIds.join(","));
+    sourceCard.classList.add("dragging");
+    return;
+  }
   const card = event.target.closest('[data-asset-output="true"]');
   if (!card) return;
   event.dataTransfer.effectAllowed = "copy";
@@ -3421,10 +3975,48 @@ el("assetGrid").addEventListener("dragend", (event) => {
   event.target.closest(".asset-card")?.classList.remove("dragging");
 });
 el("assetGrid").addEventListener("keydown", (event) => {
+  const folderCard = event.target.closest("[data-asset-folder-card]");
+  if (folderCard && ["Enter", " "].includes(event.key)) {
+    event.preventDefault();
+    selectAssetFolder(folderCard.dataset.assetFolderCard);
+    return;
+  }
+  if (event.target.closest("[data-asset-folder-back]") && ["Enter", " "].includes(event.key)) {
+    event.preventDefault();
+    selectAssetFolder("");
+    return;
+  }
   if (["Enter", " "].includes(event.key) && event.target.matches("[data-asset-job]")) {
     event.preventDefault();
+    if (state.assetEditMode && event.target.dataset.assetEditable === "true") {
+      const jobId = event.target.dataset.assetJob;
+      if (state.assetSelectedIds.has(jobId)) state.assetSelectedIds.delete(jobId);
+      else state.assetSelectedIds.add(jobId);
+      renderAssets();
+      return;
+    }
     openAssetDetail(event.target.dataset.assetJob);
   }
+});
+el("assetGrid").addEventListener("dragover", (event) => {
+  if (!state.assetEditMode) return;
+  const folderCard = event.target.closest("[data-folder-drop-id]");
+  if (!folderCard) return;
+  event.preventDefault();
+  folderCard.classList.add("drag-over");
+});
+el("assetGrid").addEventListener("dragleave", (event) => {
+  event.target.closest("[data-folder-drop-id]")?.classList.remove("drag-over");
+});
+el("assetGrid").addEventListener("drop", (event) => {
+  if (!state.assetEditMode) return;
+  const folderCard = event.target.closest("[data-folder-drop-id]");
+  if (!folderCard) return;
+  event.preventDefault();
+  folderCard.classList.remove("drag-over");
+  let jobIds = [];
+  try { jobIds = JSON.parse(event.dataTransfer.getData("application/x-h3-asset-jobs") || "[]"); } catch { jobIds = []; }
+  if (jobIds.length) moveJobsToFolder(jobIds, folderCard.dataset.folderDropId);
 });
 el("assetGrid").addEventListener("scroll", () => {
   const grid = el("assetGrid");
@@ -3446,15 +4038,22 @@ el("queueList").addEventListener("click", (event) => {
   const action = event.target.closest("[data-job-action]");
   if (action) return handleJobAction(action.dataset.jobAction, action.dataset.jobId);
   const row = event.target.closest("[data-scroll-job]");
-  if (row) scrollToJob(row.dataset.scrollJob);
+  if (row) scrollToGeneratedOutput(row.dataset.scrollJob);
 });
 el("logList").addEventListener("click", (event) => {
   const item = event.target.closest("[data-scroll-job]");
-  if (item) scrollToJob(item.dataset.scrollJob);
+  if (item) scrollToGeneratedOutput(item.dataset.scrollJob);
+});
+el("logList").addEventListener("scroll", () => {
+  const container = el("logList");
+  state.logFollowTail = container.scrollHeight - container.scrollTop - container.clientHeight < 24;
 });
 
 el("newTaskButton").addEventListener("click", newTask);
 el("exitEdit").addEventListener("click", resetComposer);
+el("editAssetsButton").addEventListener("click", () => setAssetEditMode(!state.assetEditMode));
+el("newAssetFolder").addEventListener("click", () => openAssetFolderName());
+el("moveSelectedAssets").addEventListener("click", moveSelectedAssets);
 el("assetStatusFilter").addEventListener("change", () => loadAssets({ reset: true }));
 el("refreshAssets").addEventListener("click", () => refreshSharedData());
 let assetSearchTimer = null;
@@ -3463,28 +4062,80 @@ el("assetSearch").addEventListener("input", () => {
   assetSearchTimer = setTimeout(() => loadAssets({ reset: true }), 250);
 });
 
-el("closeAssetDetail").addEventListener("click", closeAssetDetail);
+el("assetFolderNameForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const name = el("assetFolderName").value.trim();
+  if (!name) return;
+  const editingId = state.assetFolderNameEditId;
+  try {
+    await api(editingId ? `/api/v1/asset-folders/${encodeURIComponent(editingId)}` : "/api/v1/asset-folders", {
+      method: editingId ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    closeAssetFolderName();
+    await loadAssetFolders();
+    if (!editingId) selectAssetFolder(state.assetFolders[state.assetFolders.length - 1]?.id || "");
+  } catch (error) {
+    el("assetFolderNameError").textContent = error.message;
+  }
+});
+el("closeAssetFolderName").addEventListener("click", closeAssetFolderName);
+el("cancelAssetFolderName").addEventListener("click", closeAssetFolderName);
+el("assetFolderNameModal").addEventListener("click", (event) => { if (event.target === el("assetFolderNameModal")) closeAssetFolderName(); });
+el("assetFolderPickerList").addEventListener("click", (event) => {
+  const row = event.target.closest("[data-picker-folder-id]");
+  if (row) resolveAssetFolderPicker(row.dataset.pickerFolderId);
+});
+el("closeAssetFolderPicker").addEventListener("click", closeAssetFolderPicker);
+el("assetFolderPickerModal").addEventListener("click", (event) => { if (event.target === el("assetFolderPickerModal")) closeAssetFolderPicker(); });
+
+el("assetDetailModal").addEventListener("pointerdown", (event) => {
+  const windowNode = event.target.closest(".asset-detail-dialog");
+  if (!windowNode) return;
+  const record = state.assetDetailWindows.get(windowNode.dataset.detailWindowId);
+  if (record) {
+    state.assetDetailActiveWindowId = record.id;
+    state.assetDetailJob = record.job;
+    bringAssetDetailToFront(record.id);
+  }
+});
 el("assetDetailModal").addEventListener("click", (event) => {
-  if (event.target === el("assetDetailModal")) closeAssetDetail();
-});
-el("reuseAssetDetail").addEventListener("click", () => {
-  if (state.assetDetailJob) backfillJob(state.assetDetailJob.id);
-});
-el("reuseOutputAssetDetail").addEventListener("click", () => {
-  if (!state.assetDetailJob) return;
-  useGeneratedOutputAsInput(state.assetDetailJob.id).catch((error) => {
-    el("assetDetailError").textContent = error.message;
+  const windowNode = event.target.closest(".asset-detail-dialog");
+  if (!windowNode) return;
+  const record = state.assetDetailWindows.get(windowNode.dataset.detailWindowId);
+  if (!record) return;
+  if (event.target.closest("[data-detail-close]")) {
+    closeAssetDetail(record.id);
+    return;
+  }
+  if (event.target.closest("[data-detail-toggle]")) {
+    toggleAssetDetailInfo(record.id);
+    return;
+  }
+  const action = event.target.closest("[data-detail-action]");
+  if (!action || !record.job) return;
+  state.assetDetailActiveWindowId = record.id;
+  state.assetDetailJob = record.job;
+  const jobId = record.job.id;
+  if (action.dataset.detailAction === "reuse") backfillJob(jobId);
+  if (action.dataset.detailAction === "input") useGeneratedOutputAsInput(jobId).catch((error) => { detailElement(record, "assetDetailError").textContent = error.message; });
+  if (action.dataset.detailAction === "regenerate") regenerateJob(jobId);
+  if (action.dataset.detailAction === "rename") renameJobOutput(jobId);
+  if (action.dataset.detailAction === "delete") deleteJob(jobId).then((deleted) => {
+    if (deleted) closeAssetDetail(record.id);
+    else detailElement(record, "assetDetailError").textContent = el("formError").textContent;
   });
 });
-el("regenerateAssetDetail").addEventListener("click", () => {
-  if (state.assetDetailJob) regenerateJob(state.assetDetailJob.id);
+el("assetDetailModal").addEventListener("pointerdown", (event) => {
+  const handle = event.target.closest("[data-detail-drag-handle]");
+  const windowNode = event.target.closest(".asset-detail-dialog");
+  if (!handle || !windowNode || event.target.closest("button, a")) return;
+  startAssetDetailDrag(event, windowNode.dataset.detailWindowId);
 });
-el("deleteAssetDetail").addEventListener("click", async () => {
-  if (!state.assetDetailJob) return;
-  const deleted = await deleteJob(state.assetDetailJob.id);
-  if (deleted) closeAssetDetail();
-  else el("assetDetailError").textContent = el("formError").textContent;
-});
+window.addEventListener("pointermove", moveAssetDetailDrag);
+window.addEventListener("pointerup", stopAssetDetailDrag);
+window.addEventListener("pointercancel", stopAssetDetailDrag);
 el("languageToggle").addEventListener("click", () => {
   localStorage.setItem("h3-locale", state.locale === "en" ? "zh-CN" : "en");
   window.location.reload();
@@ -3508,6 +4159,11 @@ el("toggleRemoteRecordsKey").addEventListener("click", () => togglePasswordField
 el("manageLocalAssets").addEventListener("click", openLocalAssets);
 el("closeLocalAssets").addEventListener("click", closeLocalAssets);
 el("deleteLocalArtifacts").addEventListener("click", deleteLocalArtifacts);
+el("clearOldVideos").addEventListener("click", clearOldVideos);
+el("closeOldVideoCleanup").addEventListener("click", closeOldVideoCleanup);
+el("cancelOldVideoCleanup").addEventListener("click", closeOldVideoCleanup);
+el("confirmOldVideoCleanup").addEventListener("click", confirmOldVideoCleanup);
+el("oldVideoCleanupModal").addEventListener("click", (event) => { if (event.target === el("oldVideoCleanupModal")) closeOldVideoCleanup(); });
 el("localAssetsModal").addEventListener("click", (event) => { if (event.target === el("localAssetsModal")) closeLocalAssets(); });
 el("closeLocalAssetPreview").addEventListener("click", closeLocalAssetPreview);
 el("localAssetPreviewModal").addEventListener("click", (event) => { if (event.target === el("localAssetPreviewModal")) closeLocalAssetPreview(); });
@@ -3519,6 +4175,22 @@ el("localAssetsList").addEventListener("change", (event) => {
   syncLocalAssetSelectAll();
 });
 el("localAssetsList").addEventListener("click", (event) => {
+  const remove = event.target.closest("[data-local-folder-delete]");
+  if (remove) {
+    event.stopPropagation();
+    deleteAssetFolder(remove.dataset.localFolderDelete).then(() => loadLocalAssetFolders()).catch(() => {});
+    return;
+  }
+  const folder = event.target.closest("[data-local-folder-card]");
+  if (folder) {
+    folder.focus();
+    return;
+  }
+  const back = event.target.closest("[data-local-folder-back]");
+  if (back) {
+    selectLocalAssetFolder("__root__");
+    return;
+  }
   if (event.target.closest("[data-local-asset-select], input[type=checkbox]")) return;
   const button = event.target.closest("[data-unlock-owner]");
   if (button) {
@@ -3533,7 +4205,24 @@ el("localAssetsList").addEventListener("click", (event) => {
   if (asset.locked) openUnlockAssets(asset.owner_device_id, asset.owner_name);
   else openLocalAssetPreview(asset);
 });
+el("localAssetsList").addEventListener("dblclick", (event) => {
+  if (event.target.closest("[data-local-folder-delete]")) return;
+  const folder = event.target.closest("[data-local-folder-card]");
+  if (folder) selectLocalAssetFolder(folder.dataset.localFolderCard);
+});
 el("localAssetsList").addEventListener("keydown", (event) => {
+  const folder = event.target.closest("[data-local-folder-card]");
+  if (folder && ["Enter", " "].includes(event.key)) {
+    event.preventDefault();
+    selectLocalAssetFolder(folder.dataset.localFolderCard);
+    return;
+  }
+  const back = event.target.closest("[data-local-folder-back]");
+  if (back && ["Enter", " "].includes(event.key)) {
+    event.preventDefault();
+    selectLocalAssetFolder("__root__");
+    return;
+  }
   if (!["Enter", " "].includes(event.key) || !event.target.matches("[data-local-asset-id]")) return;
   event.preventDefault();
   const asset = state.localAssets.find((item) => item.id === event.target.dataset.localAssetId);
@@ -3546,7 +4235,7 @@ el("localAssetsList").addEventListener("scroll", () => {
   if (list.scrollHeight - list.scrollTop - list.clientHeight < 120) loadLocalAssets();
 }, { passive: true });
 el("localAssetsSelectAll").addEventListener("change", () => {
-  state.localAssets.filter((asset) => !asset.asset_deleted).forEach((asset) => {
+  state.localAssets.filter((asset) => !asset.asset_deleted && asset.can_delete).forEach((asset) => {
     if (el("localAssetsSelectAll").checked) state.localAssetSelected.add(asset.id);
     else state.localAssetSelected.delete(asset.id);
   });
@@ -3815,12 +4504,33 @@ window.addEventListener("touchmove", (event) => {
 }, { passive: false });
 window.addEventListener("touchend", stopLauncherDrag);
 window.addEventListener("touchcancel", stopLauncherDrag);
+el("sidebarResizer").addEventListener("pointerdown", startSidebarResize);
+window.addEventListener("pointermove", moveSidebarResize);
+window.addEventListener("pointerup", stopSidebarResize);
+window.addEventListener("pointercancel", stopSidebarResize);
+el("sidebarResizer").addEventListener("keydown", (event) => {
+  const current = el("assetSidebar").getBoundingClientRect().width;
+  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+    event.preventDefault();
+    setSidebarWidth(current + (event.key === "ArrowRight" ? 16 : -16), true);
+  }
+  if (event.key === "Home") {
+    event.preventDefault();
+    setSidebarWidth(SIDEBAR_WIDTH_MIN, true);
+  }
+  if (event.key === "End") {
+    event.preventDefault();
+    setSidebarWidth(sidebarWidthLimit(), true);
+  }
+});
 window.addEventListener("resize", () => {
   if (!el("opsWindow").hidden) applyOpsPosition();
   applyLauncherPosition();
+  if (window.innerWidth > 860) setSidebarWidth(el("assetSidebar").getBoundingClientRect().width, false);
 });
 
 async function initialize() {
+  restoreSidebarWidth();
   applyStaticLocale();
   updateModelUi();
   updateIncognitoUi();

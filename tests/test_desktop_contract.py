@@ -5,6 +5,7 @@ import os
 import sqlite3
 import tempfile
 import zipfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from tempfile import TemporaryDirectory
@@ -387,24 +388,26 @@ class DesktopContractTests(TestCase):
                         json={"asset_ids": [f"protected::{peer_id}::peer-job"]},
                     )
                     self.assertEqual(deleted.status_code, 200)
-                    self.assertEqual(deleted.json()["deleted"], [f"protected::{peer_id}::peer-job"])
-                    missing = await client.get(
+                    self.assertEqual(deleted.json()["deleted"], [])
+                    self.assertEqual(deleted.json()["rejected"], [f"protected::{peer_id}::peer-job"])
+                    still_available = await client.get(
                         f"/api/v1/assets/local/protected/{peer_id}/peer-job/result"
                     )
-                    self.assertEqual(missing.status_code, 410)
+                    self.assertEqual(still_available.status_code, 200)
                     listed_after_delete = await client.get(
                         "/api/v1/assets/local?page=1&page_size=10"
                     )
                     self.assertEqual(listed_after_delete.status_code, 200)
-                    self.assertEqual(listed_after_delete.json()["data"], [])
-                    self.assertEqual(listed_after_delete.json()["total"], 0)
+                    self.assertEqual(listed_after_delete.json()["total"], 1)
+                    self.assertFalse(listed_after_delete.json()["data"][0]["can_delete"])
 
                 main_module.restore_peer_records(peer_id, records_key)
                 restored = jobs.get("peer-job")
-                self.assertTrue(restored["asset_deleted"])
-                self.assertIsNone(restored["result_path"])
+                self.assertIsNotNone(restored)
+                self.assertFalse(restored.get("asset_deleted", False))
+                self.assertEqual(restored["result_path"], str(result_path))
                 self.assertEqual(input_path.read_bytes(), b"reference-data")
-                self.assertFalse(result_path.exists())
+                self.assertTrue(result_path.exists())
 
         with TemporaryDirectory() as temp:
             asyncio.run(run_test(temp))
@@ -500,6 +503,7 @@ class DesktopContractTests(TestCase):
         root = Path(__file__).resolve().parents[1]
         index = (root / "static" / "index.html").read_text(encoding="utf-8")
         app_js = (root / "static" / "app.js").read_text(encoding="utf-8")
+        styles = (root / "static" / "styles.css").read_text(encoding="utf-8")
         main = (root / "app" / "main.py").read_text(encoding="utf-8")
         self.assertNotIn("fonts.googleapis.com", index)
         self.assertNotIn("总设置", index)
@@ -507,12 +511,24 @@ class DesktopContractTests(TestCase):
         self.assertIn('id="toggleRemoteRecordsKey"', index)
         self.assertIn('minlength="8" maxlength="256"', index)
         self.assertIn('id="localAssetsSelectAll"', index)
+        self.assertIn('id="localAssetsSize"', index)
+        self.assertIn('id="oldVideoCleanupModal"', index)
+        self.assertIn('id="clearOldVideos"', index)
+        self.assertIn('id="oldVideoCleanupList"', index)
         self.assertIn('class="local-assets-grid"', index)
         self.assertIn('id="unlockAssetsModal"', index)
         self.assertIn('id="conversationFilterToggle"', index)
         self.assertIn('id="conversationFilterPanel"', index)
-        self.assertIn('/api/v1/assets/local?page=', app_js)
+        self.assertIn('/api/v1/assets/local?', app_js)
         self.assertIn('/api/v1/assets/local/unlock', app_js)
+        self.assertIn('/api/v1/assets/local/clear-old-video/preview', app_js)
+        self.assertIn('renderOldVideoCleanupPreview', app_js)
+        self.assertIn('window.confirm(`确认清除以下', app_js)
+        self.assertIn('local-asset-folder-card', app_js)
+        self.assertIn('class="asset-card local-asset-folder-card back"', app_js)
+        self.assertIn('data-local-folder-card', app_js)
+        self.assertIn('can_delete', app_js)
+        self.assertIn('id="oldVideoCleanupList"', index)
         self.assertIn('data-unlock-owner', app_js)
         self.assertIn('data-local-asset-id', app_js)
         self.assertIn('id="localAssetPreviewModal"', index)
@@ -540,6 +556,259 @@ class DesktopContractTests(TestCase):
         self.assertIn('addEventListener("peer_snapshot"', app_js)
         self.assertIn('renderCombinedRuntime()', app_js)
         self.assertNotIn('await Promise.all([refreshSharedRuntime(), refreshConversation(), refreshProxyJobs()])', app_js)
+
+    def test_asset_folder_store_persists_and_rejects_duplicate_names(self):
+        with TemporaryDirectory() as temp:
+            database = Path(temp) / "config.db"
+            store = LocalStateStore(database)
+            folder = store.create_asset_folder("短剧一")
+            reopened = LocalStateStore(database)
+            self.assertEqual(reopened.asset_folder(folder["id"])["name"], "短剧一")
+            with self.assertRaisesRegex(ValueError, "已存在"):
+                reopened.create_asset_folder(" 短剧一 ")
+            renamed = reopened.rename_asset_folder(folder["id"], "短剧二")
+            self.assertEqual(renamed["name"], "短剧二")
+            self.assertTrue(reopened.delete_asset_folder(folder["id"]))
+            self.assertIsNone(reopened.asset_folder(folder["id"]))
+
+    def test_asset_folder_api_filters_moves_and_deletes_local_jobs(self):
+        async def run_test(temp):
+            root = Path(temp)
+            jobs_dir = root / "jobs"
+            jobs_dir.mkdir()
+            output = root / "result.mp4"
+            output.write_bytes(b"video")
+            jobs = JobStore(jobs_dir)
+            jobs.create(
+                {
+                    "id": "folder-job",
+                    "title": "Folder video",
+                    "status": "completed",
+                    "stage": "生成完成",
+                    "progress": 100,
+                    "created_at": "2026-08-19T00:00:00+00:00",
+                    "updated_at": "2026-08-19T00:00:00+00:00",
+                    "request": {"media_type": "video"},
+                    "input_paths": [],
+                    "result_path": str(output),
+                }
+            )
+            jobs.create(
+                {
+                    "id": "active-folder-job",
+                    "title": "Active folder task",
+                    "status": "queued",
+                    "stage": "排队中",
+                    "progress": 0,
+                    "created_at": "2026-08-19T00:00:00+00:00",
+                    "updated_at": "2026-08-19T00:00:00+00:00",
+                    "request": {"media_type": "video"},
+                    "input_paths": [],
+                }
+            )
+            local_state = LocalStateStore(root / "config.db")
+            route_settings = SimpleNamespace(
+                api_key="",
+                desktop_mode=False,
+                data_dir=root,
+                outputs_dir=root,
+                uploads_dir=root / "uploads",
+            )
+            manager = MagicMock()
+            transport = httpx.ASGITransport(app=main_module.app)
+            with (
+                patch.object(main_module, "store", jobs),
+                patch.object(main_module, "local_state", local_state),
+                patch.object(main_module, "settings", route_settings),
+                patch.object(main_module, "manager", manager),
+            ):
+                async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+                    created = await client.post("/api/v1/asset-folders", json={"name": "短剧项目"})
+                    self.assertEqual(created.status_code, 201)
+                    folder_id = created.json()["id"]
+                    moved = await client.post(
+                        "/api/v1/asset-folders/move",
+                        json={"job_ids": ["folder-job", "active-folder-job"], "folder_id": folder_id},
+                    )
+                    self.assertEqual(moved.status_code, 200)
+                    listed = await client.get(
+                        "/api/v1/generations",
+                        params={"folder_id": folder_id, "status": "completed", "page": 1, "page_size": 10},
+                    )
+                    self.assertEqual(listed.status_code, 200)
+                    self.assertEqual([item["id"] for item in listed.json()["data"]], ["folder-job"])
+                    root_list = await client.get(
+                        "/api/v1/generations",
+                        params={"folder_id": "__root__", "status": "completed", "page": 1, "page_size": 10},
+                    )
+                    self.assertEqual(root_list.status_code, 200)
+                    self.assertEqual(root_list.json()["data"], [])
+                    blocked = await client.delete(f"/api/v1/asset-folders/{folder_id}")
+                    self.assertEqual(blocked.status_code, 409)
+                    jobs.update("active-folder-job", status="completed")
+                    remote_move = await client.post(
+                        "/api/v1/asset-folders/move",
+                        json={"job_ids": ["peer::peer-1::remote"], "folder_id": folder_id},
+                    )
+                    self.assertEqual(remote_move.status_code, 403)
+                    deleted = await client.delete(f"/api/v1/asset-folders/{folder_id}")
+                    self.assertEqual(deleted.status_code, 200)
+                    self.assertIsNone(jobs.get("folder-job"))
+                    self.assertIsNone(jobs.get("active-folder-job"))
+                    self.assertFalse(output.exists())
+
+        with TemporaryDirectory() as temp:
+            asyncio.run(run_test(temp))
+
+    def test_root_folder_filter_excludes_classified_jobs(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            jobs_dir = root / "jobs"
+            jobs_dir.mkdir()
+            jobs = JobStore(jobs_dir)
+            for job_id, folder_id in (("root-job", None), ("classified-job", "folder-1")):
+                jobs.create(
+                    {
+                        "id": job_id,
+                        "title": job_id,
+                        "status": "completed",
+                        "stage": "生成完成",
+                        "progress": 100,
+                        "created_at": "2026-08-19T00:00:00+00:00",
+                        "updated_at": "2026-08-19T00:00:00+00:00",
+                        "folder_id": folder_id,
+                        "request": {"media_type": "video"},
+                        "input_paths": [],
+                    }
+                )
+            self.assertEqual(
+                [item["id"] for item in jobs.list(1, 10, scope="normal", folder_id="__root__")[0]],
+                ["root-job"],
+            )
+
+    def test_asset_folder_frontend_contract(self):
+        root = Path(__file__).resolve().parents[1]
+        index = (root / "static" / "index.html").read_text(encoding="utf-8")
+        app_js = (root / "static" / "app.js").read_text(encoding="utf-8")
+        styles = (root / "static" / "styles.css").read_text(encoding="utf-8")
+        main = (root / "app" / "main.py").read_text(encoding="utf-8")
+        self.assertIn('id="assetFoldersPanel"', index)
+        self.assertIn('id="editAssetsButton"', index)
+        self.assertIn('id="assetFolderPickerModal"', index)
+        self.assertIn('id="assetFolderNameModal"', index)
+        self.assertIn('id="sidebarResizer"', index)
+        self.assertIn('function loadAssetFolders()', app_js)
+        self.assertIn('/api/v1/generations/${encodeURIComponent(jobId)}/name', app_js)
+        self.assertIn('preview_url || job.result_url', app_js)
+        self.assertIn('stopSidebarResize', app_js)
+        self.assertIn('addEventListener("dblclick"', app_js)
+        self.assertIn('SIDEBAR_WIDTH_STORAGE_KEY', app_js)
+        self.assertIn('localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY', app_js)
+        self.assertIn('function scrollToGeneratedOutput(jobId)', app_js)
+        self.assertIn('data-output-job-id', app_js)
+        self.assertIn('logFollowTail', app_js)
+        self.assertIn('grid-template-columns: repeat(auto-fill, var(--asset-card-width))', styles)
+        self.assertIn('function renderAssetDirectoryHeader()', app_js)
+        self.assertIn('data-directory-folder-id', app_js)
+        self.assertIn('function renderAssetFolderCards()', app_js)
+        self.assertIn('data-asset-folder-card', app_js)
+        self.assertIn('data-asset-folder-back', app_js)
+        self.assertIn('folderBackGlyph()', app_js)
+        self.assertIn('folder-back-glyph', styles)
+        self.assertIn('asset-folder-card.back { display: inline-flex', styles)
+        self.assertIn("folder-glyph", styles)
+        self.assertIn("scrollbar-width: none", styles)
+        self.assertIn('application/x-h3-asset-jobs', app_js)
+        self.assertIn('/api/v1/asset-folders/move', app_js)
+        self.assertIn('folder_id', app_js)
+        self.assertIn('const filteredData = (payload.data || []).filter(assetMatchesCurrentView);', app_js)
+        self.assertIn('if (!state.assetFolderId && job.peer_asset) return false;', app_js)
+        self.assertIn('/api/v1/asset-folders', main)
+        self.assertIn('UNFILED_FOLDER_ID', main)
+
+    def test_agent_documentation_route_is_public_and_matches_file(self):
+        async def request_document():
+            transport = httpx.ASGITransport(app=main_module.app)
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="http://test",
+            ) as client:
+                return await client.get("/AGENT.md")
+
+        response = asyncio.run(request_document())
+        root = Path(__file__).resolve().parents[1]
+        expected = (root / "AGENT.md").read_text(encoding="utf-8")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.text, expected)
+        self.assertIn("text/markdown", response.headers["content-type"])
+        self.assertEqual(
+            response.headers["cache-control"],
+            "no-store, no-cache, must-revalidate",
+        )
+        for marker in (
+            "H3_API_KEY",
+            "/api/v1/generations",
+            "/api/v1/asset-folders",
+            "Skill 创建规范",
+            "turbo-lora",
+            "接近原生 H3 20 步方案",
+            "系列短剧",
+            "ref2va-fp8",
+        ):
+            self.assertIn(marker, response.text)
+
+    def test_local_asset_cleanup_preview_lists_owned_old_videos(self):
+        async def run_test(temp):
+            root = Path(temp)
+            jobs_dir = root / "jobs"
+            jobs_dir.mkdir()
+            old_output = root / "old.mp4"
+            old_output.write_bytes(b"old-video")
+            recent_output = root / "recent.mp4"
+            recent_output.write_bytes(b"recent-video")
+            jobs = JobStore(jobs_dir)
+            now = datetime.now(UTC)
+            jobs.create(
+                {
+                    "id": "old-video",
+                    "title": "Old video",
+                    "status": "completed",
+                    "created_at": (now - timedelta(days=31)).isoformat(),
+                    "updated_at": now.isoformat(),
+                    "request": {"media_type": "video"},
+                    "input_paths": [],
+                    "result_path": str(old_output),
+                }
+            )
+            jobs.create(
+                {
+                    "id": "recent-video",
+                    "title": "Recent video",
+                    "status": "completed",
+                    "created_at": now.isoformat(),
+                    "updated_at": now.isoformat(),
+                    "request": {"media_type": "video"},
+                    "input_paths": [],
+                    "result_path": str(recent_output),
+                }
+            )
+            local_state = LocalStateStore(root / "config.db")
+            route_settings = SimpleNamespace(api_key="", desktop_mode=False, data_dir=root)
+            transport = httpx.ASGITransport(app=main_module.app)
+            with patch.object(main_module, "store", jobs), patch.object(main_module, "local_state", local_state), patch.object(main_module, "settings", route_settings):
+                async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+                    preview = await client.get("/api/v1/assets/local/clear-old-video/preview")
+                    self.assertEqual(preview.status_code, 200)
+                    self.assertEqual([item["job_id"] for item in preview.json()["items"]], ["old-video"])
+                    self.assertEqual(preview.json()["total_size"], len(b"old-video"))
+                    deleted = await client.post("/api/v1/assets/local/clear-old-video")
+                    self.assertEqual(deleted.status_code, 200)
+                    self.assertEqual(deleted.json()["deleted"], ["job::old-video"])
+                    self.assertFalse(old_output.exists())
+                    self.assertTrue(recent_output.exists())
+
+        with TemporaryDirectory() as temp:
+            asyncio.run(run_test(temp))
 
     def test_desktop_packaging_contract(self):
         root = Path(__file__).resolve().parents[1]
@@ -639,7 +908,8 @@ class DesktopContractTests(TestCase):
             self.assertEqual(response.headers["content-type"], "video/mp4")
             self.assertEqual(response.content, b"video-data")
             saved = jobs.get("proxy-video")
-            self.assertTrue(str(saved["result_path"]).endswith("proxy-video.mp4"))
+            self.assertTrue(str(saved["result_path"]).endswith(".mp4"))
+            self.assertNotEqual(Path(str(saved["result_path"])).stem, "proxy-video")
             self.assertEqual(Path(saved["result_path"]).read_bytes(), b"video-data")
 
         with TemporaryDirectory() as temp:

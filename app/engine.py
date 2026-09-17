@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 from PIL import Image
 
 from .nodes import ComfyNodeConfig
+from .jobs import output_file_name
 from .runninghub import (
     build_ai_app_schema,
     build_workflow_schema,
@@ -143,7 +144,7 @@ class FakeEngine:
         if job["request"].get("model_variant") == "music3-int8" or job["request"].get("execution_mode") == "tts":
             import wave
 
-            output = self.settings.outputs_dir / f"{job['id']}.wav"
+            output = self.settings.outputs_dir / output_file_name(job, ".wav")
             with wave.open(str(output), "wb") as target:
                 target.setnchannels(1 if job["request"].get("execution_mode") == "tts" else 2)
                 target.setsampwidth(2)
@@ -151,7 +152,7 @@ class FakeEngine:
                 target.writeframes(b"\0\0" * 3200)
             return output
         source = Path(job["input_paths"][0])
-        output = self.settings.outputs_dir / f"{job['id']}.jpg"
+        output = self.settings.outputs_dir / output_file_name(job, ".jpg")
         shutil.copy2(source, output)
         return output
 
@@ -331,7 +332,7 @@ class MiniMaxH3Engine:
         progress(90, "解码并写入音视频")
         from diffsynth.utils.data.audio_video import write_video_audio
 
-        output = self.settings.outputs_dir / f"{job['id']}.mp4"
+        output = self.settings.outputs_dir / output_file_name(job, ".mp4")
         write_video_audio(
             video=video,
             audio=audio,
@@ -574,12 +575,16 @@ class ComfyUIH3Engine:
             )
             workflow["142"]["inputs"].update(
                 model=["127", 0],
-                lora_name="minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+                lora_name=(
+                    "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors"
+                    if variant == "fl2va-fp8"
+                    else "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors"
+                ),
                 strength_model=1.0,
             )
             workflow["143"]["inputs"].update(
                 model=["142", 0],
-                shift_video=12.0,
+                shift_video=6.0,
                 shift_audio=3.0,
             )
             workflow["124"]["inputs"].update(
@@ -1333,7 +1338,7 @@ class ComfyUIH3Engine:
         if not result_item:
             media_name = "FLAC" if audio_only else "MP4"
             raise RuntimeError(f"ComfyUI 历史记录中没有找到节点 92 的 {media_name} 产物")
-        output = self.settings.outputs_dir / f"{job['id']}{expected_suffix}"
+        output = self.settings.outputs_dir / output_file_name(job, expected_suffix)
         if client is None:
             output_root = self.settings.comfy_output_dir.resolve()
             source = (
@@ -1384,6 +1389,7 @@ class ComfyUIH3Engine:
             segment_request["context_loop"] = True
             segment_job = dict(job)
             segment_job["id"] = f"{job['id']}-segment-{segment_index}"
+            segment_job["output_stem"] = f"{job.get('output_stem') or job['id']}-segment-{segment_index:03d}"
             segment_job["request"] = segment_request
             def segment_progress(value, message, index=segment_index):
                 overall = ((index - 1) + max(0, min(100, int(value))) / 100.0) / len(segment_frames)
@@ -1419,7 +1425,7 @@ class ComfyUIH3Engine:
                 context_latent_path = context_subfolder
 
         progress(98, "合并 Context Loop 片段")
-        output = self.settings.outputs_dir / f"{job['id']}.mp4"
+        output = self.settings.outputs_dir / output_file_name(job, ".mp4")
         self._merge_h3_segments(segment_outputs, output)
         output.with_suffix(".json").write_text(
             json.dumps(job["request"], ensure_ascii=False, indent=2),
@@ -1733,7 +1739,7 @@ class RunningHubH3Engine:
             self.last_output_media_type = "image"
         else:
             self.last_output_media_type = "file"
-        output = self.settings.outputs_dir / f"{job['id']}{suffix}"
+        output = self.settings.outputs_dir / output_file_name(job, suffix)
         with httpx.stream("GET", selected, timeout=600, follow_redirects=True, trust_env=False) as response:
             response.raise_for_status()
             with output.open("wb") as target:
@@ -1994,7 +2000,7 @@ class SGLangH3Engine:
                 raise InterruptedError("generation cancelled")
 
         progress(97, "下载单卡引擎生成结果")
-        output = self.settings.outputs_dir / f"{job['id']}.mp4"
+        output = self.settings.outputs_dir / output_file_name(job, ".mp4")
         with httpx.stream(
             "GET",
             f"{self.settings.sglang_url}/v1/videos/{remote_id}/content",

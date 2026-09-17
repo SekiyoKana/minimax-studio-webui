@@ -15,6 +15,6 @@
   "136": {"class_type": "MiniMaxH3ImageToVideo", "inputs": {"clip": ["128", 0], "vae": ["119", 0], "prompt": "Generate a coherent audiovisual shot from the supplied frame.", "width": 864, "height": 480, "length": 124, "first_frame": ["137", 0]}, "_meta": {"title": "MiniMax H3 First/Last Frame to Video"}},
   "137": {"class_type": "LoadImage", "inputs": {"image": "first_frame.png"}, "_meta": {"title": "Load Picture 1"}},
   "139": {"class_type": "LoadImage", "inputs": {"image": "last_frame.png"}, "_meta": {"title": "Load Picture 2"}},
-  "142": {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["127", 0], "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors", "strength_model": 1.0}, "_meta": {"title": "Load FL2VA 8-step LoRA v1.0"}},
-  "143": {"class_type": "MiniMaxH3SigmaShift", "inputs": {"model": ["142", 0], "shift_video": 12.0, "shift_audio": 3.0}, "_meta": {"title": "MiniMax H3 Sigma Shift"}}
+  "142": {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["127", 0], "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors", "strength_model": 1.0}, "_meta": {"title": "Load FL2VA 8-step LoRA v1.0 768p"}},
+  "143": {"class_type": "MiniMaxH3SigmaShift", "inputs": {"model": ["142", 0], "shift_video": 6.0, "shift_audio": 3.0}, "_meta": {"title": "MiniMax H3 Sigma Shift 6/3"}}
 }

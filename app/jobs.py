@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import inspect
 import logging
+import re
+import subprocess
 import shutil
 import threading
 import traceback
@@ -16,9 +18,52 @@ from cryptography.exceptions import InvalidTag
 
 
 TERMINAL_STATES = {"completed", "failed", "cancelled"}
+ROOT_FOLDER_ID = "__root__"
+UNFILED_FOLDER_ID = "__unfiled__"
 RUNNINGHUB_TARGET_PREFIX = "rh:"
 MAX_FRESH_REMOTE_RETRIES = 3
 logger = logging.getLogger("uvicorn.error")
+
+
+def output_file_stem(job: dict[str, Any]) -> str:
+    existing = str(job.get("output_stem") or "").strip()
+    if existing:
+        return existing
+    created_at = str(job.get("created_at") or "")
+    try:
+        timestamp = datetime.fromisoformat(created_at).strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    except ValueError:
+        timestamp = str(job.get("id") or "output")
+    folder_name = str(job.get("folder_name") or "").strip()
+    safe_folder = re.sub(r"[^\w\-.\u0080-\uffff]+", "_", folder_name, flags=re.UNICODE).strip("._")
+    return f"{safe_folder}_{timestamp}" if safe_folder else timestamp
+
+
+def output_file_name(job: dict[str, Any], suffix: str) -> str:
+    return f"{output_file_stem(job)}{suffix}"
+
+
+def create_video_preview(path: Path) -> Path | None:
+    if path.suffix.lower() not in {".mp4", ".webm", ".mov", ".mkv"} or not path.is_file():
+        return None
+    preview = path.with_name(f"{path.stem}.preview.jpg")
+    if preview.is_file():
+        return preview
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                "-i", str(path), "-vf", "scale=320:-2:force_original_aspect_ratio=decrease",
+                "-frames:v", "1", "-q:v", "5", str(preview),
+            ],
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        preview.unlink(missing_ok=True)
+        return None
+    return preview if preview.is_file() else None
 
 
 def generic_active_stage(status: str | None) -> str:
@@ -239,12 +284,19 @@ class JobStore:
     @staticmethod
     def _elapsed_seconds(job: dict[str, Any]) -> float | None:
         created_at = job.get("created_at")
-        if not created_at:
+        started_at = job.get("started_at")
+        if not started_at:
+            # Legacy terminal records predate started_at and can only use creation time.
+            if job.get("status") in TERMINAL_STATES:
+                started_at = created_at
+            else:
+                return 0.0
+        if not started_at:
             return None
         terminal_at = job.get("completed_at") or job.get("updated_at")
         end_at = terminal_at if job.get("status") in TERMINAL_STATES else utc_now()
         try:
-            elapsed = datetime.fromisoformat(end_at) - datetime.fromisoformat(created_at)
+            elapsed = datetime.fromisoformat(end_at) - datetime.fromisoformat(started_at)
         except (TypeError, ValueError):
             return None
         return round(max(0.0, elapsed.total_seconds()), 1)
@@ -252,6 +304,17 @@ class JobStore:
     def _decorate_public_job(self, job: dict[str, Any]) -> dict[str, Any]:
         request = job.setdefault("request", {})
         request.setdefault("execution_mode", "native")
+        job.setdefault("folder_id", None)
+        if (
+            job.get("status") == "completed"
+            and job.get("result_path")
+            and str(request.get("media_type") or "video") == "video"
+        ):
+            job["preview_url"] = f"/api/v1/generations/{job['id']}/preview"
+        if job.get("preview_path") and not Path(str(job["preview_path"])).is_file():
+            job.pop("preview_path", None)
+        if job.get("preview_path"):
+            job["preview_url"] = f"/api/v1/generations/{job['id']}/preview"
         job["elapsed_seconds"] = self._elapsed_seconds(job)
         return job
 
@@ -306,6 +369,7 @@ class JobStore:
         query: str | None = None,
         include_incognito: bool = False,
         scope: str | None = None,
+        folder_id: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         with self._lock:
             jobs = list(self._jobs.values())
@@ -317,6 +381,10 @@ class JobStore:
                 jobs = [job for job in jobs if job.get("request", {}).get("incognito")]
             elif resolved_scope != "all":
                 raise ValueError(f"unknown job scope: {resolved_scope}")
+            if folder_id in {ROOT_FOLDER_ID, UNFILED_FOLDER_ID}:
+                jobs = [job for job in jobs if not job.get("folder_id")]
+            elif folder_id:
+                jobs = [job for job in jobs if job.get("folder_id") == folder_id]
             if status:
                 jobs = [job for job in jobs if job.get("status") == status]
             if query:
@@ -354,6 +422,7 @@ class JobStore:
         query: str | None = None,
         include_incognito: bool = False,
         scope: str | None = None,
+        folder_id: str | None = None,
     ) -> tuple[list[dict[str, Any]], int, int]:
         with self._lock:
             items, total = self.list(
@@ -363,8 +432,29 @@ class JobStore:
                 query,
                 include_incognito,
                 scope,
+                folder_id,
             )
             return items, total, self._revision
+
+    def jobs_in_folder(self, folder_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return [
+                deepcopy(job)
+                for job in self._jobs.values()
+                if job.get("folder_id") == folder_id
+                and not job.get("remote_record_hidden")
+                and not job.get("request", {}).get("incognito")
+            ]
+
+    def folder_counts(self) -> dict[str | None, int]:
+        with self._lock:
+            counts: dict[str | None, int] = {}
+            for job in self._jobs.values():
+                if job.get("remote_record_hidden") or job.get("request", {}).get("incognito"):
+                    continue
+                key = str(job["folder_id"]) if job.get("folder_id") else None
+                counts[key] = counts.get(key, 0) + 1
+            return counts
 
     def incognito_jobs(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -546,6 +636,7 @@ class JobStore:
                 (
                     (result_path, "result"),
                     (result_path.with_suffix(".json"), "sidecar"),
+                    (result_path.with_name(f"{result_path.stem}.preview.jpg"), "preview"),
                 )
             )
         entries: list[dict[str, str]] = []
@@ -594,8 +685,11 @@ class JobStore:
             if result_path:
                 self._delete_data_path(result_path)
                 self._delete_data_path(result_path.with_suffix(".json"))
+                self._delete_data_path(result_path.with_name(f"{result_path.stem}.preview.jpg"))
             job["result_path"] = None
             job["result_url"] = None
+            job["preview_path"] = None
+            job["preview_url"] = None
             job["asset_deleted"] = True
             job["asset_deleted_at"] = utc_now()
             self._append_event(job, "生成产物已删除")
@@ -613,6 +707,7 @@ class JobStore:
             result = Path(job["result_path"])
             self._delete_data_path(result)
             self._delete_data_path(result.with_suffix(".json"))
+            self._delete_data_path(result.with_name(f"{result.stem}.preview.jpg"))
         self._delete_data_path(self.jobs_dir / f"{job['id']}.log")
         job_path.unlink(missing_ok=True)
 
@@ -1428,6 +1523,14 @@ class JobManager:
                         progress=100,
                         result_path=str(result),
                         result_url=f"/api/v1/generations/{job_id}/result",
+                        **(
+                            {
+                                "preview_path": str(preview),
+                                "preview_url": f"/api/v1/generations/{job_id}/preview",
+                            }
+                            if (preview := create_video_preview(Path(result)))
+                            else {}
+                        ),
                         completed_at=utc_now(),
                         remote_checkpoint=None,
                         **({"request": request_update} if request_update else {}),

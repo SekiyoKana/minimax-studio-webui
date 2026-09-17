@@ -14,7 +14,8 @@ This repository does not contain model weights. `comfyui_nodes/` contains pinned
 | ComfyUI-format H3 weights | [Comfy-Org/MiniMax-H3](https://huggingface.co/Comfy-Org/MiniMax-H3) | `eb8a16107c595128b3a578f82d2ce2f75920c355` | MiniMax H3 Community License Agreement |
 | MiniMax Music3 | [MiniMaxAI/MiniMax-Music3](https://huggingface.co/MiniMaxAI/MiniMax-Music3) | Pinned files in the model manifest | MiniMax Music 3 Community License Agreement |
 | ComfyUI-format Music3 weights | [Comfy-Org/MiniMax-Music-3](https://modelscope.cn/models/Comfy-Org/MiniMax-Music-3) | Pinned files in the model manifest | MiniMax Music 3 Community License Agreement |
-| MiniMax H3 Turbo LoRA | [lightx2v/Minimax-h3-Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo) | `050494d5fe05bd1b1140b8565ea51dc33a5085a5` | Apache-2.0 |
+| MiniMax H3 FL2VA Turbo LoRA | [lightx2v/Minimax-h3-Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo) | `f3d9da6dac47dcb985684ca150f02893f619a171`, `minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors` | Apache-2.0 |
+| MiniMax H3 Ref2VA Turbo LoRA | [lightx2v/Minimax-h3-Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo) | `0eebcc7e79f9cb200927c80b8e7595265b770e34`, `minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors` | Apache-2.0 |
 | NaughtyTimes MiniMax H3 LoRA | [SexGod1979/NaughtyTimes_MiniMax-H3](https://huggingface.co/SexGod1979/NaughtyTimes_MiniMax-H3) | User-supplied file | Author terms |
 | Lucide | [lucide-icons/lucide](https://github.com/lucide-icons/lucide) | 0.468.0 CDN | ISC |
 | Google Fonts | [Noto Sans SC](https://fonts.google.com/noto/specimen/Noto+Sans+SC), [DM Mono](https://fonts.google.com/specimen/DM+Mono) | CDN | SIL Open Font License 1.1 |

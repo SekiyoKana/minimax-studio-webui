@@ -1,177 +1,182 @@
 <div align="center">
 
-<img src="assets/h3-studio-logo.png" alt="H3 Studio logo" width="128" />
+<img src="assets/h3-studio-logo.png" alt="MiniMax H3 Studio" width="128" />
 
 # MiniMax H3 Studio
 
-A Web service and desktop application for MiniMax H3 video, character voice, and Music3 generation
+MiniMax H3 video, voice, Music3, and ComfyUI workflow control service
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![ComfyUI](https://img.shields.io/badge/ComfyUI-Backend-222222?style=flat-square)](https://github.com/Comfy-Org/ComfyUI)
+[![ComfyUI](https://img.shields.io/badge/ComfyUI-backend-222222?style=flat-square)](https://github.com/Comfy-Org/ComfyUI)
 [![MiniMax H3](https://img.shields.io/badge/MiniMax-H3-DF4A32?style=flat-square)](https://huggingface.co/MiniMaxAI/MiniMax-H3)
-[![MiniMax Music3](https://img.shields.io/badge/MiniMax-Music3-347457?style=flat-square)](https://huggingface.co/MiniMaxAI/MiniMax-Music3)
 
 [中文](README.md) | English
 
-[Features](#features) · [Generation modes](#generation-modes) · [ComfyUI node packages](#comfyui-node-packages) · [Deployment](#quick-deployment) · [Desktop app](#desktop-app) · [API](#api) · [Documentation](#documentation)
+[Features](#features) · [Data flow](#data-flow) · [Update log](#update-log) · [Deployment](#deployment) · [API](#api) · [Validation](#validation)
 
 </div>
 
-MiniMax H3 Studio runs as either a server application or a local desktop application. The server exposes a responsive Web interface and HTTP API around ComfyUI and RunningHub workflows. It handles uploads, validation, persistent queues, live progress, node scheduling, and output management. The desktop application runs FastAPI and pywebview locally while sending inference requests to a configured remote ComfyUI node. Tasks, assets, outputs, node configuration, and credentials remain on the local machine.
-
-Supported workflows include H3 FL2VA, Ref2VA, 8-step LoRA v1.0, MiniMax H3 SA, single-image audio-driven digital humans, H3 TTS, Music3 INT8, generic RunningHub workflows, and an optional H3 NSFW workflow.
-
-![MiniMax H3 Studio workspace](docs/images/h3-studio-overview.jpg)
+MiniMax H3 Studio provides a Web interface, HTTP API, and desktop entry point for MiniMax H3, H3 TTS, audio-driven digital humans, Music3, and generic RunningHub workflows. The service validates requests, stores reference files, persists jobs, schedules inference nodes, streams events, recovers interrupted jobs, manages assets, and delivers outputs.
 
 > [!IMPORTANT]
-> Model weights are not included in this repository. Review the license terms for MiniMax H3, MiniMax Music3, related LoRAs, ComfyUI, and custom nodes before deployment.
+> Model weights are not included. Review the license terms for MiniMax H3, Music3, related LoRAs, ComfyUI, and custom nodes before deployment.
 
 ## Features
 
 | Area | Capabilities |
 |---|---|
-| Generation | Model, execution mode, inference node, aspect ratio, resolution, duration, steps, seed, and incognito mode |
-| Conversation | Recent records, upward pagination, device filters, live progress, downloads, edits, cancellation, deletion, and parameter refill |
-| Asset library | Paginated loading, search, status filters, previews, details, downloads, refill, and local artifact management |
-| Node manager | ComfyUI and RunningHub node creation, editing, enable/disable, deletion, health checks, and concurrency settings |
-| Prompt tools | H3 prompt optimization, Music3 style optimization, Music3 lyric generation, and streamed responses |
-| Device sharing | LAN or Tailscale pairing, persistent authorization, revocation, and owner-labeled shared assets |
-| Runtime logs | Draggable launcher and detail window with mouse and touch input |
+| Video generation | FL2VA, Ref2VA, 8-step LoRA, dual sampling, H3 SA, VDN H3, digital human, and H3 NSFW |
+| Audio generation | Music3 INT8 and H3 TTS with lyrics, style descriptions, and audio references |
+| Long video | H3 SA frame-grid splitting, context transfer, repeated-prefix trimming, and final merge |
+| VDN H3 | 8 to 50 steps with automatic DMD or B stage selection |
+| Job queue | Persistent queue, node scheduling, cancellation, regeneration, checkpoint recovery, and live progress |
+| Elapsed time | Starts when the inference node begins work; queue waiting time is excluded |
+| Asset library | Search, pagination, status filters, cached video covers, previews, downloads, and renaming |
+| Folders | Single-level folders, double-click navigation, batch moves, unfiled root, and deletion protection |
+| Local asset management | Capacity statistics, 30-day video cleanup preview, ownership checks, and artifact deletion |
+| Detail windows | No blurred backdrop, window shadow, multiple open windows, independent dragging, and a collapsible detail rail |
+| Node manager | ComfyUI and RunningHub configuration, health checks, enablement, and concurrency settings |
+| Device sharing | LAN or Tailscale pairing, authorization revocation, proxy jobs, and read-only remote assets |
+| Agent integration | Swagger UI, OpenAPI JSON, public `AGENT.md`, and Skill creation guidance |
 
-Enabling runtime logs in Settings shows the launcher while the detail window remains closed. Runtime updates preserve the selected conversation-device filters.
+The interface also supports a resizable asset sidebar with `localStorage` persistence and a 50 percent maximum, fixed asset card sizes, hidden scrollbars, pagination checks after resizing, output-focused log navigation, and manual live-log tail following.
 
-## Generation modes
+## Screenshot
 
-| Mode | Model | Input | Parameters and output |
-|---|---|---|---|
-| Native FL2VA | FL2VA FP8 Scaled | One first frame and an optional last frame | 1 to 15 seconds, 4 to 50 steps, MP4 |
-| Native Ref2VA | Ref2VA FP8 Scaled | Up to 9 images, 3 videos, and 3 audio clips | 1 to 15 seconds, 4 to 50 steps, MP4 |
-| 8-step FL2VA | FL2VA FP8 Scaled with 8-step LoRA v1.0 | One first frame and an optional last frame | Fixed at 8 steps, LoRA strength 1.0, MP4 |
-| 8-step Ref2VA | Ref2VA FP8 Scaled with the FL2VA 8-step LoRA v1.0 | Ref2VA reference assets | Fixed at 8 steps, LoRA strength 1.0, MP4 |
-| MiniMax H3 SA FL2VA | FL2VA FP8, 8-step LoRA, Sol-Attn, and Latent 3D Upscaler | One first frame and an optional last frame | Low-resolution first stage and high-resolution second stage, fixed at 8 steps, MP4 |
-| MiniMax H3 SA Ref2VA | Ref2VA FP8, 8-step LoRA, Sol-Attn, and Latent 3D Upscaler | Up to 9 images, 3 videos, and 3 audio clips | Low-resolution first stage and high-resolution second stage, fixed at 8 steps, MP4 |
-H3 SA accepts 1 to 300 seconds. Requests longer than 15 seconds are automatically split on the valid H3 frame grid, generated with fixed audiovisual context, trimmed at repeated leading frames, and merged into one MP4. Advanced acceleration and stitching parameters are set by the service.
-| Digital human | Ref2VA FP8 Scaled | One character image and one driving audio file | Audio determines duration, fixed at 20 steps, MP4 |
-| H3 TTS | Ref2VA FP8 Scaled | Character traits, dialogue, and 0 to 3 audio references | 1 to 15 seconds, 4 to 50 steps, FLAC |
-| Music3 | Music3 DiT INT8 and INT8 text encoder | Music description and optional section-tagged lyrics | 1 to 300 seconds, fixed at 30 steps, FLAC |
-| H3 NSFW | Ref2VA FP8 Scaled with NaughtyTimes LoRA | Ref2VA reference assets | Incognito mode only, MP4 |
-| RunningHub | Model defined by the target workflow | Text, numeric, enum, switch, and media fields | Defined by the target workflow |
+![API documentation](docs/images/h3-api-docs.jpg)
 
-### Digital human
-
-The digital-human workflow uses a character image and driving audio to produce a lip-synchronized video. The service reads the actual audio duration with `ffprobe` and uses it as the video duration. The workflow requires `VRGDG_MiniMaxH3AudioDrive`.
-
-![Audio-driven digital human](docs/images/h3-studio-digital-human.jpg)
-
-### H3 TTS
-
-H3 TTS uses Ref2VA FP8 to generate character voice. The prompt describes character traits, delivery, and dialogue. Up to three audio files can provide speaker voice references. The service fixes the visual latent at 32x32, decodes audio only, and saves FLAC.
-
-### Music3
-
-Music3 accepts a music description and section-tagged lyrics and returns 32 kHz, 16-bit stereo FLAC. The API workflow uses 30 Euler steps and the repository patch enables forced-duration generation.
-
-### RunningHub
-
-A RunningHub node uses the complete HTTPS URL of a workflow or AI app. The service reads the resource ID, workflow name, parameter schema, and output type to build the input controls. API keys are stored in SQLite and node responses expose only whether a key is saved.
-
-## ComfyUI node packages
-
-The root-level [`comfyui_nodes/`](comfyui_nodes/) directory contains pinned source packages for every workflow dependency. Each dependency is distributed separately. Sources, commits, licenses, and SHA-256 checksums are recorded in [`comfyui_nodes/manifest.json`](comfyui_nodes/manifest.json).
-
-| Package | Purpose | Installation path |
-|---|---|---|
-| `ComfyUI-core-7fe8a61.zip` | Core loading, sampling, MiniMax H3, Music3, and audio/video nodes referenced by the workflows | ComfyUI installation root |
-| `ComfyUI-VideoHelperSuite-993082e.zip` | `VHS_LoadVideo` for Ref2VA video references | `ComfyUI/custom_nodes/` |
-| `ComfyUI-MultiGPU-62f98ed.zip` | `CLIPLoaderMultiGPU` for Music3 | `ComfyUI/custom_nodes/` |
-| `comfyui-minimax-h3-audio-drive-de65ec5.zip` | `VRGDG_MiniMaxH3AudioDrive` for the digital-human workflow | `ComfyUI/custom_nodes/` |
-| `ComfyUI-SolAttn_triton-842c4ea.zip` | `SolAttnPatch` for H3 SA | `ComfyUI/custom_nodes/` |
-| `Comfyui_Minimax_h3_latent_Upscaler-52a48af.zip` | `MinimaxH3LatentUpscaler3D` for H3 SA | `ComfyUI/custom_nodes/` |
-
-Extract the custom-node archives and place their top-level directories under `ComfyUI/custom_nodes/`. Install any included `requirements.txt` with the Python environment used by ComfyUI.
-
-> [!IMPORTANT]
-> Music3 forced-duration generation also requires [`patches/comfyui-music3-force-duration.patch`](patches/comfyui-music3-force-duration.patch). `scripts/install.sh` applies this patch automatically.
-
-The digital-human archive is a minimal package containing only the `VRGDG_MiniMaxH3AudioDrive` node used by the current workflow. It retains the upstream AGPL-3.0 notice. The current API workflows do not depend on ComfyUI-SoundFlow.
-
-## Architecture
+## Data flow
 
 ```mermaid
 flowchart LR
-    U["Web, desktop, or API client"] --> A["FastAPI :8193"]
-    A --> D["SQLite and job files"]
-    A --> S["SSE events"]
-    A --> Q["Persistent queue"]
-    Q --> L["Automatic or assigned-node scheduling"]
-    L --> C1["ComfyUI node A"]
-    L --> C2["ComfyUI node B"]
-    L --> R["RunningHub API"]
-    C1 --> O["MP4 or FLAC"]
-    C2 --> O
-    R --> O
-    O --> A
+    A[Web or Agent request] --> B[FastAPI validation]
+    B --> C[Persist uploads and job JSON]
+    C --> D[JobStore queue]
+    D --> E[Health checks and scheduling]
+    E --> F{Inference backend}
+    F --> G[ComfyUI]
+    F --> H[RunningHub]
+    G --> I[Checkpoint, progress, and events]
+    H --> I
+    I --> J[Output and cached video cover]
+    J --> K[Asset library, folders, and download APIs]
 ```
 
-Each ComfyUI node has one execution slot. RunningHub capacity is controlled by `max_concurrency`. Automatic scheduling assigns jobs across available online slots.
+Persistent data is stored under `data/`:
 
-## System requirements
-
-The following baseline covers one 608x352, 5-second task:
-
-| Item | Requirement |
+| Path | Data |
 |---|---|
-| Operating system | Ubuntu 22.04 x86_64 |
-| GPU | One NVIDIA GPU with 24 GB VRAM; RTX 4090 verified |
-| Driver | NVIDIA 550.54.14 or newer, subject to the installed CUDA Runtime |
-| Memory | 64 GB RAM with at least 32 GB swap |
-| Storage | At least 100 GB of available SSD space |
-| Python | 3.11 or newer |
-| Tools | Git, FFmpeg, aria2, rsync, curl, OpenSSL, and systemd |
+| `data/config.db` | Nodes, folders, desktop settings, and peer devices |
+| `data/jobs/` | Job JSON, logs, and checkpoints |
+| `data/uploads/` | Reference files for jobs |
+| `data/outputs/` | API-managed outputs, sidecars, and video covers |
 
-Higher resolutions, longer videos, and concurrent multi-node execution require additional memory and storage.
+`elapsed_seconds` is calculated from `started_at` to the terminal timestamp. Legacy jobs without `started_at` use creation time for compatibility.
 
-## Quick deployment
+## Update log
 
-Run on the cloud GPU server:
+This log covers code, workflows, documentation, tests, and the cloud publishing process. The current workspace state is recorded through 2026-09-17.
+
+### 2026-08-07 to 2026-08-13: Core service and video modes
+
+- Established the FastAPI service, ComfyUI engine adapter, persistent job queue, and Web workspace.
+- Added FL2VA, Ref2VA, 8-step LoRA, and digital-human workflows.
+- Added driving-audio duration detection, output transfer, and initial API documentation.
+- Added the project logo, workspace screenshots, and English documentation.
+
+### 2026-08-14: Music3 and multi-node scheduling
+
+- Added the Music3 INT8 workflow, style assistance, and lyric assistance.
+- Added multiple ComfyUI node configuration, health checks, capacity tracking, and scheduling.
+- Added forced-duration Music3 support, FLAC output, and balance-state persistence.
+- Added ablation scripts, model manifests, and installation verification.
+
+### 2026-08-17: Dynamic RunningHub workflows
+
+- Added RunningHub workflow and AI App resource URL parsing.
+- Added dynamic text, numeric, enum, switch, and media fields from remote schemas.
+- Added workflow schema, account balance, active task, and per-call cost persistence.
+- Preserved the last usable runtime profile when remote parameter or account queries fail.
+
+### 2026-08-19 to 2026-08-20: Desktop application and device sharing
+
+- Added macOS and Windows desktop entry points.
+- Added device pairing, persistent authorization, revocation, proxy jobs, and shared asset libraries.
+- Added a runtime log window, draggable launcher, and mouse or touch dragging.
+- Added the Agent installation guide and fixed-version node package manifest.
+
+### 2026-09-16: H3 SA, VDN H3, and deployment packages
+
+- Added H3 SA two-stage sampling, Latent 3D Upscaler, Sol-Attn, and Context Loop.
+- Added VDN H3 automatic selection between 8-step DMD and 9 to 50-step B stage.
+- Added checkpoints, connection recovery, job resubmission, and node migration.
+- Added VDN H3 node packages, workflows, model manifests, and cloud GPU installation scripts.
+
+### 2026-09-17: Asset library, Agent documentation, and UI interaction
+
+- Added the single-level `asset_folders` table, legacy migration, and `folder_id` ownership.
+- Changed the outer asset directory to show only unclassified local jobs; remote assets remain read-only.
+- Added folder creation, renaming, deletion, batch movement, and drag-to-folder classification.
+- Blocked folder deletion while jobs are queued or running; completed deletion cleans job records, references, outputs, sidecars, covers, and logs.
+- Added local asset capacity, 30-day video cleanup preview, total-size display, and non-owner deletion protection.
+- Added folder-name prefixes and timestamp output names, with user-controlled renaming for completed outputs.
+- Added persistent first-frame video covers to avoid repeated extraction after refresh.
+- Added public `/AGENT.md`, Markdown responses with disabled caching, and instructions for API use and Skill creation.
+- Changed elapsed-time calculation to start at inference execution rather than job creation.
+- Added fixed-card asset grids, persisted sidebar width, hidden scrollbars, pagination checks after resize, and directory-style folder cards.
+- Replaced the blurred detail modal with shadowed floating windows that support multiple instances, independent dragging, z-order, and a collapsed detail rail.
+
+### Release data flow
+
+Each update follows this sequence:
+
+1. Scan backend, frontend, workflows, tests, and documentation for affected data paths.
+2. Change code and static resources while preserving SQLite migrations and legacy records.
+3. Add backend contract, frontend contract, and behavior regression tests.
+4. Run Python syntax checks, JavaScript syntax checks, the full unittest suite, and diff checks.
+5. Increment static resource versions to prevent stale HTML, CSS, and JavaScript caches.
+6. Check cloud GPU queue state, GPU status, disk capacity, and ComfyUI health before publishing.
+7. Create a remote backup under `/home/tapcash/ssd2/backups/`, excluding data, models, virtual environments, and user outputs.
+8. Sync source, static files, workflows, tests, and documentation by directory, then compare SHA-256 hashes.
+9. When jobs are active, sync hot-loadable static files first. Restart the API only after confirming checkpoint recovery.
+10. After restart, verify `/health`, `/AGENT.md`, `/docs`, `/openapi.json`, task recovery, ComfyUI, and the complete remote test suite.
+
+## Generation modes
+
+| Mode | References | Duration | Steps | Output |
+|---|---|---:|---:|---|
+| FL2VA | First frame and optional last frame | 1 to 15 s | 4 to 50 | MP4 |
+| Ref2VA | Up to 9 images, 3 videos, and 3 audio clips | 1 to 15 s | 4 to 50 | MP4 |
+| H3 SA | FL2VA or Ref2VA references | 1 to 300 s | Fixed at 8 | MP4 |
+| VDN H3 | FL2VA or Ref2VA references | 1 to 15 s | 8 to 50 | MP4 |
+| Digital human | Character image and driving audio | Audio-defined | Fixed at 20 | MP4 |
+| H3 TTS | Character traits, dialogue, and audio references | 1 to 15 s | 4 to 50 | FLAC |
+| Music3 | Music description and optional lyrics | 1 to 300 s | Fixed at 30 | FLAC |
+| RunningHub | Fields defined by the target workflow | Workflow-defined | Workflow-defined | Workflow-defined |
+
+## Quick start
+
+### API service
 
 ```bash
-git clone https://github.com/SekiyoKana/minimax-studio-webui.git
-cd minimax-studio-webui
+python3.11 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements-api.txt
 
-INSTALL_ROOT=/data/minimax-h3-stack \
-GPU_ID=0 \
-MODEL_PROVIDER=modelscope \
-bash scripts/install.sh
+export H3_ROOT="$PWD"
+export H3_COMFY_URL="http://127.0.0.1:8188"
+export H3_PORT=8193
+./run.sh
 ```
 
-The installer:
+Use the fake engine for local contract work without ComfyUI:
 
-1. Installs pinned versions of ComfyUI, ComfyUI-VideoHelperSuite, and ComfyUI-MultiGPU.
-2. Creates separate Python environments for ComfyUI and the API.
-3. Downloads approximately 77.3 GB of models and verifies sizes and SHA-256 hashes.
-4. Applies the Music3 forced-duration patch.
-5. Generates `.env` and a random incognito access code.
-6. Installs and starts `comfyui.service` and `minimax-studio-webui.service`.
+```bash
+H3_FAKE_ENGINE=1 H3_ENGINE=fake ./run.sh
+```
 
-After installation:
-
-| Address | Purpose |
-|---|---|
-| `http://SERVER_IP:8193/` | Generation interface |
-| `http://SERVER_IP:8193/docs` | OpenAPI interactive documentation |
-| `http://SERVER_IP:8193/health` | Service, queue, and node health |
-
-Only port 8193 needs to be exposed to users. ComfyUI listens on `127.0.0.1:8188` by default.
-
-See the [cloud GPU deployment guide](docs/en/DEPLOYMENT.md) for all installation parameters.
-
-## Desktop app
-
-The desktop app supports macOS and Windows. The local machine hosts the interface, job records, assets, outputs, node configuration, AI configuration, and device-sharing authorization. Remote ComfyUI performs model loading and GPU inference.
-
-### Run locally
+### Desktop application
 
 ```bash
 python3 -m venv .venv-desktop
@@ -180,136 +185,185 @@ pip install -r requirements-desktop.txt
 python scripts/run_desktop.py
 ```
 
-Override the remote node and local port with environment variables:
+Configure a remote ComfyUI node:
 
 ```bash
 H3_DEFAULT_COMFY_URL=http://192.168.1.20:8188 \
 H3_DEFAULT_COMFY_NAME="Remote ComfyUI" \
-H3_DESKTOP_PORT=38193 \
 python scripts/run_desktop.py
 ```
 
-Local data directories:
+### API entry points
 
-| System | Directory |
+| URL | Purpose |
 |---|---|
-| macOS | `~/Library/Application Support/MiniMax H3 Studio` |
-| Windows | `%LOCALAPPDATA%\\MiniMax H3 Studio` |
+| `/` | Web workspace |
+| `/health` | Service, node, and queue status |
+| `/docs` | Swagger UI |
+| `/openapi.json` | OpenAPI JSON |
+| `/AGENT.md` | AI Agent and Skill integration guide |
 
-### Package the app
+With `H3_API_KEY` set, send:
 
-```bash
-pip install -r requirements-desktop.txt
-python scripts/build_desktop.py
+```http
+Authorization: Bearer YOUR_H3_API_KEY
 ```
-
-macOS produces `dist/MiniMaxH3Studio.app` and `dist/MiniMaxH3Studio.dmg`. Windows produces `dist/MiniMaxH3Studio/`. Run PyInstaller on the target operating system.
-
-See the [desktop app guide](docs/DESKTOP.md) for packaging and device sharing details.
-
-## Multi-node scheduling
-
-Use the server icon in the page header to manage ComfyUI and RunningHub nodes. Node addresses, keys, workflow schemas, account data, and the health-check interval are stored in `data/config.db`.
-
-When multiple ComfyUI processes run on one server, assign each process an independent port, GPU, user directory, and database:
-
-| Node | API address | GPU |
-|---|---|---|
-| GPU 0 | `http://127.0.0.1:8188` | `CUDA_VISIBLE_DEVICES=0` |
-| GPU 1 | `http://127.0.0.1:8189` | `CUDA_VISIBLE_DEVICES=1` |
-
-The API service must be able to reach every remote node. Restrict ComfyUI ports at the network layer when nodes run on separate hosts.
 
 ## API
 
-### VDN-H3
-
-VDN-H3 adds Video Delta Net hybrid attention to MiniMax H3. Use `execution_mode=vdn-h3` with FL2VA or Ref2VA and choose 8–50 steps, defaulting to 50. Eight steps automatically selects `stage-dmd-step-250`; 9–50 steps selects `stage-b-step-2000`. Place checkpoints under `ComfyUI/models/vdn/` and install the node and checkpoints with `scripts/install_vdn_h3.sh`.
-
-Create an 8-step FL2VA job:
+Create a video job:
 
 ```bash
 curl -X POST http://127.0.0.1:8193/api/v1/generations \
-  -F 'prompt=Locked camera. A person stands beside a window while the curtain moves gently.' \
+  -F 'prompt=Locked camera, a character walks forward while identity and environment remain consistent.' \
   -F 'reference_manifest=[{"type":"image"}]' \
   -F 'references=@first-frame.png;type=image/png' \
   -F 'model_variant=fl2va-fp8' \
   -F 'execution_mode=turbo-lora' \
-  -F 'comfy_node=auto' \
   -F 'width=864' \
   -F 'height=480' \
   -F 'duration=5' \
-  -F 'steps=8'
+  -F 'steps=8' \
+  -F 'comfy_node=auto'
 ```
 
-Main endpoints:
+Query and download:
+
+```bash
+curl http://127.0.0.1:8193/api/v1/generations/JOB_ID
+curl http://127.0.0.1:8193/api/v1/generations/JOB_ID/result -o output.mp4
+```
+
+Common endpoints:
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/health` | Service, queue, node, and capacity status |
-| `GET`, `POST` | `/api/v1/comfy/nodes` | List and create nodes |
-| `PATCH`, `DELETE` | `/api/v1/comfy/nodes/{node_id}` | Update and delete nodes |
-| `GET`, `POST` | `/api/v1/generations` | List and create jobs |
-| `GET` | `/api/v1/events` | SSE tasks, queue, logs, and node events |
+| `GET` | `/health` | Service, nodes, and queue |
+| `GET` | `/api/v1/comfy/nodes` | Inference nodes |
+| `POST` | `/api/v1/generations` | Create a job |
+| `GET` | `/api/v1/generations/{job_id}` | Query a job |
+| `POST` | `/api/v1/generations/{job_id}/cancel` | Cancel a job |
+| `POST` | `/api/v1/generations/{job_id}/regenerate` | Regenerate with a selected folder |
+| `GET` | `/api/v1/generations/{job_id}/result` | Download output |
+| `GET` | `/api/v1/events` | SSE event stream |
 | `POST` | `/api/v1/prompts/optimize` | H3 prompt optimization |
-| `POST` | `/api/v1/music/assist` | Music3 style optimization and lyric generation |
+| `POST` | `/api/v1/music/assist` | Music3 style or lyric assistance |
 
-When `H3_API_KEY` is set, every `/api/v1/*` request requires a Bearer token. See the [API guide](docs/en/API.md) for request fields and examples.
+See [API Reference](docs/en/API.md) for fields, error codes, RunningHub schemas, device sharing, and asset endpoints. See [`AGENT.md`](AGENT.md) for an Agent-oriented call sequence and Skill acceptance checklist.
 
-## Configuration
+## Asset management
 
-| Environment variable | Default | Description |
-|---|---|---|
-| `H3_HOST` | `0.0.0.0` | API listen address |
-| `H3_PORT` | `8193` | Web and API port |
-| `H3_API_KEY` | Empty | Optional Bearer token |
-| `H3_INCOGNITO_CODE` | Random value | Incognito-mode access code |
-| `H3_MAX_UPLOAD_MB` | `512` | Maximum size of one upload |
-| `H3_REMOTE_RECONNECT_SECONDS` | `120` | Remote task status reconnect window |
-| `CUDA_VISIBLE_DEVICES` | `GPU_ID` | Physical GPU used by the default ComfyUI node |
+### Folders and ownership
 
-Node addresses and the health-check interval can be changed through the Web interface or API and take effect immediately.
+Folders are single-level objects. Names contain 1 to 80 characters and are compared case-insensitively within the same level. New jobs accept `folder_id`; root and unfiled views place jobs in the unfiled group.
 
-## Verification
+```text
+GET    /api/v1/asset-folders
+POST   /api/v1/asset-folders
+PATCH  /api/v1/asset-folders/{folder_id}
+POST   /api/v1/asset-folders/move
+DELETE /api/v1/asset-folders/{folder_id}
+```
 
-Run the full test suite:
+The outer asset directory shows only unclassified local jobs. Double-clicking a folder opens the videos stored in that folder. Moving changes the relationship and does not copy files. Remote assets are read-only and cannot be moved, renamed, or deleted locally.
+
+Folder deletion checks queued and running jobs first. After confirmation, it removes completed job records, references, outputs, sidecars, covers, and logs in that folder.
+
+### Local asset management
+
+```text
+GET  /api/v1/assets/local
+GET  /api/v1/assets/local/clear-old-video/preview
+POST /api/v1/assets/local/clear-old-video
+POST /api/v1/assets/local/delete
+```
+
+Before clearing videos older than 30 days, the client should show every item, creation time, individual size, and total size. Files and folders created by another owner cannot be deleted.
+
+## Workflows and node packages
+
+API-format workflows are stored in [`workflows/`](workflows/). Fixed-version node packages and SHA-256 records are stored in [`comfyui_nodes/`](comfyui_nodes/). Main workflows include:
+
+- `minimax_h3_fl2va_fp8_720p_15s_api.json`
+- `minimax_h3_ref2va_fp8_scaled_api.json`
+- `minimax_h3_fl2va_fp8_turbo_lora_api.json`
+- `minimax_h3_ref2va_fp8_turbo_lora_api.json`
+- `minimax_h3_fl2va_fp8_sa_api.json`
+- `minimax_h3_ref2va_fp8_sa_api.json`
+- `minimax_h3_fl2va_vdn_api.json`
+- `minimax_h3_ref2va_vdn_api.json`
+- `minimax_h3_ref2va_fp8_digital_human_api.json`
+- `minimax_h3_ref2va_fp8_tts_api.json`
+- `minimax_music3_int8_api.json`
+
+Before submission, the service injects prompts, references, dimensions, frame counts, steps, seeds, folder prefixes, and output paths.
+
+## Deployment
+
+Install on a GPU server:
+
+```bash
+INSTALL_ROOT=/data/minimax-h3-stack \
+PYTHON_BIN=python3.11 \
+GPU_ID=0 \
+MODEL_PROVIDER=modelscope \
+bash scripts/install.sh
+```
+
+| Variable | Purpose |
+|---|---|
+| `INSTALL_ROOT` | ComfyUI, API, and model root |
+| `PYTHON_BIN` | Python used by the installation |
+| `GPU_ID` | GPU assigned to ComfyUI |
+| `MODEL_PROVIDER` | `modelscope` or `huggingface` |
+| `COMFY_PORT` | ComfyUI port, default 8188 |
+| `API_PORT` | API port, default 8193 |
+| `SKIP_MODELS` | Skip verified model downloads |
+| `START_SERVICES` | Start services after installation |
+| `DRY_RUN` | Print the installation plan |
+
+See [GPU Deployment](docs/en/DEPLOYMENT.md) for system requirements, model verification, service units, and ports. See [Operations](docs/en/OPERATIONS.md) for recovery and backup rules.
+
+## Validation
 
 ```bash
 python3 -m unittest discover -s tests -p 'test_*.py'
+node --check static/app.js
+python3 -m py_compile app/main.py app/jobs.py
+git diff --check
 ```
 
-Verify deployed models, nodes, services, and queue state:
+Validate an installation:
 
 ```bash
 INSTALL_ROOT=/data/minimax-h3-stack bash scripts/verify_install.sh
 ```
 
-## Repository structure
+## Project structure
 
 ```text
-app/                  FastAPI, queue, scheduling, and inference clients
-comfyui_nodes/        Pinned ComfyUI and custom-node archives
-desktop.py            pywebview desktop entry point
-static/               Responsive Chinese and English interface
-workflows/            H3 and Music3 ComfyUI API workflows
-patches/              ComfyUI compatibility and feature patches
-scripts/              Installation, packaging, model, verification, and smoke tests
-deploy/               systemd user-service templates
-docs/                 API, deployment, model, workflow, and operations guides
-tests/                Service and desktop contract tests
-model-manifest.json   Model sources, sizes, SHA-256 hashes, and license metadata
+app/                  FastAPI, job queue, node scheduling, and inference clients
+static/               Chinese and English responsive Web UI
+workflows/            H3, H3 SA, VDN H3, and Music3 API workflows
+comfyui_nodes/        Fixed-version node packages and manifests
+scripts/              Installation, download, validation, desktop, and smoke tests
+deploy/               systemd service templates
+patches/              ComfyUI compatibility patches
+docs/                 API, deployment, model, workflow, and operations docs
+data/                 SQLite settings, jobs, uploads, and outputs
+tests/                API and desktop contract tests
+AGENT.md              AI Agent API and Skill creation guide
 ```
 
 ## Documentation
 
-- [Cloud GPU deployment](docs/en/DEPLOYMENT.md)
-- [Agent installation guide](AGENT.md)
-- [Desktop app](docs/DESKTOP.md)
-- [API requests](docs/en/API.md)
-- [Model manifest](docs/en/MODELS.md)
-- [Workflow manifest](docs/en/WORKFLOWS.md)
-- [ComfyUI node packages](comfyui_nodes/README.md)
+- [API Reference](docs/en/API.md)
+- [GPU Deployment](docs/en/DEPLOYMENT.md)
 - [Operations](docs/en/OPERATIONS.md)
-- [Verification snapshot](docs/en/PROJECT_SNAPSHOT.md)
+- [Models](docs/en/MODELS.md)
+- [Workflows](docs/en/WORKFLOWS.md)
+- [Desktop application](docs/DESKTOP.md)
+- [ComfyUI node packages](comfyui_nodes/README.md)
+- [AI Agent guide](AGENT.md)
 - [Security](SECURITY.en.md)
-- [Third-party projects and licenses](THIRD_PARTY_NOTICES.en.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.en.md)

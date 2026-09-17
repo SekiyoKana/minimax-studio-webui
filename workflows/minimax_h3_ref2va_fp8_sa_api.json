@@ -276,7 +276,7 @@
         "127",
         0
       ],
-      "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+      "lora_name": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
       "strength_model": 1.0
     },
     "_meta": {
@@ -290,7 +290,7 @@
         "142",
         0
       ],
-      "shift_video": 12.0,
+      "shift_video": 6.0,
       "shift_audio": 3.0
     },
     "_meta": {

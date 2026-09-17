@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-07",
+  "generated_at": "2026-09-16",
   "models": [
     {
       "id": "fl2va-fp8",
@@ -65,12 +65,23 @@
     {
       "id": "turbo-lora",
       "required": true,
-      "target": "loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+      "target": "loras/minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
       "size_bytes": 1956193000,
-      "sha256": "2339acdf19bfe123f46b971ea35d367a84adb85de43627e1eceafa5a5b2b111e",
+      "sha256": "08cfe946033af7d27719b964b6e0a0e50c32138daabbd6ce4137e23df6bf9980",
       "license": "Apache-2.0",
       "sources": {
-        "huggingface": "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/050494d5fe05bd1b1140b8565ea51dc33a5085a5/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors"
+        "huggingface": "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/f3d9da6dac47dcb985684ca150f02893f619a171/minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors"
+      }
+    },
+    {
+      "id": "ref2va-turbo-lora",
+      "required": true,
+      "target": "loras/minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+      "size_bytes": 1956193000,
+      "sha256": "6a56f41ab4229c9dd845b9501bbd475ee57e112d846cf2e819d534a1ae928c5a",
+      "license": "Apache-2.0",
+      "sources": {
+        "huggingface": "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/0eebcc7e79f9cb200927c80b8e7595265b770e34/minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors"
       }
     },
     {

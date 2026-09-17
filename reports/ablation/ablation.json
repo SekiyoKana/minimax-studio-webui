@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-16T08:15:16.977512+00:00",
-  "git_revision": "d1a6050573daf232836a5206477f1ad6d179618e",
+  "generated_at": "2026-09-17T14:00:10.079470+00:00",
+  "git_revision": "0bbbfdfd9fab098e251b00dd119322256eaf01ad",
   "scope": "local-workflow-structure",
   "remote_tasks_submitted": false,
   "cases": [
@@ -127,7 +127,7 @@
             "127",
             0
           ],
-          "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+          "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
           "strength_model": 1.0
         },
         "143": {
@@ -135,7 +135,7 @@
             "142",
             0
           ],
-          "shift_video": 12.0,
+          "shift_video": 6.0,
           "shift_audio": 3.0
         }
       }
@@ -277,7 +277,7 @@
             "127",
             0
           ],
-          "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+          "lora_name": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
           "strength_model": 1.0
         },
         "143": {
@@ -285,7 +285,7 @@
             "142",
             0
           ],
-          "shift_video": 12.0,
+          "shift_video": 6.0,
           "shift_audio": 3.0
         }
       }
@@ -463,7 +463,7 @@
             "127",
             0
           ],
-          "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+          "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
           "strength_model": 1.0
         },
         "143": {
@@ -471,7 +471,7 @@
             "142",
             0
           ],
-          "shift_video": 12.0,
+          "shift_video": 6.0,
           "shift_audio": 3.0
         },
         "144": {
@@ -577,7 +577,7 @@
             "127",
             0
           ],
-          "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+          "lora_name": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
           "strength_model": 1.0
         },
         "143": {
@@ -585,7 +585,7 @@
             "142",
             0
           ],
-          "shift_video": 12.0,
+          "shift_video": 6.0,
           "shift_audio": 3.0
         },
         "144": {

@@ -40,11 +40,11 @@ GitHub 安装脚本默认将 ComfyUI 限制在 `127.0.0.1`，API 监听 `0.0.0.0
 | FL2VA 结果 | 完成 |
 | Ref2VA 任务 | `2e9c5f35-1286-4884-9ea2-1e518d875b70` |
 | Ref2VA 模型 | MiniMax H3 Ref2VA FP8 Scaled |
-| Ref2VA 配置 | FL2VA 8-step LoRA v1.0，强度 1.0 |
+| Ref2VA 配置 | Ref2VA 8-step v1.0 768p LoRA，强度 1.0 |
 | Ref2VA 总耗时 | 93.793 秒 |
 | Ref2VA 结果 | 完成 |
 
-两条任务均使用 `simple` 调度器、视频偏移 12.0 和音频偏移 3.0。Ref2VA 加速方案在专用 LoRA 发布前复用 FL2VA 8-step LoRA。
+两条任务均使用 `simple` 调度器、视频偏移 6.0 和音频偏移 3.0，并分别使用对应的 768p 8-step v1.0 LoRA。
 
 ## 自动测试
 

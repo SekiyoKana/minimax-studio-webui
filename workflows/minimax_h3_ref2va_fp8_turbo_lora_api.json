@@ -13,6 +13,6 @@
   "129": {"class_type": "RandomNoise", "inputs": {"noise_seed": 107094416}, "_meta": {"title": "Seed"}},
   "130": {"class_type": "CreateVideo", "inputs": {"images": ["122", 0], "audio": ["121", 0], "fps": 24.0, "bit_depth": 8}, "_meta": {"title": "Create Video with Audio"}},
   "136": {"class_type": "MiniMaxH3ReferenceToVideo", "inputs": {"clip": ["128", 0], "vae": ["119", 0], "audio_vae": ["120", 0], "prompt": "Generate a coherent audiovisual shot using the supplied references.", "width": 864, "height": 480, "length": 124, "ref_image_size": "match"}, "_meta": {"title": "MiniMax H3 Reference to Video"}},
-  "142": {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["127", 0], "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors", "strength_model": 1.0}, "_meta": {"title": "Load FL2VA 8-step LoRA v1.0 for Ref2VA"}},
-  "143": {"class_type": "MiniMaxH3SigmaShift", "inputs": {"model": ["142", 0], "shift_video": 12.0, "shift_audio": 3.0}, "_meta": {"title": "MiniMax H3 Sigma Shift"}}
+  "142": {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["127", 0], "lora_name": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors", "strength_model": 1.0}, "_meta": {"title": "Load Ref2VA 8-step LoRA v1.0 768p"}},
+  "143": {"class_type": "MiniMaxH3SigmaShift", "inputs": {"model": ["142", 0], "shift_video": 6.0, "shift_audio": 3.0}, "_meta": {"title": "MiniMax H3 Sigma Shift 6/3"}}
 }

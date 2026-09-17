@@ -80,6 +80,13 @@ class LocalStateStore:
                     nonce BLOB NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS asset_folders (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    name_key TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             columns = {
@@ -114,6 +121,78 @@ class LocalStateStore:
                 "INSERT OR IGNORE INTO desktop_settings (key, value, updated_at) VALUES (?, ?, ?)",
                 [(key, value, now) for key, value in defaults.items()],
             )
+
+    @staticmethod
+    def _validate_asset_folder_name(value: str) -> tuple[str, str]:
+        name = value.strip()
+        if not 1 <= len(name) <= 80:
+            raise ValueError("文件夹名称长度必须为 1 至 80 个字符")
+        return name, name.casefold()
+
+    def asset_folders(self) -> list[dict[str, Any]]:
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                "SELECT id, name, created_at, updated_at FROM asset_folders "
+                "ORDER BY created_at, name"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def asset_folder(self, folder_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT id, name, created_at, updated_at FROM asset_folders WHERE id = ?",
+                (folder_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def create_asset_folder(self, name: str) -> dict[str, Any]:
+        normalized, name_key = self._validate_asset_folder_name(name)
+        now = utc_now()
+        folder = {
+            "id": f"folder-{secrets.token_hex(8)}",
+            "name": normalized,
+            "created_at": now,
+            "updated_at": now,
+        }
+        try:
+            with self._lock, self._connect() as connection:
+                connection.execute(
+                    "INSERT INTO asset_folders (id, name, name_key, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (folder["id"], normalized, name_key, now, now),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise ValueError("文件夹名称已存在") from exc
+        return folder
+
+    def rename_asset_folder(self, folder_id: str, name: str) -> dict[str, Any]:
+        normalized, name_key = self._validate_asset_folder_name(name)
+        now = utc_now()
+        with self._lock, self._connect() as connection:
+            if not connection.execute(
+                "SELECT 1 FROM asset_folders WHERE id = ?", (folder_id,)
+            ).fetchone():
+                raise KeyError(folder_id)
+            try:
+                connection.execute(
+                    "UPDATE asset_folders SET name = ?, name_key = ?, updated_at = ? WHERE id = ?",
+                    (normalized, name_key, now, folder_id),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError("文件夹名称已存在") from exc
+        return self.asset_folder(folder_id) or {
+            "id": folder_id,
+            "name": normalized,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+    def delete_asset_folder(self, folder_id: str) -> bool:
+        with self._lock, self._connect() as connection:
+            result = connection.execute(
+                "DELETE FROM asset_folders WHERE id = ?", (folder_id,)
+            )
+        return result.rowcount > 0
 
     def get_setting(self, key: str, default: str = "") -> str:
         with self._lock, self._connect() as connection:

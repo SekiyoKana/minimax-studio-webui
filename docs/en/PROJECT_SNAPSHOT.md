@@ -40,11 +40,11 @@ The GitHub installer restricts ComfyUI to `127.0.0.1` by default. The API listen
 | FL2VA result | Completed |
 | Ref2VA job | `2e9c5f35-1286-4884-9ea2-1e518d875b70` |
 | Ref2VA model | MiniMax H3 Ref2VA FP8 Scaled |
-| Ref2VA configuration | FL2VA 8-step LoRA v1.0, strength 1.0 |
+| Ref2VA configuration | Ref2VA 8-step v1.0 768p LoRA, strength 1.0 |
 | Ref2VA elapsed time | 93.793 seconds |
 | Ref2VA result | Completed |
 
-Both jobs use the `simple` scheduler, video shift 12.0, and audio shift 3.0. Ref2VA acceleration reuses the FL2VA 8-step LoRA until a dedicated LoRA is released.
+Both jobs use the `simple` scheduler, video shift 6.0, and audio shift 3.0, with the corresponding 768p 8-step v1.0 LoRA for each model variant.
 
 ## Automated Tests
 

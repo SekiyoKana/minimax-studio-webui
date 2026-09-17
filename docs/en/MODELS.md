@@ -24,14 +24,15 @@ Core model pages:
 
 | File | Size | SHA-256 | Download |
 |---|---:|---|---|
-| `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` | 1,956,193,000 | `2339acdf19bfe123f46b971ea35d367a84adb85de43627e1eceafa5a5b2b111e` | [Pinned Hugging Face revision](https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/050494d5fe05bd1b1140b8565ea51dc33a5085a5/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors) |
+| `minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors` | 1,956,193,000 | `08cfe946033af7d27719b964b6e0a0e50c32138daabbd6ce4137e23df6bf9980` | [Pinned Hugging Face revision](https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/f3d9da6dac47dcb985684ca150f02893f619a171/minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors) |
+| `minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors` | 1,956,193,000 | `6a56f41ab4229c9dd845b9501bbd475ee57e112d846cf2e819d534a1ae928c5a` | [Pinned Hugging Face revision](https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/0eebcc7e79f9cb200927c80b8e7595265b770e34/minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors) |
 
 Author resources:
 
 1. [LightX2V MiniMax H3 Turbo LoRA model card](https://huggingface.co/lightx2v/Minimax-h3-Turbo)
 2. [ModelTC MiniMax H3 Turbo](https://github.com/ModelTC/Minimax-H3-Turbo)
 
-The current workflow uses LoRA strength 1.0, the `res_multistep` sampler, and `MiniMaxH3SigmaShift`, with steps fixed at 8. Ref2VA acceleration temporarily reuses this FL2VA LoRA until a dedicated Ref2VA release is available.
+The FL2VA and Ref2VA workflows use their corresponding 768p 8-step v1.0 LoRAs. Both use LoRA strength 1.0, the `res_multistep` sampler, eight steps, video shift 6.0, and audio shift 3.0.
 
 ## MiniMax Music3
 

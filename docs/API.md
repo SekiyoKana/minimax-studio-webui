@@ -258,10 +258,14 @@ curl -X DELETE http://127.0.0.1:8193/api/v1/generations/JOB_ID
 ## 重新生成
 
 ```bash
-curl -X POST http://127.0.0.1:8193/api/v1/generations/JOB_ID/regenerate
+curl -X POST http://127.0.0.1:8193/api/v1/generations/JOB_ID/regenerate \\
+  -H 'Content-Type: application/json' \\
+  -d '{"folder_id": null}'
 ```
 
 原任务进入已完成、失败或已取消状态后可以重新生成。新任务保留原提示词、参考文件、生成参数、随机种子和节点选择，参考文件会复制到新任务目录。
+
+重新生成接口接收 JSON 请求体 `{"folder_id": "folder-id"}`。`folder_id` 为 `null` 时任务进入未分组。无痕任务不支持文件夹。
 
 ## 下载产物
 
@@ -340,5 +344,15 @@ AI 服务配置和 API Key 保存在本机 `data/config.db`，网页端不使用
 | `POST` | `/api/v1/peering/connect` | 使用一次性验证码建立持久授权 |
 | `DELETE` | `/api/v1/peering/peers/{device_id}` | 撤销设备访问授权 |
 | `GET` | `/api/v1/peering/library` | 返回本机和已授权设备的归属方标签素材库 |
+
+素材文件夹接口仅管理本机任务。远端素材不返回文件夹归属，也不接受文件夹写入操作。`folder_id=__unfiled__` 查询未分组任务，省略该参数返回全部素材。
+
+| 方法 | 路径 | 作用 |
+|---|---|---|
+| `GET` | `/api/v1/asset-folders` | 返回本机文件夹和任务数量 |
+| `POST` | `/api/v1/asset-folders` | 创建单层文件夹 |
+| `PATCH` | `/api/v1/asset-folders/{folder_id}` | 重命名文件夹 |
+| `POST` | `/api/v1/asset-folders/move` | 批量移动本机任务或移入未分组 |
+| `DELETE` | `/api/v1/asset-folders/{folder_id}` | 删除文件夹、任务记录和关联文件 |
 
 互联设备通过 Bearer 令牌访问 `/api/v1/peering/export/*`。令牌只保存在双方本机 SQLite。互联地址仅允许局域网、回环和 Tailscale 地址。
