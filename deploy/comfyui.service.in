@@ -8,7 +8,7 @@ Type=simple
 WorkingDirectory=@@COMFY_ROOT@@
 EnvironmentFile=@@ENV_FILE@@
 Environment=PYTHONUNBUFFERED=1
-ExecStart=@@COMFY_PYTHON@@ main.py --listen @@COMFY_HOST@@ --port @@COMFY_PORT@@ --reserve-vram @@COMFY_RESERVE_VRAM_GB@@ --lowvram
+ExecStart=@@COMFY_PYTHON@@ main.py --listen @@COMFY_HOST@@ --port @@COMFY_PORT@@ --reserve-vram @@COMFY_RESERVE_VRAM_GB@@ --lowvram --max-upload-size 2048
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30

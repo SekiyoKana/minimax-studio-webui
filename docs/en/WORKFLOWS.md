@@ -61,6 +61,8 @@ H3 SA parameters are `sa_tau`, `sa_start_percent`, `sa_end_percent`, `sa_min_tok
 
 VDN-H3 applies the `ApplyVDNH3` Video Delta Net hybrid-attention patch. The steps control accepts 8–50 and defaults to 50: 8 steps selects `stage-dmd-step-250` with the turbo adapter, while 9–50 steps selects `stage-b-step-2000` with the turbo adapter disabled. Both paths use merged adapters and streamed branch weights. Do not combine it with Sol-Attn. Place checkpoints under `ComfyUI/models/vdn/`.
 
+The super-resolution video flow calculates a frame budget from the target GPU's free VRAM, input resolution, and requested scale. FFmpeg splits longer videos into segments. Each segment uses `ImageUpscaleWithModelBatched` with a per-frame batch, then `VHS_VideoCombine` preserves the source frame rate and audio. The API merges completed segments into the final MP4.
+
 The optional NaughtyTimes workflow adds node `141` with type `LoraLoaderBypass`, model strength 0.5, and CLIP strength 0.0.
 
 The digital human workflow adds:

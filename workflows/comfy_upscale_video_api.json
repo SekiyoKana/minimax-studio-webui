@@ -1,0 +1,78 @@
+{
+  "1": {
+    "class_type": "VHS_LoadVideo",
+    "inputs": {
+      "video": "input.mp4",
+      "force_rate": 0.0,
+      "custom_width": 0,
+      "custom_height": 0,
+      "frame_load_cap": 0,
+      "skip_first_frames": 0,
+      "select_every_nth": 1
+    },
+    "_meta": {
+      "title": "加载超分输入视频"
+    }
+  },
+  "2": {
+    "class_type": "UpscaleModelLoader",
+    "inputs": {
+      "model_name": "4x-UltraSharp.pth"
+    },
+    "_meta": {
+      "title": "加载分类超分模型"
+    }
+  },
+  "3": {
+    "class_type": "ImageUpscaleWithModelBatched",
+    "inputs": {
+      "upscale_model": [
+        "2",
+        0
+      ],
+      "images": [
+        "1",
+        0
+      ],
+      "per_batch": 1,
+      "downscale_ratio": 1.0,
+      "downscale_method": "lanczos",
+      "precision": "float16"
+    },
+    "_meta": {
+      "title": "逐帧执行视频超分"
+    }
+  },
+  "4": {
+    "class_type": "ImageScaleBy",
+    "inputs": {
+      "image": [
+        "3",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "scale_by": 1.0
+    },
+    "_meta": {
+      "title": "调整目标倍率"
+    }
+  },
+  "5": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "images": [
+        "4",
+        0
+      ],
+      "frame_rate": 24.0,
+      "loop_count": 0,
+      "filename_prefix": "minimax-studio-webui/upscale",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true
+    },
+    "_meta": {
+      "title": "保存超分视频"
+    }
+  }
+}

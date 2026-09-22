@@ -82,6 +82,40 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
 
 删除节点使用 `DELETE /api/v1/comfy/nodes/{node_id}`。正在执行任务、存在定向排队任务或属于最后一个启用节点时，服务拒绝停用或删除。
 
+## 创建超分任务
+
+超分任务通过 ComfyUI 节点执行，支持图片和视频输入。服务根据分类和倍率选择模型，视频任务逐帧处理并按源帧率合成 MP4。
+
+真人图片 2x：
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations \
+  -F 'task_type=upscale' \
+  -F 'upscale_category=real' \
+  -F 'upscale_scale=2' \
+  -F 'reference_manifest=[{"type":"image"}]' \
+  -F 'references=@input.png;type=image/png' \
+  -F 'comfy_node=auto'
+```
+
+动画视频 4x：
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/generations \
+  -F 'task_type=upscale' \
+  -F 'upscale_category=anime' \
+  -F 'upscale_scale=4' \
+  -F 'reference_manifest=[{"type":"video"}]' \
+  -F 'references=@input.mp4;type=video/mp4' \
+  -F 'comfy_node=auto'
+```
+
+`upscale_category` 可取 `real`、`anime`、`3d`。`upscale_scale` 可取 `2`、`4`。超分任务无需提示词、分辨率、时长和采样步数参数。
+
+超分单文件上传上限为 2048 MB，可通过环境变量 `H3_MAX_UPLOAD_MB` 调整。
+
+普通视频生成任务支持生成后自动超分。提交时使用 `auto_upscale=true`，并设置 `auto_upscale_category=real|anime|3d` 与 `auto_upscale_scale=2|4`。任务只创建一个记录，完成后直接返回超分视频。
+
 ## 创建 VDN-H3 任务
 
 VDN-H3 支持 8–50 步，支持 FL2VA 与 Ref2VA。8 步自动使用 `stage-dmd-step-250`，9–50 步自动使用 `stage-b-step-2000`：

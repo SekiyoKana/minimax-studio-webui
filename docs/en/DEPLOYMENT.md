@@ -62,6 +62,7 @@ The installer checks out the same revisions from the upstream repositories by de
 | `API_HOST` | `0.0.0.0` | Web and API listen address |
 | `API_PORT` | `8193` | Web and API port |
 | `COMFY_RESERVE_VRAM_GB` | `8` | ComfyUI reserved-VRAM argument |
+| ComfyUI upload limit | `2048 MB` | `--max-upload-size 2048` for video super-resolution inputs |
 | `INSTALL_NSFW` | `0` | Install the optional NaughtyTimes LoRA |
 | `NSFW_LORA_FILE` | Empty | Authorized local LoRA file |
 | `NSFW_LORA_URL` | Empty | Authorized LoRA download URL |

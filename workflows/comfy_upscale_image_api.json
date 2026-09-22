@@ -1,0 +1,63 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "input.png"
+    },
+    "_meta": {
+      "title": "加载超分输入图片"
+    }
+  },
+  "2": {
+    "class_type": "UpscaleModelLoader",
+    "inputs": {
+      "model_name": "RealESRGAN_x2plus.pth"
+    },
+    "_meta": {
+      "title": "加载分类超分模型"
+    }
+  },
+  "3": {
+    "class_type": "ImageUpscaleWithModel",
+    "inputs": {
+      "upscale_model": [
+        "2",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "执行图像超分"
+    }
+  },
+  "4": {
+    "class_type": "ImageScaleBy",
+    "inputs": {
+      "image": [
+        "3",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "scale_by": 1.0
+    },
+    "_meta": {
+      "title": "调整目标倍率"
+    }
+  },
+  "5": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "4",
+        0
+      ],
+      "filename_prefix": "minimax-studio-webui/upscale"
+    },
+    "_meta": {
+      "title": "保存超分图片"
+    }
+  }
+}

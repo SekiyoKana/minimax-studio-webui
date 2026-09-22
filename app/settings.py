@@ -104,8 +104,23 @@ class Settings:
             str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_vdn_api.json"),
         )
     )
+    comfy_upscale_image_workflow: Path = Path(
+        os.getenv(
+            "H3_COMFY_UPSCALE_IMAGE_WORKFLOW",
+            str(DEFAULT_WORKFLOW_ROOT / "comfy_upscale_image_api.json"),
+        )
+    )
+    comfy_upscale_video_workflow: Path = Path(
+        os.getenv(
+            "H3_COMFY_UPSCALE_VIDEO_WORKFLOW",
+            str(DEFAULT_WORKFLOW_ROOT / "comfy_upscale_video_api.json"),
+        )
+    )
     comfy_output_dir: Path = Path(
         os.getenv("H3_COMFY_OUTPUT_DIR", str(DEFAULT_COMFY_ROOT / "output"))
+    )
+    comfy_input_dir: Path = Path(
+        os.getenv("H3_COMFY_INPUT_DIR", str(DEFAULT_COMFY_ROOT / "input"))
     )
     comfy_poll_seconds: float = float(os.getenv("H3_COMFY_POLL_SECONDS", "2"))
     remote_reconnect_seconds: float = float(
@@ -118,7 +133,7 @@ class Settings:
     sglang_poll_seconds: float = float(os.getenv("H3_SGLANG_POLL_SECONDS", "2"))
     vram_limit_gb: float = float(os.getenv("H3_VRAM_LIMIT_GB", "19"))
     min_free_vram_gb: float = float(os.getenv("H3_MIN_FREE_VRAM_GB", "20"))
-    max_upload_mb: int = int(os.getenv("H3_MAX_UPLOAD_MB", "512"))
+    max_upload_mb: int = int(os.getenv("H3_MAX_UPLOAD_MB", "2048"))
     fake_engine: bool = os.getenv("H3_FAKE_ENGINE", "0") == "1"
 
     @property

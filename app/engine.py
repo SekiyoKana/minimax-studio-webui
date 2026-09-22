@@ -140,6 +140,13 @@ class FakeEngine:
         self.settings = settings
 
     def generate(self, job, progress, cancelled):
+        if job["request"].get("task_type") == "upscale":
+            source = Path(job["input_paths"][0])
+            suffix = ".mp4" if job["request"].get("media_type") == "video" else ".png"
+            output = self.settings.outputs_dir / output_file_name(job, suffix)
+            shutil.copy2(source, output)
+            progress(100, "测试模式超分任务完成")
+            return output
         progress(50, "测试模式")
         if job["request"].get("model_variant") == "music3-int8" or job["request"].get("execution_mode") == "tts":
             import wave
@@ -1054,6 +1061,7 @@ class ComfyUIH3Engine:
                 with connect(
                     f"{websocket_url}/ws?clientId={client_id}",
                     additional_headers=self.api_headers or None,
+                    proxy=None,
                     open_timeout=10,
                     max_size=None,
                 ) as socket:
@@ -1434,10 +1442,761 @@ class ComfyUIH3Engine:
         progress(100, f"Context Loop 完成，共 {len(segment_outputs)} 个片段")
         return output
 
+    def _generate_with_auto_upscale(
+        self,
+        job,
+        progress,
+        cancelled,
+        checkpoint=None,
+        checkpoint_callback=None,
+    ):
+        request = job["request"]
+        phase = str((checkpoint or {}).get("auto_upscale_phase") or "")
+        work_dir = self.settings.data_dir / "auto_upscale" / str(job["id"])
+        source = work_dir / "source.mp4"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        upscale_checkpoint = checkpoint if phase == "upscale" else None
+        if phase == "upscale":
+            if not source.is_file():
+                raise RuntimeError("自动超分 checkpoint 缺少生成后源视频")
+        elif not source.is_file():
+            base_output = self.settings.outputs_dir / output_file_name(job, ".mp4")
+            if base_output.is_file() and checkpoint is None:
+                shutil.copy2(base_output, source)
+            else:
+                if self._execution_mode(job) == "h3-sa" and float(request.get("duration", 0)) > 15:
+                    base_output = self._generate_h3_sa_long(
+                        job,
+                        progress,
+                        cancelled,
+                        checkpoint=checkpoint,
+                        checkpoint_callback=checkpoint_callback,
+                    )
+                else:
+                    base_output = self._generate_once(
+                        job,
+                        progress,
+                        cancelled,
+                        checkpoint=checkpoint,
+                        checkpoint_callback=checkpoint_callback,
+                    )
+                shutil.copy2(base_output, source)
+                if checkpoint_callback:
+                    checkpoint_callback(None)
+
+        auto_job = dict(job)
+        auto_job["request"] = {
+            **request,
+            "task_type": "upscale",
+            "media_type": "video",
+            "upscale_category": str(request.get("auto_upscale_category") or "real"),
+            "upscale_scale": int(request.get("auto_upscale_scale") or 2),
+            "auto_upscale": False,
+        }
+        auto_job["input_paths"] = [str(source)]
+
+        def upscale_checkpoint_callback(value):
+            if checkpoint_callback is None:
+                return
+            if value:
+                checkpoint_callback({**value, "auto_upscale_phase": "upscale"})
+            else:
+                checkpoint_callback(None)
+
+        def upscale_progress(value, stage):
+            mapped = 70 + round(max(0, min(100, int(value))) * 0.29)
+            progress(min(99, mapped), f"生成后超分 · {stage}")
+
+        output = ComfyUIUpscaleEngine(self.settings, self.node).generate(
+            auto_job,
+            upscale_progress,
+            cancelled,
+            checkpoint=upscale_checkpoint,
+            checkpoint_callback=upscale_checkpoint_callback,
+        )
+        shutil.rmtree(work_dir, ignore_errors=True)
+        if checkpoint_callback:
+            checkpoint_callback(None)
+        progress(100, "生成后超分完成")
+        return output
+
     def generate(self, job, progress, cancelled, checkpoint=None, checkpoint_callback=None):
+        if job.get("request", {}).get("auto_upscale"):
+            return self._generate_with_auto_upscale(
+                job,
+                progress,
+                cancelled,
+                checkpoint=checkpoint,
+                checkpoint_callback=checkpoint_callback,
+            )
+        if job.get("request", {}).get("task_type") == "upscale":
+            return ComfyUIUpscaleEngine(self.settings, self.node).generate(
+                job,
+                progress,
+                cancelled,
+                checkpoint=checkpoint,
+                checkpoint_callback=checkpoint_callback,
+            )
         request = job.get("request", {})
         if self._execution_mode(job) == "h3-sa" and float(request.get("duration", 0)) > 15:
             return self._generate_h3_sa_long(job, progress, cancelled, checkpoint, checkpoint_callback)
+        return self._generate_once(job, progress, cancelled, checkpoint, checkpoint_callback)
+
+
+class ComfyUIUpscaleEngine(ComfyUIH3Engine):
+    """Run category-aware image or video super-resolution through ComfyUI."""
+
+    MODEL_MATRIX = {
+        "real": {
+            2: ("RealESRGAN_x2plus.pth", 1.0),
+            4: ("4x_foolhardy_Remacri.pth", 1.0),
+        },
+        "anime": {
+            2: ("4x-AnimeSharp.pth", 0.5),
+            4: ("4x-AnimeSharp.pth", 1.0),
+        },
+        "3d": {
+            2: ("2xNomosUni_span_multijpg.pth", 1.0),
+            4: ("4x-UltraSharp.pth", 1.0),
+        },
+    }
+
+    UPSCALE_NODE_STAGES = {
+        "1": (8, "加载超分输入素材"),
+        "2": (18, "加载分类超分模型"),
+        "3": (82, "执行超分计算"),
+        "4": (90, "调整目标倍率"),
+        "5": (96, "保存超分产物"),
+    }
+
+    @classmethod
+    def model_spec(cls, category: str, scale: int) -> tuple[str, float]:
+        try:
+            return cls.MODEL_MATRIX[category][scale]
+        except KeyError as exc:
+            raise ValueError(f"不支持的超分分类或倍率：{category}/{scale}") from exc
+
+    def _load_upscale_workflow(
+        self,
+        job: dict[str, Any],
+        input_name: str,
+    ) -> dict[str, Any]:
+        request = job["request"]
+        media_type = request.get("media_type") or "image"
+        workflow_path = (
+            self.settings.comfy_upscale_video_workflow
+            if media_type == "video"
+            else self.settings.comfy_upscale_image_workflow
+        )
+        if not workflow_path.exists():
+            raise FileNotFoundError(f"ComfyUI 超分工作流不存在：{workflow_path}")
+        workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+        model_name, post_scale = self.model_spec(
+            str(request.get("upscale_category") or "real"),
+            int(request.get("upscale_scale") or 2),
+        )
+        workflow["1"]["inputs"]["video" if media_type == "video" else "image"] = input_name
+        workflow["2"]["inputs"]["model_name"] = model_name
+        workflow["4"]["inputs"]["scale_by"] = post_scale
+        output_node_id = "5"
+        workflow[output_node_id]["inputs"]["filename_prefix"] = f"minimax-studio-webui/{job['id']}"
+        if media_type == "video":
+            workflow["3"]["inputs"]["per_batch"] = 1
+            workflow[output_node_id]["inputs"]["frame_rate"] = float(request.get("source_fps") or 24)
+            if request.get("has_audio"):
+                workflow[output_node_id]["inputs"]["audio"] = ["1", 2]
+        return workflow
+
+    def _upload_upscale_input(self, client, job: dict[str, Any]) -> str:
+        source = Path(job["input_paths"][0])
+        request = job["request"]
+        media_type = str(request.get("media_type") or "image")
+        suffix = source.suffix.lower() or (".mp4" if media_type == "video" else ".png")
+        filename = f"01_{media_type}{suffix}"
+        subfolder = f"minimax-studio-webui/{job['id']}"
+        content_type = mimetypes.guess_type(source.name)[0] or "application/octet-stream"
+        with source.open("rb") as handle:
+            response = client.post(
+                "/upload/image",
+                data={"type": "input", "subfolder": subfolder, "overwrite": "true"},
+                files={"image": (filename, handle, content_type)},
+            )
+        response.raise_for_status()
+        result = response.json()
+        stored_name = str(result.get("name") or filename)
+        stored_folder = str(result.get("subfolder") or subfolder).strip("/")
+        return f"{stored_folder}/{stored_name}" if stored_folder else stored_name
+
+    @staticmethod
+    def _output_items(history: dict[str, Any]) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        output = history.get("outputs") or {}
+        for node_output in output.values():
+            if not isinstance(node_output, dict):
+                continue
+            for value in node_output.values():
+                if isinstance(value, list):
+                    items.extend(item for item in value if isinstance(item, dict))
+        return items
+
+    def _cleanup_comfy_output_family(self, result_item: dict[str, Any]) -> None:
+        output_root = self.settings.comfy_output_dir.resolve()
+        folder = (output_root / str(result_item.get("subfolder") or "")).resolve()
+        filename = Path(str(result_item.get("filename") or ""))
+        prefix = filename.stem
+        suffix = prefix.rsplit("_", 1)
+        if len(suffix) == 2 and suffix[1].isdigit():
+            prefix = suffix[0]
+        try:
+            folder.relative_to(output_root)
+        except ValueError:
+            return
+        if not folder.is_dir():
+            return
+        for candidate in folder.iterdir():
+            if not candidate.is_file() or not candidate.name.startswith(prefix):
+                continue
+            try:
+                candidate.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def _cleanup_comfy_input(self, job: dict[str, Any]) -> None:
+        input_root = self.settings.comfy_input_dir.resolve()
+        input_dir = (input_root / "minimax-studio-webui" / str(job.get("id") or "")).resolve()
+        try:
+            input_dir.relative_to(input_root)
+        except ValueError:
+            return
+        if input_dir.is_dir():
+            shutil.rmtree(input_dir, ignore_errors=True)
+
+    def _copy_upscale_result(self, job, history: dict[str, Any], client=None) -> Path:
+        status = history.get("status") or {}
+        if status.get("completed") is not True or status.get("status_str") != "success":
+            messages = status.get("messages") or []
+            raise RuntimeError(f"ComfyUI 超分工作流未成功完成：{messages[-1:]}")
+        media_type = str(job["request"].get("media_type") or "image")
+        allowed_suffixes = {".mp4", ".webm", ".mkv", ".mov"} if media_type == "video" else {".png", ".jpg", ".jpeg", ".webp"}
+        result_item = next(
+            (
+                item
+                for item in self._output_items(history)
+                if Path(str(item.get("filename") or "")).suffix.lower() in allowed_suffixes
+            ),
+            None,
+        )
+        if not result_item:
+            raise RuntimeError(f"ComfyUI 历史记录中没有找到超分{media_type}产物")
+        suffix = Path(str(result_item["filename"])).suffix.lower()
+        output = self.settings.outputs_dir / output_file_name(job, suffix)
+        if client is None:
+            output_root = self.settings.comfy_output_dir.resolve()
+            source = (
+                output_root
+                / str(result_item.get("subfolder") or "")
+                / str(result_item["filename"])
+            ).resolve()
+            try:
+                source.relative_to(output_root)
+            except ValueError as exc:
+                raise RuntimeError("ComfyUI 返回了非法超分产物路径") from exc
+            if not source.is_file():
+                raise FileNotFoundError(f"ComfyUI 超分产物不存在：{source}")
+            shutil.copy2(source, output)
+            source.unlink(missing_ok=True)
+        else:
+            params = {
+                "filename": result_item["filename"],
+                "subfolder": str(result_item.get("subfolder") or ""),
+                "type": str(result_item.get("type") or "output"),
+            }
+            with client.stream("GET", "/view", params=params) as response:
+                response.raise_for_status()
+                with output.open("wb") as target:
+                    for chunk in response.iter_bytes():
+                        target.write(chunk)
+            output_root = self.settings.comfy_output_dir.resolve()
+            remote_source = (
+                output_root
+                / str(result_item.get("subfolder") or "")
+                / str(result_item["filename"])
+            ).resolve()
+            try:
+                remote_source.relative_to(output_root)
+            except ValueError:
+                remote_source = None
+            if remote_source and remote_source.is_file():
+                remote_source.unlink(missing_ok=True)
+        self._cleanup_comfy_output_family(result_item)
+        output.with_suffix(".json").write_text(
+            json.dumps(job["request"], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return output
+
+    def _gpu_memory_for_node(self) -> tuple[float, float, str]:
+        try:
+            raw = subprocess.check_output(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=index,memory.total,memory.free",
+                    "--format=csv,noheader,nounits",
+                ],
+                text=True,
+                timeout=10,
+            )
+            rows = []
+            for line in raw.splitlines():
+                parts = [item.strip() for item in line.split(",")]
+                if len(parts) != 3:
+                    continue
+                rows.append((int(parts[0]), float(parts[1]) / 1024, float(parts[2]) / 1024))
+            label = " ".join(
+                str(value)
+                for value in (
+                    getattr(self.settings, "gpu_label", ""),
+                    getattr(self.node, "name", ""),
+                    os.environ.get("CUDA_VISIBLE_DEVICES", ""),
+                )
+            )
+            match = re.search(r"GPU\s*([0-9]+)", label, re.IGNORECASE)
+            selected = next((row for row in rows if match and row[0] == int(match.group(1))), None)
+            if selected is None:
+                selected = max(rows, key=lambda row: row[2]) if rows else None
+            if selected:
+                return selected[1], selected[2], f"GPU {selected[0]}"
+        except (OSError, subprocess.SubprocessError, ValueError):
+            pass
+        return 24.0, 12.0, "GPU"
+
+    @staticmethod
+    def _video_metadata(path: Path) -> tuple[float, float, int, int, int]:
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration:stream=width,height,r_frame_rate,nb_frames",
+                    "-select_streams",
+                    "v:0",
+                    "-of",
+                    "json",
+                    str(path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=True,
+            )
+            payload = json.loads(result.stdout)
+            stream = (payload.get("streams") or [{}])[0]
+            raw_rate = str(stream.get("r_frame_rate") or "24/1")
+            if "/" in raw_rate:
+                numerator, denominator = raw_rate.split("/", 1)
+                fps = float(numerator) / max(float(denominator), 1.0)
+            else:
+                fps = float(raw_rate)
+            duration = float((payload.get("format") or {}).get("duration") or 0)
+            width = int(stream.get("width") or 0)
+            height = int(stream.get("height") or 0)
+            try:
+                frames = int(stream.get("nb_frames") or 0)
+            except (TypeError, ValueError):
+                frames = 0
+            if frames <= 0:
+                frames = max(1, round(duration * fps))
+            if not duration > 0 or not 1 <= fps <= 120 or width <= 0 or height <= 0:
+                raise ValueError("视频元数据无效")
+            return duration, fps, width, height, frames
+        except (OSError, ValueError, TypeError, ZeroDivisionError, json.JSONDecodeError, subprocess.SubprocessError) as exc:
+            raise RuntimeError(f"无法读取超分视频元数据：{path.name}") from exc
+
+    def _video_frame_budget(self, job: dict[str, Any], width: int, height: int) -> tuple[int, float, str]:
+        total_gb, free_gb, gpu_name = self._gpu_memory_for_node()
+        scale = int(job["request"].get("upscale_scale") or 2)
+        pixel_factor = (width * height) / float(1280 * 720)
+        pixel_factor *= (scale / 2.0) ** 2
+        usable_gb = max(2.0, min(free_gb, total_gb) - 6.0)
+        budget = int((usable_gb * 4.0) / max(pixel_factor, 0.05))
+        return max(8, min(64, budget)), free_gb, gpu_name
+
+    @staticmethod
+    def _segment_job(job: dict[str, Any], index: int) -> dict[str, Any]:
+        segment_job = dict(job)
+        segment_job["id"] = f"{job['id']}-segment-{index + 1:04d}"
+        segment_job["output_stem"] = f"{job.get('output_stem') or job['id']}-segment-{index + 1:04d}"
+        return segment_job
+
+    def _segment_output_path(self, job: dict[str, Any], index: int) -> Path:
+        segment_job = self._segment_job(job, index)
+        return self.settings.outputs_dir / output_file_name(segment_job, ".mp4")
+
+    @staticmethod
+    def _valid_segment_output(path: Path) -> bool:
+        if not path.is_file() or path.stat().st_size <= 0:
+            return False
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    str(path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=True,
+            )
+            return float(result.stdout.strip() or 0) > 0
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return False
+
+    @staticmethod
+    def _remove_segment_output(path: Path) -> None:
+        for candidate in (
+            path,
+            path.with_suffix(".json"),
+            path.with_name(f"{path.stem}.preview.jpg"),
+        ):
+            try:
+                candidate.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def _split_upscale_video(
+        self,
+        source: Path,
+        segment_dir: Path,
+        segment_seconds: float,
+    ) -> list[Path]:
+        shutil.rmtree(segment_dir, ignore_errors=True)
+        segment_dir.mkdir(parents=True, exist_ok=True)
+        pattern = segment_dir / "segment_%04d.mp4"
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-i",
+                    str(source),
+                    "-map",
+                    "0:v:0",
+                    "-map",
+                    "0:a?",
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    "ultrafast",
+                    "-crf",
+                    "18",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "192k",
+                    "-force_key_frames",
+                    f"expr:gte(t,n_forced*{segment_seconds:.6f})",
+                    "-f",
+                    "segment",
+                    "-segment_time",
+                    f"{segment_seconds:.6f}",
+                    "-reset_timestamps",
+                    "1",
+                    str(pattern),
+                ],
+                check=True,
+                timeout=3600,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise RuntimeError(f"超分视频切分失败：{source.name}") from exc
+        segments = sorted(segment_dir.glob("segment_*.mp4"))
+        if not segments:
+            raise RuntimeError("超分视频切分后没有生成有效片段")
+        return segments
+
+    @staticmethod
+    def _merge_upscale_video_segments(segment_paths: list[Path], output: Path) -> None:
+        if not segment_paths:
+            raise RuntimeError("超分视频没有可合并片段")
+        concat_list = output.with_suffix(".concat.txt")
+        concat_list.write_text(
+            "".join(
+                f"file '{path.resolve().as_posix().replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'\n"
+                for path in segment_paths
+            ),
+            encoding="utf-8",
+        )
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    str(concat_list),
+                    "-map",
+                    "0:v:0",
+                    "-map",
+                    "0:a?",
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    "medium",
+                    "-crf",
+                    "18",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-c:a",
+                    "aac",
+                    "-movflags",
+                    "+faststart",
+                    str(output),
+                ],
+                check=True,
+                timeout=3600,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise RuntimeError("超分视频片段合并失败") from exc
+        finally:
+            concat_list.unlink(missing_ok=True)
+
+    def _generate_upscale_video_long(
+        self,
+        job,
+        progress,
+        cancelled,
+        checkpoint=None,
+        checkpoint_callback=None,
+    ) -> Path:
+        source = Path(job["input_paths"][0])
+        duration, fps, width, height, frame_count = self._video_metadata(source)
+        frame_budget, free_gb, gpu_name = self._video_frame_budget(job, width, height)
+        segment_seconds = max(1.0 / fps, frame_budget / fps)
+        segment_dir = source.parent / "_upscale_segments"
+        segments = self._split_upscale_video(source, segment_dir, segment_seconds)
+        segment_count = len(segments)
+        checkpoint_index = int((checkpoint or {}).get("upscale_segment_index") or 0)
+        completed_prefix = 0
+        segment_outputs: list[Path] = []
+        while completed_prefix < segment_count:
+            candidate = self._segment_output_path(job, completed_prefix)
+            if not self._valid_segment_output(candidate):
+                break
+            segment_outputs.append(candidate)
+            completed_prefix += 1
+        start_index = completed_prefix
+        active_checkpoint = checkpoint
+        if checkpoint_index:
+            active_index = max(0, checkpoint_index - 1)
+            if active_index < completed_prefix:
+                active_checkpoint = None
+                start_index = completed_prefix
+            elif active_index == completed_prefix:
+                start_index = active_index
+            else:
+                active_checkpoint = None
+                start_index = completed_prefix
+            if start_index < completed_prefix:
+                start_index = completed_prefix
+        if active_checkpoint is None and checkpoint_callback and checkpoint_index:
+            checkpoint_callback(None)
+        try:
+            progress(
+                2,
+                f"{gpu_name} 当前空闲 {free_gb:.1f} GiB，视频 {width}×{height} 共 {frame_count} 帧，切分为 {segment_count} 段，从视频切片 {min(start_index + 1, segment_count)}/{segment_count} 继续",
+            )
+            for index in range(start_index, segment_count):
+                if cancelled():
+                    raise InterruptedError("generation cancelled")
+                segment_path = segments[index]
+                segment_request = dict(job["request"])
+                segment_request["source_fps"] = fps
+                segment_request["has_audio"] = bool(job["request"].get("has_audio"))
+                segment_job = self._segment_job(job, index)
+                segment_job["request"] = segment_request
+                segment_job["input_paths"] = [str(segment_path)]
+
+                def segment_progress(value, stage, segment_number=index + 1):
+                    overall = 2 + ((segment_number - 1) + max(0, min(100, value)) / 100) / segment_count * 96
+                    progress(min(98, max(2, round(overall))), f"视频切片 {segment_number}/{segment_count} · {stage}")
+
+                def segment_checkpoint(value, segment_number=index + 1):
+                    if checkpoint_callback is None:
+                        return
+                    if value:
+                        checkpoint_callback({**value, "upscale_segment_index": segment_number})
+                    else:
+                        checkpoint_callback(None)
+
+                segment_checkpoint_value = active_checkpoint if index == start_index else None
+                output = self._generate_once(
+                    segment_job,
+                    segment_progress,
+                    cancelled,
+                    checkpoint=segment_checkpoint_value,
+                    checkpoint_callback=segment_checkpoint,
+                )
+                segment_outputs.append(output)
+                segment_checkpoint(None)
+                active_checkpoint = None
+
+            progress(98, f"正在合并 {segment_count} 个超分片段")
+            output = self.settings.outputs_dir / output_file_name(job, ".mp4")
+            self._merge_upscale_video_segments(segment_outputs, output)
+            for segment_output in segment_outputs:
+                self._remove_segment_output(segment_output)
+            output.with_suffix(".json").write_text(
+                json.dumps(job["request"], ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            progress(100, f"长视频超分完成，共处理 {segment_count} 段")
+            return output
+        finally:
+            shutil.rmtree(segment_dir, ignore_errors=True)
+
+    def _generate_once(
+        self,
+        job,
+        progress,
+        cancelled,
+        checkpoint=None,
+        checkpoint_callback=None,
+    ):
+        import httpx
+        from websockets.sync.client import connect
+
+        prompt_id = _remote_checkpoint_id(checkpoint, "comfyui", str(self.node.id))
+        client_id = str((checkpoint or {}).get("client_id") or f"minimax-studio-upscale-{uuid.uuid4().hex}")
+        websocket_url = self.comfy_url.replace("http://", "ws://", 1).replace("https://", "wss://", 1)
+        media_type = str(job["request"].get("media_type") or "image")
+        try:
+            with httpx.Client(
+                base_url=self.comfy_url,
+                headers=self.api_headers,
+                timeout=httpx.Timeout(30, connect=10),
+                trust_env=False,
+            ) as client:
+                if prompt_id:
+                    progress(5, f"正在重新连接 ComfyUI 超分任务 {prompt_id[:8]}")
+                    history = self._poll_until_finished(client, prompt_id, progress, cancelled)
+                    progress(98, "回传超分产物")
+                    output = self._copy_upscale_result(job, history, client)
+                    self._cleanup_comfy_input(job)
+                    return output
+                client.get("/system_stats").raise_for_status()
+                input_name = self._upload_upscale_input(client, job)
+                workflow = self._load_upscale_workflow(job, input_name)
+                with connect(
+                    f"{websocket_url}/ws?clientId={client_id}",
+                    additional_headers=self.api_headers or None,
+                    proxy=None,
+                    open_timeout=10,
+                    max_size=None,
+                ) as socket:
+                    response = client.post("/prompt", json={"prompt": workflow, "client_id": client_id})
+                    response.raise_for_status()
+                    result = response.json()
+                    prompt_id = result.get("prompt_id")
+                    if not prompt_id:
+                        raise RuntimeError(f"ComfyUI 未返回超分任务标识：{result}")
+                    _write_remote_checkpoint(
+                        checkpoint_callback,
+                        provider="comfyui",
+                        node_id=str(self.node.id),
+                        remote_id=str(prompt_id),
+                        client_id=client_id,
+                    )
+                    progress(4, "已提交 ComfyUI 超分任务")
+                    history = self._wait_for_finished(socket, client, prompt_id, progress, cancelled)
+                if cancelled():
+                    self._cancel_prompt(client, prompt_id)
+                    raise InterruptedError("generation cancelled")
+                progress(98, "回传超分产物")
+                output = self._copy_upscale_result(job, history, client)
+                self._cleanup_comfy_input(job)
+            progress(99, f"{('视频' if media_type == 'video' else '图片')}超分完成")
+            return output
+        finally:
+            self._release_vram()
+
+    def _wait_for_finished(self, socket, client, prompt_id, progress, cancelled, audio_only=False, recovering=False):
+        while True:
+            if cancelled():
+                self._cancel_prompt(client, prompt_id)
+                raise InterruptedError("generation cancelled")
+            try:
+                raw = socket.recv(timeout=self.settings.comfy_poll_seconds)
+            except TimeoutError:
+                history = self._history(client, prompt_id)
+                if history:
+                    return history
+                continue
+            except Exception:
+                return self._poll_until_finished(client, prompt_id, progress, cancelled)
+            if isinstance(raw, bytes):
+                continue
+            try:
+                message = json.loads(raw)
+            except (TypeError, json.JSONDecodeError):
+                continue
+            data = message.get("data") or {}
+            if data.get("prompt_id") != prompt_id:
+                continue
+            event_type = message.get("type")
+            if event_type == "executing":
+                node = str(data.get("node") or "")
+                if node in self.UPSCALE_NODE_STAGES:
+                    percent, stage = self.UPSCALE_NODE_STAGES[node]
+                    progress(percent, stage)
+                elif data.get("node") is None:
+                    history = self._history(client, prompt_id)
+                    if history:
+                        return history
+            elif event_type == "execution_success":
+                for _ in range(10):
+                    history = self._history(client, prompt_id)
+                    if history:
+                        return history
+                    time.sleep(0.2)
+            elif event_type == "execution_error":
+                raise RuntimeError(data.get("exception_message") or "ComfyUI 超分工作流执行失败")
+            elif event_type == "execution_interrupted":
+                raise RuntimeError("ComfyUI 超分工作流被中断")
+
+    def generate(self, job, progress, cancelled, checkpoint=None, checkpoint_callback=None):
+        request = job["request"]
+        if request.get("media_type") not in {"image", "video"}:
+            raise ValueError("超分任务仅支持图片或视频输入")
+        if request.get("media_type") == "video":
+            source = Path(job["input_paths"][0])
+            _, _, width, height, frame_count = self._video_metadata(source)
+            frame_budget, _, _ = self._video_frame_budget(job, width, height)
+            if frame_count > frame_budget:
+                return self._generate_upscale_video_long(
+                    job,
+                    progress,
+                    cancelled,
+                    checkpoint=checkpoint,
+                    checkpoint_callback=checkpoint_callback,
+                )
         return self._generate_once(job, progress, cancelled, checkpoint, checkpoint_callback)
 
 

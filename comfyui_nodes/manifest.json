@@ -30,6 +30,11 @@
         "SamplerCustomAdvanced",
         "SaveAudio",
         "SaveVideo",
+        "SaveImage",
+        "UpscaleModelLoader",
+        "ImageUpscaleWithModel",
+        "ImageUpscaleWithModelBatched",
+        "ImageScaleBy",
         "UNETLoader",
         "VAEDecode",
         "VAEDecodeAudio",
@@ -43,7 +48,7 @@
       "commit": "993082e4f2473bf4acaf06f51e33877a7eb38960",
       "license": "GPL-3.0",
       "sha256": "064ced8c704f8f847430f581044e3b510d312e29169db202e30aa1e8be2176d5",
-      "provides": ["VHS_LoadVideo"]
+      "provides": ["VHS_LoadVideo", "VHS_VideoCombine"]
     },
     {
       "file": "ComfyUI-MultiGPU-62f98ed.zip",

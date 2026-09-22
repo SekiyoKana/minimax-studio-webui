@@ -62,6 +62,7 @@ Ubuntu 22.04 默认源可能不包含 Python 3.11。云 GPU 镜像可以预装 P
 | `API_HOST` | `0.0.0.0` | Web 与 API 监听地址 |
 | `API_PORT` | `8193` | Web 与 API 端口 |
 | `COMFY_RESERVE_VRAM_GB` | `8` | ComfyUI 预留显存参数 |
+| ComfyUI 上传上限 | `2048 MB` | `--max-upload-size 2048`，用于视频超分输入 |
 | `INSTALL_NSFW` | `0` | 是否安装可选 NaughtyTimes LoRA |
 | `NSFW_LORA_FILE` | 空 | 已授权的本地 LoRA 文件 |
 | `NSFW_LORA_URL` | 空 | 已授权的下载地址 |

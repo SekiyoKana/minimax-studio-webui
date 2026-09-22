@@ -103,7 +103,7 @@ const COPY = {
     connectEngine: "连接推理节点", offline: "服务离线", autoSchedule: "自动调度", nodePending: "节点待分配", online: "在线", available: "可用", nodeOffline: "离线", disabled: "已停用", busy: "执行中",
     balance: "余额", credits: "点数", recentCost: "最近调用消耗", accountUnavailable: "账户信息不可用", workflowUnavailable: "工作流信息不可用", balancePending: "余额读取中", accountTasks: "账户任务", balanceUpdated: "余额更新", balanceFailed: "余额读取失败",
     noAssets: "暂无素材", loading: "加载中", allLoaded: "已加载全部", loadFailed: "加载失败", startCreating: "开始创作", you: "你", allAssets: "全部素材", unfiled: "未分组", folders: "文件夹", editAssets: "编辑素材", exitAssetEdit: "退出编辑", selectedAssets: "已选择", newFolder: "新建文件夹", renameFolder: "重命名文件夹", deleteFolder: "删除文件夹", moveTo: "移动到", noSelection: "未选择素材", folderName: "文件夹名称", folderPurpose: "用于归类短剧生成任务", folderDeleteConfirm: "删除文件夹后，其中的任务记录、参考文件和生成产物都会被删除。确认继续？", activeFolderDelete: "文件夹包含进行中任务，请先取消或等待任务结束", regenerateFolder: "选择重新生成任务的文件夹",
-    native: "普通流 · 原生 H3", turbo: "8-step LoRA · 强度 1.0", dualSampling: "双采 · Sigma + 潜空间放大", h3Sa: "MiniMax H3 SA · Sol-Attn", vdnH3: "VDN-H3 · Video Delta Net", digitalHuman: "数字人 · 音频驱动", tts: "H3 TTS · 人物语音", music3: "Music3 · 30 步", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache（已停用）",
+    native: "普通流 · 原生 H3", turbo: "8-step LoRA · 强度 1.0", dualSampling: "双采 · Sigma + 潜空间放大", h3Sa: "MiniMax H3 SA · Sol-Attn", vdnH3: "VDN-H3 · Video Delta Net", digitalHuman: "数字人 · 音频驱动", tts: "H3 TTS · 人物语音", videoUpscale: "视频超分", upscale2x: "2x 超分", upscale4x: "4x 超分", music3: "Music3 · 30 步", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache（已停用）",
     reuse: "回填到发送区", useAsInput: "作为输入", regenerate: "重新生成", edit: "修改", cancel: "取消", delete: "删除", deleteRecord: "删除记录", downloadVideo: "下载视频", downloadAudio: "下载音频", downloadImage: "下载图片", downloadFile: "下载文件", videoReady: "视频已生成", musicReady: "音频已生成", imageReady: "图片已生成", fileReady: "文件已生成", peering: "多端互联", peerConnected: "已连接设备", peerRevoked: "已撤销设备访问", peerConnectNotice: "设备已完成互联", localPeerKey: "本机互联密钥",
     aiKeySaved: "API Key 已保存到本机数据库", aiKeyEmpty: "尚未保存 API Key", aiKeyReplace: "输入新值可覆盖已保存密钥", noPeers: "暂无已连接设备", revokeAccess: "撤销访问", owner: "归属方", pairingRefresh: "秒后刷新", connectPeer: "建立互联",
     assetDetail: "素材详情", prompt: "关键词与提示词", lyrics: "歌词", sourceFiles: "使用的文件", parameters: "生成参数", noSourceFiles: "未使用参考文件", outputUnavailable: "当前没有可预览的生成产物", assetDeleted: "该资产已删除", deviceFilter: "设备筛选",
@@ -116,7 +116,7 @@ const COPY = {
     connectEngine: "Connecting to inference nodes", offline: "Service offline", autoSchedule: "Auto", nodePending: "Awaiting node", online: "Online", available: "available", nodeOffline: "Offline", disabled: "Disabled", busy: "Running",
     balance: "Balance", credits: "credits", recentCost: "Recent call cost", accountUnavailable: "Account unavailable", workflowUnavailable: "Workflow information unavailable", balancePending: "Loading balance", accountTasks: "Account tasks", balanceUpdated: "balance updated", balanceFailed: "balance read failed",
     noAssets: "No assets", loading: "Loading", allLoaded: "All assets loaded", loadFailed: "Load failed", startCreating: "Start creating", you: "You", allAssets: "All assets", unfiled: "Unfiled", folders: "Folders", editAssets: "Edit assets", exitAssetEdit: "Exit editing", selectedAssets: "Selected", newFolder: "New folder", renameFolder: "Rename folder", deleteFolder: "Delete folder", moveTo: "Move to", noSelection: "No assets selected", folderName: "Folder name", folderPurpose: "Organize short-drama generation tasks", folderDeleteConfirm: "Deleting this folder also deletes its task records, source files, and generated outputs. Continue?", activeFolderDelete: "This folder contains active tasks. Cancel or wait for them first.", regenerateFolder: "Choose a folder for the regenerated task",
-    native: "Native H3", turbo: "8-step LoRA · 1.0", dualSampling: "Dual sampling · Sigma + latent upscale", h3Sa: "MiniMax H3 SA · Sol-Attn", vdnH3: "VDN-H3 · Video Delta Net", digitalHuman: "Digital human · audio driven", tts: "H3 TTS · Character voice", music3: "Music3 · 30 steps", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache (disabled)",
+    native: "Native H3", turbo: "8-step LoRA · 1.0", dualSampling: "Dual sampling · Sigma + latent upscale", h3Sa: "MiniMax H3 SA · Sol-Attn", vdnH3: "VDN-H3 · Video Delta Net", digitalHuman: "Digital human · audio driven", tts: "H3 TTS · Character voice", videoUpscale: "Video super-resolution", upscale2x: "2x super-resolution", upscale4x: "4x super-resolution", music3: "Music3 · 30 steps", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache (disabled)",
     reuse: "Fill composer", useAsInput: "Use as input", regenerate: "Regenerate", edit: "Edit", cancel: "Cancel", delete: "Delete", deleteRecord: "Delete record", downloadVideo: "Download video", downloadAudio: "Download audio", downloadImage: "Download image", downloadFile: "Download file", videoReady: "Video generated", musicReady: "Audio generated", imageReady: "Image generated", fileReady: "File generated", peering: "Device sharing", peerConnected: "Connected device", peerRevoked: "Device access revoked", peerConnectNotice: "Device pairing completed", localPeerKey: "Local pairing key",
     aiKeySaved: "API Key saved in the local database", aiKeyEmpty: "No API Key saved", aiKeyReplace: "Enter a new value to replace the saved key", noPeers: "No connected devices", revokeAccess: "Revoke access", owner: "Owner", pairingRefresh: "s until refresh", connectPeer: "Connect",
     assetDetail: "Asset details", prompt: "Keywords and prompt", lyrics: "Lyrics", sourceFiles: "Source files", parameters: "Parameters", noSourceFiles: "No reference files", outputUnavailable: "No generated output is available for preview", assetDeleted: "This asset has been deleted", deviceFilter: "Device filter",
@@ -200,6 +200,7 @@ function applyStaticLocale() {
   setText('#executionMode option[value="dual-sampling"]', "Dual sampling · Sigma + latent upscale");
   setText('#executionMode option[value="digital-human"]', "Digital human · audio driven");
   setText('#executionMode option[value="tts"]', "H3 TTS · character voice");
+  setText('#executionMode option[value="video-upscale"]', "Video super-resolution");
   setText("#music3ExecutionOption", "Music3 · 30 steps");
   setText("#durationHint", "Video length follows the driving audio");
   setText("#mentionQuickLabel", "Quick actions");
@@ -362,6 +363,9 @@ function modelLabel(job) {
     return job.request?.runninghub_workflow_name || job.assigned_node?.workflow_name || job.assigned_node?.name || "RunningHub";
   }
   if (job.request?.model_variant === "music3-int8") return "Music3 INT8";
+  if (job.request?.task_type === "upscale") {
+    return `${{ real: "真人", anime: "动画", "3d": "3D" }[job.request?.upscale_category] || "超分"} · ${job.request?.upscale_scale || 2}x`;
+  }
   return job.request?.model_variant === "ref2va-fp8" ? "Ref2VA FP8" : "FL2VA FP8";
 }
 
@@ -380,6 +384,7 @@ function mediaDownloadLabel(mediaType) {
 
 function executionModeLabel(job) {
   if (job.request?.provider === "runninghub" || job.assigned_node?.provider === "runninghub") return "RunningHub";
+  if (job.request?.task_type === "upscale") return t("videoUpscale");
   if (job.request?.execution_mode === "music3") return t("music3");
   if (job.request?.execution_mode === "digital-human") return t("digitalHuman");
   if (job.request?.execution_mode === "tts") return t("tts");
@@ -393,6 +398,7 @@ function executionModeLabel(job) {
 }
 
 function executionModeClass(job) {
+  if (job.request?.task_type === "upscale") return "upscale";
   if (job.request?.execution_mode === "music3") return "music3";
   if (job.request?.execution_mode === "digital-human") return "digital-human";
   if (job.request?.execution_mode === "tts") return "tts";
@@ -805,6 +811,51 @@ function selectedExecutionMode() {
   return el("executionMode").value;
 }
 
+function isUpscale(executionMode = selectedExecutionMode()) {
+  return executionMode === "video-upscale";
+}
+
+function selectedUpscaleScale() {
+  return Number(el("upscaleScale").value) === 4 ? 4 : 2;
+}
+
+function autoUpscaleParameters() {
+  return {
+    auto_upscale: Boolean(el("autoUpscale")?.checked),
+    auto_upscale_category: el("upscaleCategory")?.value || "real",
+    auto_upscale_scale: Number(el("upscaleScale")?.value) === 4 ? 4 : 2,
+  };
+}
+
+function confirmAutoUpscale() {
+  return !el("autoUpscale")?.checked || isUpscale();
+}
+
+let autoUpscaleConfirmResolve = null;
+
+function closeAutoUpscaleConfirm(result = false) {
+  el("autoUpscaleConfirmModal").hidden = true;
+  if (document.activeElement?.closest("#autoUpscaleConfirmModal")) document.activeElement.blur();
+  if (autoUpscaleConfirmResolve) {
+    const resolve = autoUpscaleConfirmResolve;
+    autoUpscaleConfirmResolve = null;
+    resolve(result);
+  }
+}
+
+function requestAutoUpscaleConfirmation() {
+  if (!el("autoUpscale")?.checked || isUpscale()) return Promise.resolve(true);
+  el("autoUpscaleConfirmCategory").value = el("upscaleCategory").value || "real";
+  el("autoUpscaleConfirmScale").value = el("upscaleScale").value || "2";
+  el("autoUpscaleConfirmModal").hidden = false;
+  refreshIcons();
+  return new Promise((resolve) => { autoUpscaleConfirmResolve = resolve; });
+}
+
+function backendExecutionMode() {
+  return isUpscale() ? "native" : selectedExecutionMode();
+}
+
 const SA_DEFAULTS = {
   sa_tau: 1.3,
   sa_start_percent: 0.2,
@@ -1048,6 +1099,7 @@ function referenceLimits(variant = selectedVariant()) {
     return limits;
   }
   if (isMusic3(variant)) return { image: 0, video: 0, audio: 0 };
+  if (isUpscale()) return { image: 1, video: 1, audio: 0 };
   if (isDigitalHuman()) return { image: 1, video: 0, audio: 1 };
   if (isDualSampling()) return { image: 9, video: 0, audio: 0 };
   if (isTTS()) return { image: 0, video: 0, audio: 3 };
@@ -1080,6 +1132,7 @@ function referenceLabels(
     counts[kind] += 1;
     const runningHubField = runningHubReferenceField(item, schema);
     if (runningHubField) return runningHubFieldLabel(runningHubField);
+    if (isUpscale(executionMode)) return kind === "video" ? localized("输入视频", "Input video") : localized("输入图片", "Input image");
     if (isDigitalHuman(executionMode)) return kind === "image" ? localized("人物图像", "Portrait") : localized("驱动音频", "Driving audio");
     if (!isRef2VA(variant)) return counts.image === 1 ? localized("首帧", "First frame") : localized("尾帧", "Last frame");
     return `<${{ image: "Picture", video: "Video", audio: "Audio" }[kind]} ${counts[kind]}>`;
@@ -1102,6 +1155,12 @@ function validateReferenceSet(references = state.references, variant = selectedV
     return missing ? localized(`请填写 ${runningHubFieldLabel(missing)}`, `Provide ${runningHubFieldLabel(missing)}`) : "";
   }
   if (isMusic3(variant)) return references.length ? localized("Music3 不使用参考素材", "Music3 does not use reference files") : "";
+  if (isUpscale()) {
+    if (references.length !== 1 || !["image", "video"].includes(references[0]?.kind || references[0]?.type)) {
+      return localized("超分任务需要添加 1 张图片或 1 段视频", "Super-resolution requires one image or one video");
+    }
+    return "";
+  }
   if (isTTS()) {
     const audioCount = references.filter((item) => (item.kind || item.type) === "audio").length;
     if (audioCount !== references.length || references.length > 3) {
@@ -1166,14 +1225,18 @@ async function api(url, options = {}) {
 function updateModelUi() {
   const runningHubNode = selectedRunningHubNode();
   const runningHub = Boolean(runningHubNode?.runninghub_schema);
+  const upscale = !runningHub && isUpscale();
   syncRunningHubSchema();
   el("modelControl").hidden = Boolean(runningHubNode);
+  el("modelControl").hidden = Boolean(runningHubNode) || upscale;
   el("executionControl").hidden = Boolean(runningHubNode);
   el("runningHubWorkflowControl").hidden = !runningHubNode;
+  el("upscaleCategoryControl").hidden = !upscale;
+  el("upscaleScaleControl").hidden = !upscale;
   el("runningHubWorkflowName").textContent = runningHubNode
     ? `${runningHubNode.workflow_name || runningHubNode.name} · ${runningHubNode.runninghub_resource_type === "ai-app" ? "AI App" : "Workflow"}`
     : "";
-  const music3 = !runningHub && isMusic3();
+  const music3 = !runningHub && isMusic3() && !upscale;
   const music3ExecutionOption = el("music3ExecutionOption");
   music3ExecutionOption.hidden = !music3;
   if (music3) {
@@ -1188,6 +1251,10 @@ function updateModelUi() {
   const h3Sa = isH3SA();
   const vdnH3 = isVDNH3();
   const tts = isTTS();
+  const autoUpscaleAllowed = !runningHub && !upscale && !music3 && !tts;
+  el("autoUpscaleControl").hidden = !autoUpscaleAllowed;
+  el("autoUpscale").disabled = !autoUpscaleAllowed;
+  if (!autoUpscaleAllowed) el("autoUpscale").checked = false;
   const fl2vaOption = el("modelVariant").querySelector('option[value="fl2va-fp8"]');
   fl2vaOption.disabled = nsfw || digitalHuman || tts || dualSampling;
   if (nsfw || digitalHuman || tts || dualSampling) el("modelVariant").value = "ref2va-fp8";
@@ -1195,13 +1262,13 @@ function updateModelUi() {
   const ref2va = isRef2VA();
   const accelerated = selectedExecutionMode() === "turbo-lora";
   const stepsMode = el("steps").dataset.mode;
-  const nextStepsMode = music3 ? "music3" : vdnH3 ? "vdn-h3" : "h3";
+  const nextStepsMode = upscale ? "upscale" : music3 ? "music3" : vdnH3 ? "vdn-h3" : "h3";
   if (stepsMode !== nextStepsMode) {
-    el("steps").value = music3 ? "30" : vdnH3 ? "50" : "10";
+    el("steps").value = upscale ? "1" : music3 ? "30" : vdnH3 ? "50" : "10";
     el("steps").dataset.mode = nextStepsMode;
   }
-  el("steps").min = vdnH3 ? "8" : "4";
-  el("steps").max = "50";
+  el("steps").min = upscale ? "1" : vdnH3 ? "8" : "4";
+  el("steps").max = upscale ? "1" : "50";
   el("steps").step = vdnH3 ? "1" : "1";
   const duration = el("duration");
   const maxDuration = music3 || h3Sa ? 300 : 15;
@@ -1212,13 +1279,13 @@ function updateModelUi() {
   duration.value = Number.isFinite(currentDuration) && currentDuration >= 1 && currentDuration <= maxDuration
     ? String(currentDuration)
     : String(defaultDuration);
-  if (music3 || accelerated || digitalHuman || h3Sa) {
-    el("steps").value = music3 ? "30" : accelerated ? "8" : digitalHuman ? "20" : "8";
+  if (upscale || music3 || accelerated || digitalHuman || h3Sa) {
+    el("steps").value = upscale ? "1" : music3 ? "30" : accelerated ? "8" : digitalHuman ? "20" : "8";
   } else if (vdnH3) {
     const vdnSteps = Number(el("steps").value);
     if (!Number.isInteger(vdnSteps) || vdnSteps < 8 || vdnSteps > 50) el("steps").value = "50";
   }
-  el("steps").disabled = music3 || accelerated || digitalHuman || h3Sa || runningHub;
+  el("steps").disabled = upscale || music3 || accelerated || digitalHuman || h3Sa || runningHub;
   el("duration").disabled = digitalHuman;
   const durationControl = el("duration").closest(".duration-control");
   durationControl.classList.toggle("digital-human", digitalHuman);
@@ -1234,23 +1301,23 @@ function updateModelUi() {
   const runningHubKinds = new Set(runningHubMediaFields().map((field) => field.media_kind));
   referenceInput.accept = runningHub
     ? [...runningHubKinds].map((kind) => kind === "file" ? "*/*" : `${kind}/*`).join(",")
-    : music3 ? "" : tts ? "audio/*" : digitalHuman ? "image/*,audio/*" : dualSampling ? "image/*" : ref2va ? "image/*,video/*,audio/*" : "image/*";
+    : music3 ? "" : upscale ? "image/*,video/*" : tts ? "audio/*" : digitalHuman ? "image/*,audio/*" : dualSampling ? "image/*" : ref2va ? "image/*,video/*,audio/*" : "image/*";
   el("addReference").title = state.locale === "en"
-    ? runningHub ? "Add a workflow input file" : tts ? "Add up to three character voice references" : digitalHuman ? "Add portrait and driving audio" : dualSampling ? "Add image references for dual sampling" : ref2va ? "Add image, video, or audio references" : "Add first or last frame"
-    : runningHub ? "添加工作流输入文件" : tts ? "添加最多 3 段人物音频参考" : digitalHuman ? "添加人物图片和驱动音频" : dualSampling ? "添加双采图片参考" : ref2va ? "添加图片、视频或音频参考" : "添加首帧或尾帧";
+    ? runningHub ? "Add a workflow input file" : upscale ? "Add one image or video" : tts ? "Add up to three character voice references" : digitalHuman ? "Add portrait and driving audio" : dualSampling ? "Add image references for dual sampling" : ref2va ? "Add image, video, or audio references" : "Add first or last frame"
+    : runningHub ? "添加工作流输入文件" : upscale ? "添加一张图片或一段视频" : tts ? "添加最多 3 段人物音频参考" : digitalHuman ? "添加人物图片和驱动音频" : dualSampling ? "添加双采图片参考" : ref2va ? "添加图片、视频或音频参考" : "添加首帧或尾帧";
   el("addReference").setAttribute("aria-label", el("addReference").title);
   el("addReference").hidden = music3 || (runningHub && runningHubKinds.size === 0);
-  el("aspectControl").hidden = music3 || tts || runningHub;
-  el("resolutionControl").hidden = music3 || tts || runningHub;
-  el("duration").closest(".duration-control").hidden = runningHub;
-  el("stepsControl").hidden = runningHub || h3Sa;
+  el("aspectControl").hidden = upscale || music3 || tts || runningHub;
+  el("resolutionControl").hidden = upscale || music3 || tts || runningHub;
+  el("duration").closest(".duration-control").hidden = runningHub || upscale;
+  el("stepsControl").hidden = runningHub || h3Sa || upscale;
   el("lyrics").hidden = !music3;
-  el("globalSeedControl").hidden = runningHub;
+  el("globalSeedControl").hidden = runningHub || upscale;
   // SA tuning uses the validated server defaults. Keep the controls in the
   // DOM for backward-compatible saved settings, but do not expose them.
   el("saSettings").hidden = true;
   el("stepsControl").title = state.locale === "en" ? music3 ? "Music3 uses 30 steps" : h3Sa ? "H3 SA uses 8 LoRA steps" : vdnH3 ? "VDN-H3 uses 8 to 50 steps; default 50" : "Sampling steps" : music3 ? "Music3 固定使用 30 步" : h3Sa ? "H3 SA 固定使用 8 步 LoRA" : vdnH3 ? "VDN-H3 可使用 8–50 步，默认 50 步" : "采样步数";
-  el("optimizePrompt").hidden = runningHub;
+  el("optimizePrompt").hidden = runningHub || upscale;
   el("optimizePrompt").title = state.locale === "en" ? music3 ? "Optimize style" : tts ? "Optimize TTS dialogue prompt" : "Optimize prompt" : music3 ? "优化曲风" : tts ? "优化 TTS 对话提示词" : "优化提示词";
   el("optimizePrompt").setAttribute("aria-label", el("optimizePrompt").title);
   el("optimizePromptLabel").textContent = el("optimizePrompt").title;
@@ -1264,8 +1331,8 @@ function updateModelUi() {
       ? runningHubFieldLabel(primaryText)
       : localized("该工作流没有主文本输入，可留空", "This workflow has no primary text input; this field may be empty")
     : state.locale === "en"
-      ? music3 ? "Describe genre, mood, tempo, key, instruments, vocals, and arrangement..." : tts ? "Describe each speaker's age, personality, delivery, and exact dialogue..." : "Describe the scene, characters, action, camera, and sound..."
-      : music3 ? "描述曲风、情绪、速度、调式、乐器、人声与编曲…" : tts ? "描述人物年龄、性格、说话方式和需要生成的完整对白…" : "输入自然语言，描述场景、人物、动作、镜头与声音…";
+      ? upscale ? "Optional note for the super-resolution task..." : music3 ? "Describe genre, mood, tempo, key, instruments, vocals, and arrangement..." : tts ? "Describe each speaker's age, personality, delivery, and exact dialogue..." : "Describe the scene, characters, action, camera, and sound..."
+      : upscale ? "可选，填写超分任务说明…" : music3 ? "描述曲风、情绪、速度、调式、乐器、人声与编曲…" : tts ? "描述人物年龄、性格、说话方式和需要生成的完整对白…" : "输入自然语言，描述场景、人物、动作、镜头与声音…";
   el("dropZone").title = localized("可拖入本地文件或素材库生成产物", "Drop local files or generated assets from the library");
   renderReferences();
   const error = validateReferenceSet(state.references);
@@ -1794,13 +1861,29 @@ async function ensureAssetGridFilled() {
   await loadAssets();
 }
 
+function canVideoUpscale(job) {
+  return job.status === "completed" && Boolean(job.result_url) && jobMediaType(job) === "video";
+}
+
+function videoUpscaleAction(job) {
+  if (!canVideoUpscale(job)) return "";
+  const jobId = escapeHtml(job.id);
+  return `<button type="button" data-job-action="video-upscale" data-job-id="${jobId}" title="${t("videoUpscale")}" aria-label="${t("videoUpscale")}">${icon("scan-up")}</button>`;
+}
+
+function videoUpscaleMessageAction(job) {
+  if (!canVideoUpscale(job)) return "";
+  return `<button type="button" data-job-action="video-upscale" data-job-id="${escapeHtml(job.id)}">${icon("scan-up")}<span>${t("videoUpscale")}</span></button>`;
+}
+
 function assetAction(job) {
   const jobId = escapeHtml(job.id);
   if (job.peer_asset) {
     const inputAction = job.status === "completed" && job.result_url
       ? `<button type="button" data-asset-input="${jobId}" title="${t("useAsInput")}" aria-label="${t("useAsInput")}">${icon("file-input")}</button>`
       : "";
-    return inputAction ? `<span class="asset-actions">${inputAction}</span>` : "";
+    const upscaleAction = videoUpscaleAction(job);
+    return inputAction || upscaleAction ? `<span class="asset-actions">${inputAction}${upscaleAction}</span>` : "";
   }
   if (job.status === "queued") {
     return `<span class="asset-actions"><button type="button" data-job-action="edit" data-job-id="${jobId}" title="修改" aria-label="修改">${icon("pencil")}</button><button type="button" data-job-action="cancel" data-job-id="${jobId}" title="取消" aria-label="取消">${icon("square")}</button></span>`;
@@ -1811,7 +1894,7 @@ function assetAction(job) {
   const inputAction = job.status === "completed" && job.result_url
     ? `<button type="button" data-asset-input="${jobId}" title="${t("useAsInput")}" aria-label="${t("useAsInput")}">${icon("file-input")}</button>`
     : "";
-  return `<span class="asset-actions">${inputAction}<button type="button" data-job-action="delete" data-job-id="${jobId}" title="删除" aria-label="删除">${icon("trash-2")}</button></span>`;
+  return `<span class="asset-actions">${inputAction}${videoUpscaleAction(job)}<button type="button" data-job-action="delete" data-job-id="${jobId}" title="删除" aria-label="删除">${icon("trash-2")}</button></span>`;
 }
 
 function renderAssetCard(job) {
@@ -2156,10 +2239,13 @@ async function refreshProxyJobs() {
 
 function referenceSummary(job) {
   const references = job.request?.references || [];
+  const summaryExecutionMode = job.request?.task_type === "upscale"
+    ? "video-upscale"
+    : job.request?.execution_mode || "native";
   const labels = referenceLabels(
     references,
     job.request?.model_variant || "fl2va-fp8",
-    job.request?.execution_mode || "native",
+    summaryExecutionMode,
     job.request?.runninghub_schema || null,
   );
   if (!references.length) return "";
@@ -2181,12 +2267,13 @@ function referenceSummary(job) {
 
 function messageActions(job) {
   if (job.peer_asset) return job.status === "completed" && job.result_url
-    ? `<div class="message-actions"><button type="button" data-job-action="input" data-job-id="${job.id}">${icon("file-input")}<span>${t("useAsInput")}</span></button></div>`
+    ? `<div class="message-actions"><button type="button" data-job-action="input" data-job-id="${job.id}">${icon("file-input")}<span>${t("useAsInput")}</span></button>${videoUpscaleMessageAction(job)}</div>`
     : "";
   if (job.request?.remote_proxy) {
     const buttons = [];
     if (job.status === "completed" && job.result_url) {
       buttons.push(`<button type="button" data-job-action="input" data-job-id="${job.id}">${icon("file-input")}<span>${t("useAsInput")}</span></button>`);
+      if (canVideoUpscale(job)) buttons.push(videoUpscaleMessageAction(job));
     }
     if (isActive(job)) {
       buttons.push(`<button type="button" class="cancel" data-job-action="cancel" data-job-id="${job.id}">${icon("square")}<span>${t("cancel")}</span></button>`);
@@ -2198,6 +2285,7 @@ function messageActions(job) {
   const buttons = [`<button type="button" data-job-action="reuse" data-job-id="${job.id}">${icon("corner-down-left")}<span>${t("reuse")}</span></button>`];
   if (job.status === "completed" && job.result_url) {
     buttons.push(`<button type="button" data-job-action="input" data-job-id="${job.id}">${icon("file-input")}<span>${t("useAsInput")}</span></button>`);
+    if (canVideoUpscale(job)) buttons.push(videoUpscaleMessageAction(job));
   }
   if (job.status === "queued") {
     buttons.push(`<button type="button" data-job-action="edit" data-job-id="${job.id}">${icon("pencil")}<span>${t("edit")}</span></button>`);
@@ -2248,7 +2336,7 @@ function renderJobExchange(job) {
   return `<section class="exchange" id="job-${job.id}" data-job-id="${job.id}">
     <article class="message user-message">
       <div class="message-avatar user-avatar">${t("you")}</div>
-      <div class="message-body">${referenceSummary(job)}<div class="message-text">${escapeHtml(request.prompt || request.runninghub_workflow_name || "")}${audio && request.lyrics ? `\n\n${escapeHtml(request.lyrics)}` : ""}</div><div class="message-meta">${sourceLabel}${executionMode}<span>${modelLabel(job)}</span><span>${escapeHtml(nodeLabel(job))}</span>${runningHub || audio ? "" : `<span>${request.width} × ${request.height}</span>`}${runningHub ? "" : `<span>${request.duration}${t("seconds")}</span><span>${request.steps} ${t("steps")}</span><span>${t("seed")} ${request.seed}</span>`}${elapsed}${incognito}</div></div>
+      <div class="message-body">${referenceSummary(job)}<div class="message-text">${escapeHtml(request.prompt || request.runninghub_workflow_name || "")}${audio && request.lyrics ? `\n\n${escapeHtml(request.lyrics)}` : ""}</div><div class="message-meta">${sourceLabel}${executionMode}<span>${modelLabel(job)}</span><span>${escapeHtml(nodeLabel(job))}</span>${runningHub || audio || request.task_type === "upscale" ? "" : `<span>${request.width} × ${request.height}</span>`}${runningHub || request.task_type === "upscale" ? "" : `<span>${request.duration}${t("seconds")}</span><span>${request.steps} ${t("steps")}</span><span>${t("seed")} ${request.seed}</span>`}${elapsed}${incognito}</div></div>
     </article>
     <article class="message assistant-message" data-output-job-id="${escapeHtml(job.id)}">
       <div class="message-avatar assistant-avatar">H3</div>
@@ -2351,10 +2439,10 @@ function renderAssetDetail(job, windowNode = el("assetDetailModal")) {
     ? [localAssetTypeLabel(mediaType), job.owner_name ? `${t("owner")} ${job.owner_name}` : null]
     : [
       executionModeLabel(job), modelLabel(job), nodeLabel(job),
-      runningHub || audio ? null : `${request.width} × ${request.height}`,
-      runningHub ? null : `${request.duration}${t("seconds")}`,
-      runningHub ? null : `${request.steps} ${t("steps")}`,
-      runningHub ? null : `${t("seed")} ${request.seed}`,
+      runningHub || audio || request.task_type === "upscale" ? null : `${request.width} × ${request.height}`,
+      runningHub || request.task_type === "upscale" ? null : `${request.duration}${t("seconds")}`,
+      runningHub || request.task_type === "upscale" ? null : `${request.steps} ${t("steps")}`,
+      runningHub || request.task_type === "upscale" ? null : `${t("seed")} ${request.seed}`,
       ...runningHubParameterFacts(request),
       `${t("overallTime")} ${formatElapsed(job.elapsed_seconds)}`,
     ]).filter(Boolean).map((value) => `<span>${escapeHtml(value)}</span>`).join("");
@@ -2381,6 +2469,11 @@ function renderAssetDetail(job, windowNode = el("assetDetailModal")) {
   get("reuseAssetDetail").disabled = peerAsset || localAsset;
   get("reuseOutputAssetDetail").hidden = localAsset;
   get("reuseOutputAssetDetail").disabled = localAsset || !downloadable;
+  const videoUpscaleButton = get("upscaleVideoAssetDetail");
+  if (videoUpscaleButton) {
+    videoUpscaleButton.hidden = !canVideoUpscale(job);
+    videoUpscaleButton.disabled = !canVideoUpscale(job);
+  }
   refreshIcons();
 }
 
@@ -2406,6 +2499,7 @@ async function openAssetDetail(jobId) {
   windowNode.querySelector("#deleteAssetDetail span").textContent = t("deleteRecord");
   windowNode.querySelector("#renameAssetDetail span").textContent = localized("重命名文件", "Rename file");
   windowNode.querySelector("#reuseOutputAssetDetail span").textContent = t("useAsInput");
+  windowNode.querySelector("#upscaleVideoAssetDetail span").textContent = t("videoUpscale");
   windowNode.querySelector("#regenerateAssetDetail span").textContent = t("regenerate");
   windowNode.querySelector("#reuseAssetDetail span").textContent = t("reuse");
   windowNode.dataset.detailWindowId = windowId;
@@ -2428,6 +2522,7 @@ async function openAssetDetail(jobId) {
   get("regenerateAssetDetail").hidden = false;
   get("reuseAssetDetail").hidden = false;
   get("reuseOutputAssetDetail").hidden = false;
+  get("upscaleVideoAssetDetail").hidden = true;
   get("regenerateAssetDetail").disabled = true;
   get("reuseOutputAssetDetail").disabled = true;
   get("assetDetailBody").innerHTML = `<div class="feed-loading"><span></span><span></span><span></span></div>`;
@@ -2577,6 +2672,33 @@ async function useGeneratedOutputAsInput(jobId) {
   if (detailOpen) closeAssetDetail(detailRecord.id);
 }
 
+async function startVideoUpscaleFromJob(jobId) {
+  const detailRecord = activeAssetDetailRecord();
+  const detailOpen = Boolean(detailRecord);
+  const target = detailOpen ? detailElement(detailRecord, "assetDetailError") : el("formError");
+  target.textContent = t("fillLoading");
+  try {
+    const job = await fetchAssetDetail(jobId);
+    if (!canVideoUpscale(job)) throw new Error(t("outputUnavailable"));
+    const response = await fetch(job.result_url, { cache: "no-store" });
+    if (!response.ok) throw new Error(t("outputUnavailable"));
+    const blob = await response.blob();
+    const basename = String(job.title || job.id).replace(/[^\w\u4e00-\u9fff.-]+/g, "_").slice(0, 64) || job.id;
+    const file = new File([blob], `${basename}.mp4`, { type: blob.type || "video/mp4" });
+    resetComposer();
+    el("executionMode").value = "video-upscale";
+    el("upscaleCategory").value = "real";
+    el("upscaleScale").value = "2";
+    updateModelUi();
+    if (!addFiles([file])) throw new Error(el("formError").textContent || t("outputUnavailable"));
+    updateModelUi();
+    target.textContent = "";
+    if (detailOpen) closeAssetDetail(detailRecord.id);
+  } catch (error) {
+    target.textContent = error.message;
+  }
+}
+
 function composerNodeForJob(job) {
   const requestedNode = job.request?.comfy_node || "auto";
   if (requestedNode !== "auto" && Array.from(el("comfyNode").options).some((option) => option.value === requestedNode && !option.disabled)) {
@@ -2606,7 +2728,12 @@ async function backfillJob(jobId) {
     promptInput.value = job.request?.prompt || "";
     el("lyrics").value = job.request?.lyrics || "";
     el("modelVariant").value = job.request?.model_variant || "fl2va-fp8";
-    el("executionMode").value = job.request?.execution_mode || "native";
+    el("executionMode").value = job.request?.task_type === "upscale"
+      ? "video-upscale"
+      : job.request?.execution_mode || "native";
+    el("upscaleCategory").value = job.request?.upscale_category || "real";
+    el("upscaleScale").value = String(job.request?.upscale_scale === 4 ? 4 : 2);
+    el("autoUpscale").checked = Boolean(job.request?.auto_upscale);
     setSaParameters(job.request || {});
     el("comfyNode").value = composerNodeForJob(job);
     updateModelUi();
@@ -2666,7 +2793,12 @@ async function startEdit(jobId) {
     promptInput.value = job.request.prompt;
     el("lyrics").value = job.request.lyrics || "";
     el("modelVariant").value = job.request.model_variant || "fl2va-fp8";
-    el("executionMode").value = job.request.execution_mode || "native";
+    el("executionMode").value = job.request?.task_type === "upscale"
+      ? "video-upscale"
+      : job.request.execution_mode || "native";
+    el("upscaleCategory").value = job.request?.upscale_category || "real";
+    el("upscaleScale").value = String(job.request?.upscale_scale === 4 ? 4 : 2);
+    el("autoUpscale").checked = Boolean(job.request?.auto_upscale);
     setSaParameters(job.request || {});
     el("comfyNode").value = composerNodeForJob(job);
     el("seed").value = String(job.request.seed);
@@ -2778,6 +2910,7 @@ async function regenerateJob(jobId) {
 async function handleJobAction(action, jobId) {
   if (action === "reuse") return backfillJob(jobId);
   if (action === "input") return useGeneratedOutputAsInput(jobId).catch((error) => showError(error.message));
+  if (action === "video-upscale") return startVideoUpscaleFromJob(jobId);
   if (action === "regenerate") return regenerateJob(jobId);
   if (action === "edit") return startEdit(jobId);
   if (action === "cancel") return cancelJob(jobId);
@@ -2788,13 +2921,20 @@ async function handleJobAction(action, jobId) {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   showError("");
+  if (!confirmAutoUpscale()) return;
+  if (!(await requestAutoUpscaleConfirmation())) return;
+  if (el("autoUpscale")?.checked) {
+    el("upscaleCategory").value = el("autoUpscaleConfirmCategory").value;
+    el("upscaleScale").value = el("autoUpscaleConfirmScale").value;
+  }
   const prompt = promptInput.value.trim();
   const runningHubNode = selectedRunningHubNode();
   const runningHub = Boolean(runningHubNode?.runninghub_schema);
-  const minimumPromptLength = isMusic3() ? 2 : 8;
+  const upscale = isUpscale();
+  const minimumPromptLength = upscale ? 0 : isMusic3() ? 2 : 8;
   if (!runningHub && prompt.length < minimumPromptLength) return showError(localized(`请填写至少 ${minimumPromptLength} 个字符的提示词`, `Enter a prompt with at least ${minimumPromptLength} characters`));
-  const steps = isMusic3() ? 30 : selectedExecutionMode() === "turbo-lora" || isH3SA() ? 8 : isVDNH3() ? Number(el("steps").value) : isDigitalHuman() ? 20 : Number(el("steps").value);
-  if (!runningHub && (!Number.isInteger(steps) || steps < 4 || steps > 50)) return showError(localized("采样步数请输入 4–50 的整数", "Sampling steps must be an integer from 4 to 50"));
+  const steps = upscale ? 1 : isMusic3() ? 30 : selectedExecutionMode() === "turbo-lora" || isH3SA() ? 8 : isVDNH3() ? Number(el("steps").value) : isDigitalHuman() ? 20 : Number(el("steps").value);
+  if (!runningHub && !upscale && (!Number.isInteger(steps) || steps < 4 || steps > 50)) return showError(localized("采样步数请输入 4–50 的整数", "Sampling steps must be an integer from 4 to 50"));
   const [width, height] = isTTS() ? [32, 32] : getDimensions();
   const button = el("generateButton");
   button.disabled = true;
@@ -2815,7 +2955,13 @@ form.addEventListener("submit", async (event) => {
         requestBody.steps = steps;
         requestBody.seed = el("seed").value === "" ? undefined : Number(el("seed").value);
         requestBody.model_variant = selectedVariant();
-        requestBody.execution_mode = selectedExecutionMode();
+        requestBody.execution_mode = backendExecutionMode();
+        Object.assign(requestBody, autoUpscaleParameters());
+        requestBody.task_type = upscale ? "upscale" : "generation";
+        if (upscale) {
+          requestBody.upscale_category = el("upscaleCategory").value;
+          requestBody.upscale_scale = selectedUpscaleScale();
+        }
       }
       payload = await api(`/api/v1/generations/${state.editingJobId}`, {
         method: "PATCH",
@@ -2840,7 +2986,16 @@ form.addEventListener("submit", async (event) => {
         data.append("runninghub_parameters", JSON.stringify(collectRunningHubParameters()));
       } else {
         data.append("model_variant", selectedVariant());
-        data.append("execution_mode", selectedExecutionMode());
+        data.append("execution_mode", backendExecutionMode());
+        const autoUpscale = autoUpscaleParameters();
+        data.append("auto_upscale", autoUpscale.auto_upscale ? "true" : "false");
+        data.append("auto_upscale_category", autoUpscale.auto_upscale_category);
+        data.append("auto_upscale_scale", String(autoUpscale.auto_upscale_scale));
+        data.append("task_type", upscale ? "upscale" : "generation");
+        if (upscale) {
+          data.append("upscale_category", el("upscaleCategory").value);
+          data.append("upscale_scale", String(selectedUpscaleScale()));
+        }
       }
       data.append("comfy_node", el("comfyNode").value);
       if (state.assetFolderId && state.assetFolderId !== "__unfiled__") data.append("folder_id", state.assetFolderId);
@@ -4120,6 +4275,7 @@ el("assetDetailModal").addEventListener("click", (event) => {
   const jobId = record.job.id;
   if (action.dataset.detailAction === "reuse") backfillJob(jobId);
   if (action.dataset.detailAction === "input") useGeneratedOutputAsInput(jobId).catch((error) => { detailElement(record, "assetDetailError").textContent = error.message; });
+  if (action.dataset.detailAction === "video-upscale") startVideoUpscaleFromJob(jobId);
   if (action.dataset.detailAction === "regenerate") regenerateJob(jobId);
   if (action.dataset.detailAction === "rename") renameJobOutput(jobId);
   if (action.dataset.detailAction === "delete") deleteJob(jobId).then((deleted) => {
@@ -4303,7 +4459,20 @@ el("writeLyrics").addEventListener("click", () => {
 });
 el("modelVariant").addEventListener("change", updateModelUi);
 el("executionMode").addEventListener("change", updateModelUi);
+el("upscaleCategory").addEventListener("change", updateModelUi);
+el("upscaleScale").addEventListener("change", updateModelUi);
 el("comfyNode").addEventListener("change", updateModelUi);
+el("cancelAutoUpscaleConfirm").addEventListener("click", () => closeAutoUpscaleConfirm(false));
+el("cancelAutoUpscaleConfirmButton").addEventListener("click", () => closeAutoUpscaleConfirm(false));
+el("autoUpscaleConfirmModal").addEventListener("click", (event) => {
+  if (event.target === el("autoUpscaleConfirmModal")) closeAutoUpscaleConfirm(false);
+});
+el("autoUpscaleConfirmForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  el("upscaleCategory").value = el("autoUpscaleConfirmCategory").value;
+  el("upscaleScale").value = el("autoUpscaleConfirmScale").value;
+  closeAutoUpscaleConfirm(true);
+});
 el("duration").closest(".duration-control").addEventListener("mouseenter", positionDurationTooltip);
 el("duration").closest(".duration-control").addEventListener("focusin", positionDurationTooltip);
 

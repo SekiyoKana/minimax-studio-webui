@@ -39,6 +39,9 @@ from .settings import settings
 
 ExecutionMode = Literal["native", "turbo-lora", "dual-sampling", "h3-sa", "vdn-h3", "h3-nsfw", "digital-human", "tts", "music3"]
 ModelVariant = Literal["fl2va-fp8", "ref2va-fp8", "music3-int8"]
+TaskType = Literal["generation", "upscale"]
+UpscaleCategory = Literal["real", "anime", "3d"]
+UpscaleScale = int
 
 
 settings.ensure_directories()
@@ -115,6 +118,12 @@ class GenerationPatch(BaseModel):
     seed: int | None = Field(None, ge=0, le=2**31 - 1)
     model_variant: ModelVariant | None = None
     execution_mode: ExecutionMode | None = None
+    task_type: TaskType | None = None
+    upscale_category: UpscaleCategory | None = None
+    upscale_scale: UpscaleScale | None = None
+    auto_upscale: bool | None = None
+    auto_upscale_category: UpscaleCategory | None = None
+    auto_upscale_scale: UpscaleScale | None = None
     sa_tau: float | None = Field(None, ge=0, le=4)
     sa_start_percent: float | None = Field(None, ge=0, le=1)
     sa_end_percent: float | None = Field(None, ge=0, le=1)
@@ -269,6 +278,8 @@ def validate_generation(
     steps: int,
     execution_mode: str = "native",
 ) -> None:
+    if execution_mode == "upscale":
+        return
     if execution_mode == "music3":
         if not 1 <= duration <= 300:
             raise HTTPException(status_code=422, detail="Music3 时长范围为 1–300 秒")
@@ -391,6 +402,10 @@ def validate_references(
     kinds: list[str],
     execution_mode: str = "native",
 ) -> None:
+    if execution_mode == "upscale":
+        if len(kinds) != 1 or kinds[0] not in {"image", "video"}:
+            raise HTTPException(status_code=422, detail="超分任务需要上传 1 张图片或 1 段视频")
+        return
     if execution_mode == "music3":
         if kinds:
             raise HTTPException(status_code=422, detail="Music3 不使用参考素材")
@@ -427,6 +442,8 @@ def validate_execution_mode(
     model_variant: str,
     incognito: bool,
 ) -> None:
+    if execution_mode == "upscale":
+        return
     if execution_mode == "music3":
         if model_variant != "music3-int8":
             raise HTTPException(status_code=422, detail="Music3 执行方案仅支持 Music3 INT8")
@@ -463,6 +480,39 @@ def validate_execution_mode(
         raise HTTPException(status_code=422, detail="H3 NSFW 模式仅支持 Ref2VA FP8")
 
 
+def validate_upscale_parameters(
+    task_type: str,
+    category: str,
+    scale: int,
+) -> None:
+    if task_type != "upscale":
+        return
+    if category not in {"real", "anime", "3d"}:
+        raise HTTPException(status_code=422, detail="超分分类必须为 real、anime 或 3d")
+    if scale not in {2, 4}:
+        raise HTTPException(status_code=422, detail="超分倍率必须为 2 或 4")
+
+
+def validate_auto_upscale_parameters(
+    enabled: bool,
+    task_type: str,
+    model_variant: str,
+    execution_mode: str,
+    category: str,
+    scale: int,
+    provider: str = "comfyui",
+) -> None:
+    if not enabled:
+        return
+    if provider != "comfyui":
+        raise HTTPException(status_code=422, detail="自动超分需要使用 ComfyUI 节点")
+    if task_type != "generation" or execution_mode in {"music3", "tts"} or model_variant == "music3-int8":
+        raise HTTPException(status_code=422, detail="当前任务类型不支持生成后自动超分")
+    if not category or scale not in {2, 4}:
+        raise HTTPException(status_code=422, detail="自动超分参数无效")
+    validate_upscale_parameters("upscale", category, scale)
+
+
 def probe_media(path: Path, max_duration: float | None = 15.1) -> tuple[float, bool]:
     try:
         result = subprocess.run(
@@ -493,6 +543,39 @@ def probe_media(path: Path, max_duration: float | None = 15.1) -> tuple[float, b
     if max_duration is not None and (duration < 1 or duration > max_duration):
         raise HTTPException(status_code=422, detail=f"视频和音频素材时长必须为 1–15 秒：{path.name}")
     return duration, has_audio
+
+
+def probe_video_fps(path: Path) -> float:
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=r_frame_rate",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
+        )
+        raw = result.stdout.strip()
+        if "/" in raw:
+            numerator, denominator = raw.split("/", 1)
+            fps = float(numerator) / float(denominator)
+        else:
+            fps = float(raw)
+        if math.isfinite(fps) and 1 <= fps <= 120:
+            return fps
+    except (OSError, ValueError, ZeroDivisionError, subprocess.SubprocessError):
+        pass
+    return 24.0
 
 
 async def save_upload(upload: UploadFile, destination: Path) -> int:
@@ -2168,6 +2251,12 @@ async def create_generation(
     ] = [],
     model_variant: Annotated[ModelVariant, Form()] = "fl2va-fp8",
     execution_mode: Annotated[ExecutionMode, Form()] = "native",
+    task_type: Annotated[TaskType, Form()] = "generation",
+    upscale_category: Annotated[UpscaleCategory, Form()] = "real",
+    upscale_scale: Annotated[UpscaleScale, Form()] = 2,
+    auto_upscale: Annotated[bool, Form()] = False,
+    auto_upscale_category: Annotated[UpscaleCategory, Form()] = "real",
+    auto_upscale_scale: Annotated[UpscaleScale, Form()] = 2,
     width: Annotated[int, Form()] = 832,
     height: Annotated[int, Form()] = 480,
     duration: Annotated[float, Form()] = 5,
@@ -2201,6 +2290,7 @@ async def create_generation(
         raise HTTPException(status_code=422, detail="无痕任务不支持文件夹")
     if len(prompt) > 12000:
         raise HTTPException(status_code=422, detail="提示词不能超过 12000 个字符")
+    validate_upscale_parameters(task_type, upscale_category, upscale_scale)
     if incognito and not secrets.compare_digest(incognito_code or "", settings.incognito_code):
         raise HTTPException(status_code=403, detail="无痕模式授权已失效")
     remote_target = parse_remote_node_id(comfy_node)
@@ -2211,6 +2301,12 @@ async def create_generation(
             references=references,
             model_variant=model_variant,
             execution_mode=execution_mode,
+            task_type=task_type,
+            upscale_category=upscale_category,
+            upscale_scale=upscale_scale,
+            auto_upscale=auto_upscale,
+            auto_upscale_category=auto_upscale_category,
+            auto_upscale_scale=auto_upscale_scale,
             width=width,
             height=height,
             duration=duration,
@@ -2238,6 +2334,18 @@ async def create_generation(
             proxy_source_device_id=proxy_source_device_id,
             folder_id=normalized_folder_id,
         )
+    if auto_upscale and comfy_node == "auto":
+        comfy_candidate = next(
+            (
+                node["id"]
+                for node in manager.nodes_public()
+                if node.get("provider") == "comfyui" and node.get("healthy")
+            ),
+            None,
+        )
+        if not comfy_candidate:
+            raise HTTPException(status_code=422, detail="自动超分没有可用的 ComfyUI 节点")
+        comfy_node = comfy_candidate
     if comfy_node == "auto" and not manager.node_ids:
         raise HTTPException(status_code=422, detail="当前没有可用推理节点，请添加推理节点")
     if not manager.accepts_node(comfy_node):
@@ -2248,18 +2356,30 @@ async def create_generation(
     is_runninghub = bool(
         workflow_profile and workflow_profile.get("provider") == "runninghub"
     )
+    if is_runninghub and task_type == "upscale":
+        raise HTTPException(status_code=422, detail="超分任务需要使用 ComfyUI 节点")
+    validate_auto_upscale_parameters(
+        auto_upscale,
+        task_type,
+        model_variant,
+        execution_mode,
+        auto_upscale_category,
+        auto_upscale_scale,
+        "runninghub" if is_runninghub else "comfyui",
+    )
     if not is_runninghub:
-        minimum_prompt_length = 2 if execution_mode == "music3" else 8
+        minimum_prompt_length = 0 if task_type == "upscale" else 2 if execution_mode == "music3" else 8
         if len(prompt) < minimum_prompt_length:
             raise HTTPException(
                 status_code=422,
                 detail=f"提示词至少需要 {minimum_prompt_length} 个字符",
             )
-        validate_execution_mode(execution_mode, model_variant, incognito)
+        effective_execution_mode = "upscale" if task_type == "upscale" else execution_mode
+        validate_execution_mode(effective_execution_mode, model_variant, incognito)
         if execution_mode == "tts":
             width = 32
             height = 32
-        validate_generation(width, height, duration, steps, execution_mode)
+        validate_generation(width, height, duration, steps, effective_execution_mode)
         if execution_mode == "h3-sa":
             validate_sa_parameters(
                 tau=sa_tau,
@@ -2303,7 +2423,11 @@ async def create_generation(
             workflow_profile or {}, prompt, dynamic_parameters, manifest
         )
     else:
-        validate_references(model_variant, kinds, execution_mode)
+        validate_references(
+            model_variant,
+            kinds,
+            "upscale" if task_type == "upscale" else execution_mode,
+        )
 
     job_id = secrets.token_hex(8)
     upload_dir = settings.uploads_dir / job_id
@@ -2323,15 +2447,18 @@ async def create_generation(
             field_key = str(manifest[index - 1].get("field_key") or "")
             if field_key:
                 item["field_key"] = field_key
-            if not is_runninghub and model_variant == "fl2va-fp8":
+            if not is_runninghub and task_type != "upscale" and model_variant == "fl2va-fp8":
                 item["role"] = "first_frame" if index == 1 else "last_frame"
             if kind in {"video", "audio"}:
                 media_duration, has_audio = probe_media(
-                    destination, None if is_runninghub else 15.1
+                    destination,
+                    None if is_runninghub or task_type == "upscale" else 15.1,
                 )
                 item["duration"] = round(media_duration, 3)
                 if kind == "video":
                     item["has_audio"] = has_audio
+                    if task_type == "upscale":
+                        item["source_fps"] = round(probe_video_fps(destination), 6)
             input_paths.append(str(destination))
             public_manifest.append(item)
     except Exception:
@@ -2354,6 +2481,8 @@ async def create_generation(
         if isinstance(schema, dict)
         else "audio"
         if execution_mode in {"music3", "tts"}
+        else str(public_manifest[0]["type"])
+        if task_type == "upscale"
         else "video"
     )
     workflow_name = str(
@@ -2361,9 +2490,14 @@ async def create_generation(
         if is_runninghub and workflow_profile
         else ""
     )
+    upscale_title = (
+        f"{ {'real': '真人', 'anime': '动画', '3d': '3D'}.get(upscale_category, '超分') } · {upscale_scale}x 超分"
+        if task_type == "upscale"
+        else ""
+    )
     job = {
         "id": job_id,
-        "title": (title or (prompt.splitlines()[0] if prompt else workflow_name))[:120],
+        "title": (title or (prompt.splitlines()[0] if prompt else workflow_name or upscale_title))[:120],
         "folder_id": normalized_folder_id,
         "status": "queued",
         "stage": "等待推理节点执行",
@@ -2376,6 +2510,12 @@ async def create_generation(
             "lyrics": lyrics.strip() if execution_mode == "music3" else "",
             "model_variant": model_variant,
             "execution_mode": execution_mode,
+            "task_type": task_type,
+            "upscale_category": upscale_category,
+            "upscale_scale": upscale_scale,
+            "auto_upscale": auto_upscale,
+            "auto_upscale_category": auto_upscale_category,
+            "auto_upscale_scale": auto_upscale_scale,
             "width": width,
             "height": height,
             "duration": duration,
@@ -2395,6 +2535,14 @@ async def create_generation(
             "seed": seed_value,
             "references": public_manifest,
             "media_type": media_type,
+            **(
+                {
+                    "source_fps": public_manifest[0].get("source_fps", 24.0),
+                    "has_audio": bool(public_manifest[0].get("has_audio")),
+                }
+                if task_type == "upscale" and public_manifest[0]["type"] == "video"
+                else {}
+            ),
             "comfy_node": comfy_node,
             "incognito": incognito,
             **(
@@ -2437,6 +2585,12 @@ async def submit_proxy_generation(
     references: list[UploadFile],
     model_variant: str,
     execution_mode: str,
+    task_type: str,
+    upscale_category: str,
+    upscale_scale: int,
+    auto_upscale: bool,
+    auto_upscale_category: str,
+    auto_upscale_scale: int,
     width: int,
     height: int,
     duration: float,
@@ -2488,6 +2642,12 @@ async def submit_proxy_generation(
         "reference_manifest": reference_manifest,
         "model_variant": model_variant,
         "execution_mode": execution_mode,
+        "task_type": task_type,
+        "upscale_category": upscale_category,
+        "upscale_scale": str(upscale_scale),
+        "auto_upscale": "true" if auto_upscale else "false",
+        "auto_upscale_category": auto_upscale_category,
+        "auto_upscale_scale": str(auto_upscale_scale),
         "width": str(width),
         "height": str(height),
         "duration": str(duration),
@@ -2734,14 +2894,30 @@ async def update_generation(
         )
     else:
         request_data.pop("provider", None)
-        minimum_prompt_length = 2 if request_data["execution_mode"] == "music3" else 8
+        task_type = request_data.get("task_type", "generation")
+        validate_upscale_parameters(
+            task_type,
+            str(request_data.get("upscale_category") or "real"),
+            int(request_data.get("upscale_scale") or 2),
+        )
+        validate_auto_upscale_parameters(
+            bool(request_data.get("auto_upscale")),
+            task_type,
+            str(request_data.get("model_variant") or "fl2va-fp8"),
+            str(request_data.get("execution_mode") or "native"),
+            str(request_data.get("auto_upscale_category") or "real"),
+            int(request_data.get("auto_upscale_scale") or 2),
+            "comfyui",
+        )
+        minimum_prompt_length = 0 if task_type == "upscale" else 2 if request_data["execution_mode"] == "music3" else 8
         if len(request_data.get("prompt", "").strip()) < minimum_prompt_length:
             raise HTTPException(
                 status_code=422,
                 detail=f"提示词至少需要 {minimum_prompt_length} 个字符",
             )
+        effective_execution_mode = "upscale" if task_type == "upscale" else request_data["execution_mode"]
         validate_execution_mode(
-            request_data["execution_mode"],
+            effective_execution_mode,
             request_data["model_variant"],
             bool(request_data.get("incognito")),
         )
@@ -2753,7 +2929,7 @@ async def update_generation(
         validate_references(
             request_data["model_variant"],
             [item["type"] for item in request_data.get("references", [])],
-            request_data["execution_mode"],
+            effective_execution_mode,
         )
         if request_data["execution_mode"] == "digital-human":
             audio_reference = next(
@@ -2765,7 +2941,7 @@ async def update_generation(
             request_data["height"],
             request_data["duration"],
             request_data["steps"],
-            request_data["execution_mode"],
+            effective_execution_mode,
         )
         if request_data["execution_mode"] == "h3-sa":
             validate_sa_parameters(
@@ -2775,7 +2951,13 @@ async def update_generation(
                 min_tokens=int(request_data.get("sa_min_tokens", 4096)),
                 stage2_denoise=float(request_data.get("sa_stage2_denoise", 0.35)),
             )
-        request_data["media_type"] = "audio" if request_data["execution_mode"] in {"music3", "tts"} else "video"
+        request_data["media_type"] = (
+            request_data["references"][0]["type"]
+            if task_type == "upscale" and request_data.get("references")
+            else "audio"
+            if request_data["execution_mode"] in {"music3", "tts"}
+            else "video"
+        )
         request_data["num_frames"] = align_frames(request_data["duration"])
     changes: dict[str, object] = {"request": request_data, "event_message": "任务参数已修改"}
     if title is not None:
@@ -2887,16 +3069,31 @@ async def regenerate_generation(
     else:
         if manager.node_provider(comfy_node) == "runninghub":
             raise HTTPException(status_code=422, detail="原任务指定节点的类型已变更")
+        validate_upscale_parameters(
+            str(request_data.get("task_type") or "generation"),
+            str(request_data.get("upscale_category") or "real"),
+            int(request_data.get("upscale_scale") or 2),
+        )
+        validate_auto_upscale_parameters(
+            bool(request_data.get("auto_upscale")),
+            str(request_data.get("task_type") or "generation"),
+            model_variant,
+            execution_mode,
+            str(request_data.get("auto_upscale_category") or "real"),
+            int(request_data.get("auto_upscale_scale") or 2),
+            "comfyui",
+        )
         if execution_mode == "tts":
             request_data["width"] = 32
             request_data["height"] = 32
-        validate_execution_mode(execution_mode, model_variant, incognito)
+        effective_execution_mode = "upscale" if request_data.get("task_type") == "upscale" else execution_mode
+        validate_execution_mode(effective_execution_mode, model_variant, incognito)
         validate_generation(
             request_data.get("width", 832),
             request_data.get("height", 480),
             request_data.get("duration", 5),
             request_data.get("steps", 10),
-            execution_mode,
+            effective_execution_mode,
         )
         if execution_mode == "h3-sa":
             validate_sa_parameters(
@@ -2909,9 +3106,15 @@ async def regenerate_generation(
         validate_references(
             model_variant,
             [item.get("type") for item in references],
-            execution_mode,
+            effective_execution_mode,
         )
-        request_data["media_type"] = "audio" if execution_mode in {"music3", "tts"} else "video"
+        request_data["media_type"] = (
+            references[0].get("type")
+            if request_data.get("task_type") == "upscale" and references
+            else "audio"
+            if execution_mode in {"music3", "tts"}
+            else "video"
+        )
 
     source_paths = source_job.get("input_paths", [])
     if len(source_paths) != len(references):

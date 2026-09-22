@@ -20,6 +20,8 @@
 | `minimax_h3_ref2va_fp8_digital_human_api.json` | Ref2VA FP8 Scaled | 单图数字人音频驱动 | `829babe98437529714c4608185be9a63cd5db3ea09544d813a060b6e47138c06` |
 | `minimax_music3_int8_api.json` | Music3 INT8 | 文本与歌词生成音乐 | `f3f3d2af89aadd9b25bd4d49628e28b13ba6e9e05e3afc551f4edd5177980fa5` |
 | `minimax_h3_ref2va_fp8_tts_api.json` | Ref2VA FP8 Scaled | 人物音频参考与对白生成语音，音频-only | `b80991825b1e959b4dc6eb7a8714458dcc1620eedce5bc36fc96b5bf66bb65b6` |
+| `comfy_upscale_image_api.json` | 分类图像超分模型 | 图片 2x 或 4x 超分 | `a56acaa19ebe865a9a3be9a03a8b06a7c93c37cbe366b48af090ef970e74517f` |
+| `comfy_upscale_video_api.json` | 分类图像超分模型 + VideoHelperSuite | 视频逐帧 2x 或 4x 超分 | `830d46b4068d8a04560c4f3f00b13dc76ee9c1697e36237ea38005ca69a2bb1a` |
 
 ## 动态节点
 
@@ -60,6 +62,20 @@ H3 SA 工作流增加低分辨率首阶段、Latent 3D 放大和高分辨率 Sol
 H3 SA 可调参数：`sa_tau`、`sa_start_percent`、`sa_end_percent`、`sa_min_tokens`、`sa_int8_qk`、`sa_int8_pv`、`sa_sink_conditioning`、`sa_morton`、`sa_morton_curve`、`sa_dense_blocks` 和 `sa_stage2_denoise`。默认值与远端 `SolAttnPatch` 节点签名一致，`steps` 固定为 8。
 
 VDN-H3 工作流通过 `ApplyVDNH3` 注入 Video Delta Net 混合注意力。步数控件开放 8–50 步，默认 50 步：选择 8 步时自动使用 `stage-dmd-step-250` 并启用 turbo adapter，选择 9–50 步时自动使用 `stage-b-step-2000` 并关闭 turbo adapter。两种路径均使用 `merge` 和 `stream`。VDN-H3 与 Sol-Attn 节点不叠加，检查点放置于 `ComfyUI/models/vdn/`。
+
+## 超分工作流
+
+超分任务使用 `task_type=upscale`，输入一张图片或一段视频。`upscale_category` 支持 `real`、`anime`、`3d`，`upscale_scale` 支持 `2`、`4`。
+
+普通视频生成可设置 `auto_upscale=true`，生成完成后在同一任务内部继续执行视频超分，任务结果直接返回超分视频。自动超分支持 `auto_upscale_category=real|anime|3d` 和 `auto_upscale_scale=2|4`，阶段状态会写入同一任务日志和 checkpoint。
+
+| 分类 | 2x 模型 | 4x 模型 | 处理方式 |
+|---|---|---|---|
+| 真人 | `RealESRGAN_x2plus.pth` | `4x_foolhardy_Remacri.pth` | 直接按目标倍率输出 |
+| 动画 | `4x-AnimeSharp.pth` | `4x-AnimeSharp.pth` | 2x 请求在 4x 模型结果上执行 0.5 倍 Lanczos 缩放 |
+| 3D | `2xNomosUni_span_multijpg.pth` | `4x-UltraSharp.pth` | 直接按目标倍率输出 |
+
+图片流使用 `LoadImage`、`UpscaleModelLoader`、`ImageUpscaleWithModel`、`ImageScaleBy` 和 `SaveImage`。视频流先依据目标 GPU 空闲显存、输入分辨率和倍率计算帧预算，再使用 FFmpeg 切分为多个片段。每个片段通过 `VHS_LoadVideo` 读取，使用 `ImageUpscaleWithModelBatched` 按单帧处理，经 `VHS_VideoCombine` 按源帧率合成为 MP4，并保留源音频。片段完成后由服务端再次合并为最终视频。
 
 可选 NaughtyTimes 工作流增加节点 `141`，类型为 `LoraLoaderBypass`，模型强度 0.5，CLIP 强度 0.0。
 
