@@ -167,13 +167,6 @@
                     </select>
                   </label>
 
-                  <label class="compact-control auto-upscale-control" id="autoUpscaleControl" title="生成后自动超分">
-                    <i data-lucide="wand-sparkles"></i>
-                    <span>生成后自动超分</span>
-                    <input id="autoUpscale" type="checkbox" aria-label="生成后自动超分">
-                    <span class="switch"></span>
-                  </label>
-
                   <label class="compact-control" id="aspectControl" title="画面比例">
                     <i data-lucide="panels-top-left"></i>
                     <select id="aspectRatio" aria-label="画面比例">
@@ -226,6 +219,7 @@
                   <summary class="icon-button" title="更多设置" aria-label="更多设置"><i data-lucide="sliders-horizontal"></i></summary>
                   <div class="popover-panel">
                     <label id="globalSeedControl">随机种子<input id="seed" name="seed" type="number" min="0" max="2147483647" placeholder="自动"></label>
+                    <label class="switch-row auto-upscale-setting" id="autoUpscaleControl"><span>生成后自动超分</span><input id="autoUpscale" type="checkbox" aria-label="生成后自动超分"><span class="switch"></span></label>
                     <div id="saSettings" hidden>
                       <div class="popover-divider"></div>
                       <strong id="saSettingsTitle">MiniMax H3 SA 参数</strong>

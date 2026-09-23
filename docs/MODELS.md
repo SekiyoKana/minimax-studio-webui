@@ -34,6 +34,18 @@
 
 当前 FL2VA 和 Ref2VA 工作流分别使用对应的 768p 8-step v1.0 LoRA，LoRA 强度为 1.0，`res_multistep` 采样器固定使用 8 步。视频偏移为 6.0，音频偏移为 3.0。
 
+## 超分模型
+
+远程 ComfyUI 当前检测到以下像素超分模型：
+
+| 分类 | 2x | 4x |
+|---|---|---|
+| 真人 | `RealESRGAN_x2plus.pth` | `4x_foolhardy_Remacri.pth` |
+| 动画 | `4x-AnimeSharp.pth`，结果缩放到 2x | `4x-AnimeSharp.pth` |
+| 3D | `2xNomosUni_span_multijpg.pth` | `4x-UltraSharp.pth` |
+
+远程模型目录还存在 `ltx-2.3-spatial-upscaler-x2-1.0.safetensors`、`ltx-2.3-spatial-upscaler-x2-1.1.safetensors` 和 `ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors`。这些文件可由 ComfyUI 的 `LatentUpscaleModelLoader` 识别，当前像素图像流使用的 `UpscaleModelLoader` 会返回 `UnsupportedModelError`。消融测试结果见 [`reports/ablation/upscale_ablation.md`](../reports/ablation/upscale_ablation.md)。
+
 ## MiniMax Music3
 
 | 文件 | 大小 | SHA-256 | ModelScope | Hugging Face |

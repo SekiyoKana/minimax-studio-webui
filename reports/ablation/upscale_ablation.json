@@ -1,0 +1,270 @@
+{
+  "schema_version": 1,
+  "run_id": "run-1790068109",
+  "base_url": "http://100.77.224.102:8188",
+  "input": "synthetic_256.png",
+  "input_width": 256,
+  "input_height": 256,
+  "models": [
+    {
+      "model": "RealESRGAN_x2plus.pth",
+      "expected_scale": 2,
+      "status": "success",
+      "prompt_id": "9036b917-a524-4199-844c-fe0ae9519420",
+      "output_width": 512,
+      "output_height": 512,
+      "output_bytes": 210480,
+      "reconstruction_mae": 6.08028,
+      "elapsed_seconds": 0.798
+    },
+    {
+      "model": "2xNomosUni_span_multijpg.pth",
+      "expected_scale": 2,
+      "status": "success",
+      "prompt_id": "11aae538-52b6-4901-8153-e01c58d1e193",
+      "output_width": 512,
+      "output_height": 512,
+      "output_bytes": 90410,
+      "reconstruction_mae": 6.20642,
+      "elapsed_seconds": 0.536
+    },
+    {
+      "model": "4x-AnimeSharp.pth",
+      "expected_scale": 4,
+      "status": "success",
+      "prompt_id": "ec247142-c9ab-40eb-9d9a-e669497be164",
+      "output_width": 1024,
+      "output_height": 1024,
+      "output_bytes": 225087,
+      "reconstruction_mae": 2.49642,
+      "elapsed_seconds": 0.562
+    },
+    {
+      "model": "4x_foolhardy_Remacri.pth",
+      "expected_scale": 4,
+      "status": "success",
+      "prompt_id": "292aa9bb-f4a0-4f1a-b3f7-e4179207e4b8",
+      "output_width": 1024,
+      "output_height": 1024,
+      "output_bytes": 249710,
+      "reconstruction_mae": 2.80143,
+      "elapsed_seconds": 0.567
+    },
+    {
+      "model": "4x-UltraSharp.pth",
+      "expected_scale": 4,
+      "status": "success",
+      "prompt_id": "2047516e-f83f-4eed-910b-ba65008e22e1",
+      "output_width": 1024,
+      "output_height": 1024,
+      "output_bytes": 326421,
+      "reconstruction_mae": 1.86549,
+      "elapsed_seconds": 0.577
+    },
+    {
+      "model": "4x_NMKD-Siax_200k.pth",
+      "expected_scale": 4,
+      "status": "success",
+      "prompt_id": "9f2f5ff7-4f6f-419e-a2f4-b239f71f42c4",
+      "output_width": 1024,
+      "output_height": 1024,
+      "output_bytes": 385422,
+      "reconstruction_mae": 2.57545,
+      "elapsed_seconds": 0.566
+    },
+    {
+      "model": "4x-ClearRealityV1.pth",
+      "expected_scale": 4,
+      "status": "success",
+      "prompt_id": "6d97cc11-555d-4867-a32c-ccf34bd3bca5",
+      "output_width": 1024,
+      "output_height": 1024,
+      "output_bytes": 398043,
+      "reconstruction_mae": 3.80514,
+      "elapsed_seconds": 0.563
+    },
+    {
+      "model": "ltx-2.3-spatial-upscaler-x2-1.0.safetensors",
+      "expected_scale": 2,
+      "status": "error",
+      "prompt_id": "41982808-a2f2-4146-829c-3fe59195cfab",
+      "messages": [
+        [
+          "execution_start",
+          {
+            "prompt_id": "41982808-a2f2-4146-829c-3fe59195cfab",
+            "timestamp": 1790068065601
+          }
+        ],
+        [
+          "execution_cached",
+          {
+            "nodes": [
+              "1"
+            ],
+            "prompt_id": "41982808-a2f2-4146-829c-3fe59195cfab",
+            "timestamp": 1790068065604
+          }
+        ],
+        [
+          "execution_error",
+          {
+            "prompt_id": "41982808-a2f2-4146-829c-3fe59195cfab",
+            "node_id": "2",
+            "node_type": "UpscaleModelLoader",
+            "executed": [],
+            "exception_message": "\n",
+            "exception_type": "spandrel.__helpers.registry.UnsupportedModelError",
+            "traceback": [
+              "  File \"/home/tapcash/ssd2/ComfyUI/execution.py\", line 545, in execute\n    output_data, output_ui, has_subgraph, has_pending_tasks = await get_output_data(prompt_id, unique_id, obj, input_data_all, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)\n                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/execution.py\", line 344, in get_output_data\n    return_values = await _async_map_node_over_list(prompt_id, unique_id, obj, input_data_all, obj.FUNCTION, allow_interrupt=True, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/execution.py\", line 318, in _async_map_node_over_list\n    await process_inputs(input_dict, i)\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/execution.py\", line 306, in process_inputs\n    result = f(**inputs)\n             ^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/comfy_api/internal/__init__.py\", line 149, in wrapped_func\n    return method(locked_class, **inputs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/comfy_api/latest/_io.py\", line 1990, in EXECUTE_NORMALIZED\n    to_return = cls.execute(*args, **kwargs)\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/comfy_extras/nodes_upscale_model.py\", line 41, in execute\n    out = ModelLoader().load_from_state_dict(sd).eval()\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/anaconda3/envs/ComfyUI/lib/python3.11/site-packages/spandrel/__helpers/loader.py\", line 94, in load_from_state_dict\n    return self.registry.load(state_dict).to(self.device)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/anaconda3/envs/ComfyUI/lib/python3.11/site-packages/spandrel/__helpers/registry.py\", line 205, in load\n    raise UnsupportedModelError\n"
+            ],
+            "current_inputs": {
+              "model_name": [
+                "ltx-2.3-spatial-upscaler-x2-1.0.safetensors"
+              ]
+            },
+            "current_outputs": [
+              "3",
+              "4",
+              "1",
+              "2",
+              "5"
+            ],
+            "timestamp": 1790068065622
+          }
+        ]
+      ],
+      "elapsed_seconds": 0.524
+    },
+    {
+      "model": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+      "expected_scale": 2,
+      "status": "error",
+      "prompt_id": "8df3b4a1-a868-4eff-8af8-3ee468a59b59",
+      "messages": [
+        [
+          "execution_start",
+          {
+            "prompt_id": "8df3b4a1-a868-4eff-8af8-3ee468a59b59",
+            "timestamp": 1790068066124
+          }
+        ],
+        [
+          "execution_cached",
+          {
+            "nodes": [
+              "1"
+            ],
+            "prompt_id": "8df3b4a1-a868-4eff-8af8-3ee468a59b59",
+            "timestamp": 1790068066126
+          }
+        ],
+        [
+          "execution_error",
+          {
+            "prompt_id": "8df3b4a1-a868-4eff-8af8-3ee468a59b59",
+            "node_id": "2",
+            "node_type": "UpscaleModelLoader",
+            "executed": [],
+            "exception_message": "\n",
+            "exception_type": "spandrel.__helpers.registry.UnsupportedModelError",
+            "traceback": [
+              "  File \"/home/tapcash/ssd2/ComfyUI/execution.py\", line 545, in execute\n    output_data, output_ui, has_subgraph, has_pending_tasks = await get_output_data(prompt_id, unique_id, obj, input_data_all, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)\n                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/execution.py\", line 344, in get_output_data\n    return_values = await _async_map_node_over_list(prompt_id, unique_id, obj, input_data_all, obj.FUNCTION, allow_interrupt=True, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/execution.py\", line 318, in _async_map_node_over_list\n    await process_inputs(input_dict, i)\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/execution.py\", line 306, in process_inputs\n    result = f(**inputs)\n             ^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/comfy_api/internal/__init__.py\", line 149, in wrapped_func\n    return method(locked_class, **inputs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/comfy_api/latest/_io.py\", line 1990, in EXECUTE_NORMALIZED\n    to_return = cls.execute(*args, **kwargs)\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/comfy_extras/nodes_upscale_model.py\", line 41, in execute\n    out = ModelLoader().load_from_state_dict(sd).eval()\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/anaconda3/envs/ComfyUI/lib/python3.11/site-packages/spandrel/__helpers/loader.py\", line 94, in load_from_state_dict\n    return self.registry.load(state_dict).to(self.device)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/anaconda3/envs/ComfyUI/lib/python3.11/site-packages/spandrel/__helpers/registry.py\", line 205, in load\n    raise UnsupportedModelError\n"
+            ],
+            "current_inputs": {
+              "model_name": [
+                "ltx-2.3-spatial-upscaler-x2-1.1.safetensors"
+              ]
+            },
+            "current_outputs": [
+              "3",
+              "4",
+              "1",
+              "2",
+              "5"
+            ],
+            "timestamp": 1790068066137
+          }
+        ]
+      ],
+      "elapsed_seconds": 0.525
+    },
+    {
+      "model": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+      "expected_scale": 2,
+      "status": "error",
+      "prompt_id": "36a8e9b0-0f74-4c34-bdbf-b4b7919d46bc",
+      "messages": [
+        [
+          "execution_start",
+          {
+            "prompt_id": "36a8e9b0-0f74-4c34-bdbf-b4b7919d46bc",
+            "timestamp": 1790068066647
+          }
+        ],
+        [
+          "execution_cached",
+          {
+            "nodes": [
+              "1"
+            ],
+            "prompt_id": "36a8e9b0-0f74-4c34-bdbf-b4b7919d46bc",
+            "timestamp": 1790068066650
+          }
+        ],
+        [
+          "execution_error",
+          {
+            "prompt_id": "36a8e9b0-0f74-4c34-bdbf-b4b7919d46bc",
+            "node_id": "2",
+            "node_type": "UpscaleModelLoader",
+            "executed": [],
+            "exception_message": "\n",
+            "exception_type": "spandrel.__helpers.registry.UnsupportedModelError",
+            "traceback": [
+              "  File \"/home/tapcash/ssd2/ComfyUI/execution.py\", line 545, in execute\n    output_data, output_ui, has_subgraph, has_pending_tasks = await get_output_data(prompt_id, unique_id, obj, input_data_all, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)\n                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/execution.py\", line 344, in get_output_data\n    return_values = await _async_map_node_over_list(prompt_id, unique_id, obj, input_data_all, obj.FUNCTION, allow_interrupt=True, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/execution.py\", line 318, in _async_map_node_over_list\n    await process_inputs(input_dict, i)\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/execution.py\", line 306, in process_inputs\n    result = f(**inputs)\n             ^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/comfy_api/internal/__init__.py\", line 149, in wrapped_func\n    return method(locked_class, **inputs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/comfy_api/latest/_io.py\", line 1990, in EXECUTE_NORMALIZED\n    to_return = cls.execute(*args, **kwargs)\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/ssd2/ComfyUI/comfy_extras/nodes_upscale_model.py\", line 41, in execute\n    out = ModelLoader().load_from_state_dict(sd).eval()\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/anaconda3/envs/ComfyUI/lib/python3.11/site-packages/spandrel/__helpers/loader.py\", line 94, in load_from_state_dict\n    return self.registry.load(state_dict).to(self.device)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+              "  File \"/home/tapcash/anaconda3/envs/ComfyUI/lib/python3.11/site-packages/spandrel/__helpers/registry.py\", line 205, in load\n    raise UnsupportedModelError\n"
+            ],
+            "current_inputs": {
+              "model_name": [
+                "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
+              ]
+            },
+            "current_outputs": [
+              "3",
+              "4",
+              "1",
+              "2",
+              "5"
+            ],
+            "timestamp": 1790068066656
+          }
+        ]
+      ],
+      "elapsed_seconds": 0.519
+    }
+  ]
+}

@@ -27,10 +27,11 @@ MiniMax H3 Studio provides a Web interface, HTTP API, and desktop entry point fo
 | Area | Capabilities |
 |---|---|
 | Video generation | FL2VA, Ref2VA, 8-step LoRA, dual sampling, H3 SA, VDN H3, digital human, and H3 NSFW |
+| Video super-resolution | 2x and 4x image and video super-resolution for real, anime, and 3D categories, with long-video slicing, checkpoint recovery, and cleanup |
 | Audio generation | Music3 INT8 and H3 TTS with lyrics, style descriptions, and audio references |
-| Long video | H3 SA frame-grid splitting, context transfer, repeated-prefix trimming, and final merge |
+| Long video | H3 SA frame-grid splitting, context transfer, repeated-prefix trimming, and final merge; super-resolution videos use GPU-aware slicing |
 | VDN H3 | 8 to 50 steps with automatic DMD or B stage selection |
-| Job queue | Persistent queue, node scheduling, cancellation, regeneration, checkpoint recovery, and live progress |
+| Job queue | Persistent queue, node scheduling, cancellation, regeneration, checkpoint recovery, automatic super-resolution stages, and live progress |
 | Elapsed time | Starts when the inference node begins work; queue waiting time is excluded |
 | Asset library | Search, pagination, status filters, cached video covers, previews, downloads, and renaming |
 | Folders | Single-level folders, double-click navigation, batch moves, unfiled root, and deletion protection |
@@ -76,7 +77,16 @@ Persistent data is stored under `data/`:
 
 ## Update log
 
-This log covers code, workflows, documentation, tests, and the cloud publishing process. The current workspace state is recorded through 2026-09-17.
+This log covers code, workflows, documentation, tests, and the cloud publishing process. The current workspace state is recorded through 2026-09-22.
+
+### 2026-09-22: Video super-resolution, automatic processing, and model audit
+
+- Added category-aware 2x and 4x image and video super-resolution for real, anime, and 3D inputs.
+- Added automatic post-generation super-resolution inside the same video job with stage logs and checkpoint recovery.
+- Added GPU-aware long-video slicing, per-frame batching, final merge, and intermediate cleanup.
+- Increased the ComfyUI and API single-file upload limit to 2048 MB.
+- Audited the newly present LTX 2x models and confirmed that they require a latent super-resolution workflow; they remain outside the current pixel image and video flow.
+- Completed a remote ablation over 10 candidate super-resolution models. See [`reports/ablation/upscale_ablation.md`](reports/ablation/upscale_ablation.md).
 
 ### 2026-08-07 to 2026-08-13: Core service and video modes
 
@@ -295,6 +305,8 @@ API-format workflows are stored in [`workflows/`](workflows/). Fixed-version nod
 - `minimax_h3_ref2va_fp8_digital_human_api.json`
 - `minimax_h3_ref2va_fp8_tts_api.json`
 - `minimax_music3_int8_api.json`
+- `comfy_upscale_image_api.json`
+- `comfy_upscale_video_api.json`
 
 Before submission, the service injects prompts, references, dimensions, frame counts, steps, seeds, folder prefixes, and output paths.
 

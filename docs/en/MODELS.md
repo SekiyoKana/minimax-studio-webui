@@ -34,6 +34,18 @@ Author resources:
 
 The FL2VA and Ref2VA workflows use their corresponding 768p 8-step v1.0 LoRAs. Both use LoRA strength 1.0, the `res_multistep` sampler, eight steps, video shift 6.0, and audio shift 3.0.
 
+## Super-resolution models
+
+The remote ComfyUI currently exposes these pixel super-resolution models:
+
+| Category | 2x | 4x |
+|---|---|---|
+| Real | `RealESRGAN_x2plus.pth` | `4x_foolhardy_Remacri.pth` |
+| Anime | `4x-AnimeSharp.pth`, resized to 2x after inference | `4x-AnimeSharp.pth` |
+| 3D | `2xNomosUni_span_multijpg.pth` | `4x-UltraSharp.pth` |
+
+The remote model directory also contains `ltx-2.3-spatial-upscaler-x2-1.0.safetensors`, `ltx-2.3-spatial-upscaler-x2-1.1.safetensors`, and `ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors`. ComfyUI recognizes these files through `LatentUpscaleModelLoader`; the pixel workflow's `UpscaleModelLoader` returns `UnsupportedModelError` for them. See the [super-resolution ablation report](../../reports/ablation/upscale_ablation.md).
+
 ## MiniMax Music3
 
 | File | Size | SHA-256 | ModelScope | Hugging Face |
