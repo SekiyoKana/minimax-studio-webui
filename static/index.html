@@ -2,13 +2,13 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="description" content="基于 ComfyUI 与 RunningHub API 的 MiniMax H3 视频与 Music3 音乐生成工作台">
     <meta name="theme-color" content="#f4f5f2">
     <title>MiniMax Studio</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=44&rev=54">
+    <link rel="stylesheet" href="/assets/styles.css?v=45&rev=55">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
-    <script src="/assets/app.js?v=60&rev=71&upscale=1" defer></script>
+    <script src="/assets/app.js?v=61&rev=72&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -74,6 +74,7 @@
           </div>
           <div class="header-actions">
             <button class="icon-button" id="openPeering" type="button" title="多端互联" aria-label="多端互联"><i data-lucide="key-round"></i></button>
+            <button class="icon-button" id="androidServerSettings" type="button" title="服务器连接" aria-label="服务器连接" hidden><i data-lucide="network"></i></button>
             <button class="icon-button" id="openGlobalSettings" type="button" title="设置" aria-label="设置"><i data-lucide="settings-2"></i></button>
             <button class="icon-button" id="languageToggle" type="button" title="Switch to English" aria-label="Switch to English"><i data-lucide="languages"></i></button>
             <a class="icon-button" id="apiDocsLink" href="/docs" target="_blank" rel="noreferrer" title="API 文档" aria-label="API 文档"><i data-lucide="braces"></i></a>

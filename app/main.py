@@ -19,7 +19,7 @@ from urllib.parse import quote, urlparse
 
 import httpx
 from cryptography.exceptions import InvalidTag
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile, status
+from fastapi import Cookie, Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
@@ -257,8 +257,13 @@ class IncognitoAuthRequest(BaseModel):
     code: str = Field(min_length=1, max_length=200)
 
 
-async def authorize(authorization: Annotated[str | None, Header()] = None) -> None:
+async def authorize(
+    authorization: Annotated[str | None, Header()] = None,
+    api_cookie: Annotated[str | None, Cookie(alias="h3_api_key")] = None,
+) -> None:
     if not settings.api_key:
+        return
+    if authorization == f"Bearer {settings.api_key}" or api_cookie == settings.api_key:
         return
     if authorization != f"Bearer {settings.api_key}":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的 API Key")

@@ -825,6 +825,37 @@ body.sidebar-resizing * { cursor: col-resize !important; }
   .node-row-copy > div { align-items: flex-start; flex-direction: column; gap: 2px; }
 }
 
+body.android-client .conversation-header {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+body.android-client .composer {
+  margin-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+}
+
+body.android-client #modelControl,
+body.android-client #executionControl,
+body.android-client #stepsControl,
+body.android-client #advancedSettings,
+body.android-client #openGlobalSettings,
+body.android-client #languageToggle,
+body.android-client #apiDocsLink,
+body.android-client [data-detail-action="video-upscale"] {
+  display: none !important;
+}
+
+@media (min-width: 861px) and (max-width: 1180px) {
+  body.android-client .app-shell { --asset-sidebar-width: clamp(240px, 27vw, 300px); }
+  body.android-client .composer { width: min(940px, calc(100% - 24px)); }
+}
+
+@media (max-width: 860px) {
+  body.android-client .conversation-header { padding-top: env(safe-area-inset-top, 0px); }
+  body.android-client .asset-sidebar { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  body.android-client .composer { margin-bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
+  body.android-client .conversation-feed { overscroll-behavior: contain; }
+}
+
 @media (hover: none) {
   .asset-actions { opacity: 1; transform: none; }
 }
