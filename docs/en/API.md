@@ -82,6 +82,18 @@ Read field keys from `runninghub_schema` returned by `GET /api/v1/comfy/nodes`. 
 
 Delete a node with `DELETE /api/v1/comfy/nodes/{node_id}`. The service rejects disabling or deleting a node that is running a job, has manually targeted queued jobs, or is the final enabled node.
 
+## ComfyUI Workflow Configurations
+
+`GET /api/v1/comfy/workflows` returns built-in and imported configurations stored in `data/config.db`. Import an API JSON file with:
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/comfy/workflows \
+  -F 'name=My H3 workflow' \
+  -F 'workflow_file=@minimax_h3_custom_api.json;type=application/json'
+```
+
+Select a configuration with `workflow_id` when creating a generation. The service infers the artifact type from `SaveVideo`, `SaveAudio`, or `SaveImage` output nodes; pass `media_type=video|audio|image|file` during import to override it. The file must be ComfyUI API format (the node JSON that can be sent directly to `/prompt`); a UI editor workflow export is not directly usable. The service stores the configuration only. Before execution, confirm that the target ComfyUI server already contains every required custom node, model, and other resource. Custom workflows used through a remote peer must also be imported on the target device first.
+
 ## Create a VDN-H3 Job
 
 VDN-H3 supports 8–50 steps for FL2VA and Ref2VA. Eight steps automatically selects `stage-dmd-step-250`; 9–50 steps selects `stage-b-step-2000`:

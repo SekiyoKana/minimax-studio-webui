@@ -60,6 +60,8 @@ const state = {
   logFloor: 0,
   queue: [],
   nodes: [],
+  workflows: [],
+  selectedWorkflowId: "",
   managedNodes: [],
   nodeEditingId: null,
   runningHubSchemaKey: "",
@@ -367,6 +369,7 @@ function modelLabel(job) {
   if (job.request?.task_type === "upscale") {
     return `${{ real: "真人", anime: "动画", "3d": "3D" }[job.request?.upscale_category] || "超分"} · ${job.request?.upscale_scale || 2}x`;
   }
+  if (job.request?.workflow_name) return job.request.workflow_name;
   return job.request?.model_variant === "ref2va-fp8" ? "Ref2VA FP8" : "FL2VA FP8";
 }
 
@@ -680,6 +683,85 @@ async function loadManagedNodes() {
   renderManagedNodes();
 }
 
+function selectedWorkflow() {
+  const id = el("workflowSelect")?.value || state.selectedWorkflowId;
+  return state.workflows.find((workflow) => workflow.id === id) || null;
+}
+
+function isCustomWorkflow() {
+  const workflow = selectedWorkflow();
+  return Boolean(workflow && !workflow.is_default);
+}
+
+function renderWorkflowOptions(workflows = state.workflows, preferredId = "") {
+  state.workflows = Array.isArray(workflows) ? workflows : [];
+  const select = el("workflowSelect");
+  if (!select) return;
+  const current = preferredId || state.selectedWorkflowId || select.value;
+  const defaults = state.workflows.filter((item) => item.is_default);
+  const custom = state.workflows.filter((item) => !item.is_default);
+  const customSuffix = localized(" · 自定义", " · Custom");
+  const option = (item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}${item.is_default ? "" : customSuffix}</option>`;
+  const defaultGroup = localized("内置工作流", "Built-in workflows");
+  const customGroup = localized("自定义工作流", "Custom workflows");
+  select.innerHTML = `${defaults.length ? `<optgroup label="${defaultGroup}">${defaults.map(option).join("")}</optgroup>` : ""}${custom.length ? `<optgroup label="${customGroup}">${custom.map(option).join("")}</optgroup>` : ""}`;
+  let selected = current && state.workflows.some((item) => item.id === current) ? current : "";
+  if (!selected) {
+    const variant = el("modelVariant")?.value || "fl2va-fp8";
+    const mode = el("executionMode")?.value || "native";
+    selected = state.workflows.find((item) => item.is_default && item.model_variant === variant && item.execution_mode === mode)?.id || state.workflows[0]?.id || "";
+  }
+  select.value = selected;
+  state.selectedWorkflowId = selected;
+  const workflow = selectedWorkflow();
+  select.title = workflow
+    ? `${workflow.description || workflow.name}。${localized("必须是 ComfyUI API 格式，目标服务器需包含节点和模型", "ComfyUI API JSON required; the target server must contain its nodes and models")}`
+    : localized("ComfyUI API 工作流", "ComfyUI API workflow");
+  if (el("workflowNotice")) {
+    el("workflowNotice").textContent = localized(
+      "必须使用 ComfyUI API 格式；目标服务器还必须包含工作流引用的节点和模型。",
+      "Use ComfyUI API JSON; the target server must also contain every referenced node and model.",
+    );
+  }
+}
+
+async function loadWorkflows(preferredId = "") {
+  const payload = await api("/api/v1/comfy/workflows");
+  renderWorkflowOptions(payload.data || [], preferredId);
+  updateModelUi();
+}
+
+async function importWorkflowFile(file) {
+  if (!file) return;
+  const fallback = file.name.replace(/\.json$/i, "").trim() || localized("自定义工作流", "Custom workflow");
+  const name = window.prompt(localized("为工作流命名", "Name this workflow"), fallback);
+  if (name === null || !name.trim()) return;
+  const data = new FormData();
+  data.append("workflow_file", file, file.name);
+  data.append("name", name.trim());
+  try {
+    const imported = await api("/api/v1/comfy/workflows", { method: "POST", body: data });
+    await loadWorkflows(imported.id);
+    showError("");
+    showToast(localized("工作流已导入并保存", "Workflow imported and saved"));
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+async function deleteSelectedWorkflow() {
+  const workflow = selectedWorkflow();
+  if (!workflow || workflow.is_default) return;
+  if (!window.confirm(localized(`确认删除自定义工作流“${workflow.name}”？`, `Delete custom workflow "${workflow.name}"?`))) return;
+  try {
+    await api(`/api/v1/comfy/workflows/${encodeURIComponent(workflow.id)}`, { method: "DELETE" });
+    await loadWorkflows();
+    showToast(localized("工作流已删除", "Workflow deleted"));
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
 function openNodeEditor(nodeId = null) {
   const node = nodeId ? state.managedNodes.find((item) => item.id === nodeId) : null;
   state.nodeEditingId = node?.id || null;
@@ -805,7 +887,11 @@ function isAnonymousQueueJob(job) {
 }
 
 function selectedVariant() {
-  return ANDROID_CLIENT ? "fl2va-fp8" : el("modelVariant").value;
+  const workflow = selectedWorkflow();
+  if (ANDROID_CLIENT) return "fl2va-fp8";
+  return workflow && !workflow.is_default
+    ? workflow.model_variant || el("modelVariant").value
+    : el("modelVariant").value;
 }
 
 function selectedExecutionMode() {
@@ -813,7 +899,7 @@ function selectedExecutionMode() {
 }
 
 function isUpscale(executionMode = selectedExecutionMode()) {
-  return executionMode === "video-upscale";
+  return executionMode === "video-upscale" || selectedWorkflow()?.task_type === "upscale";
 }
 
 function selectedUpscaleScale() {
@@ -1099,6 +1185,7 @@ function referenceLimits(variant = selectedVariant()) {
     runningHubMediaFields("", schema).forEach((field) => { limits[field.media_kind] += 1; });
     return limits;
   }
+  if (isCustomWorkflow()) return { image: 9, video: 9, audio: 9, file: 9 };
   if (isMusic3(variant)) return { image: 0, video: 0, audio: 0 };
   if (isUpscale()) return { image: 1, video: 1, audio: 0 };
   if (isDigitalHuman()) return { image: 1, video: 0, audio: 1 };
@@ -1154,6 +1241,14 @@ function validateReferenceSet(references = state.references, variant = selectedV
     }
     const missing = runningHubMediaFields("", schema).find((field) => field.required && !used.has(field.key));
     return missing ? localized(`请填写 ${runningHubFieldLabel(missing)}`, `Provide ${runningHubFieldLabel(missing)}`) : "";
+  }
+  if (isCustomWorkflow()) {
+    if (selectedWorkflow()?.task_type === "upscale") {
+      return references.length !== 1 || !["image", "video"].includes(references[0]?.kind || references[0]?.type)
+        ? localized("自定义超分工作流需要添加 1 张图片或 1 段视频", "Custom super-resolution workflows require one image or one video")
+        : "";
+    }
+    return references.length > 9 ? localized("自定义工作流最多添加 9 个参考文件", "Custom workflows accept up to 9 reference files") : "";
   }
   if (isMusic3(variant)) return references.length ? localized("Music3 不使用参考素材", "Music3 does not use reference files") : "";
   if (isUpscale()) {
@@ -1226,18 +1321,35 @@ async function api(url, options = {}) {
 function updateModelUi() {
   const runningHubNode = selectedRunningHubNode();
   const runningHub = Boolean(runningHubNode?.runninghub_schema);
+  let workflow = selectedWorkflow();
+  const custom = Boolean(workflow && !workflow.is_default);
+  if (custom) {
+    el("executionMode").value = workflow.task_type === "upscale" ? "video-upscale" : "native";
+  }
   const upscale = !runningHub && isUpscale();
+  if (!runningHub && upscale && !custom) {
+    const kind = state.references[0]?.kind || state.references[0]?.type;
+    const targetId = kind === "video" ? "builtin:upscale-video" : "builtin:upscale-image";
+    if (state.workflows.some((item) => item.id === targetId) && el("workflowSelect").value !== targetId) {
+      el("workflowSelect").value = targetId;
+      state.selectedWorkflowId = targetId;
+      workflow = selectedWorkflow();
+    }
+  }
   syncRunningHubSchema();
-  el("modelControl").hidden = Boolean(runningHubNode);
-  el("modelControl").hidden = Boolean(runningHubNode) || upscale;
-  el("executionControl").hidden = Boolean(runningHubNode);
+  el("workflowControl").hidden = Boolean(runningHubNode);
+  el("importWorkflowButton").hidden = Boolean(runningHubNode);
+  el("workflowNotice").hidden = Boolean(runningHubNode);
+  el("deleteWorkflowButton").hidden = Boolean(runningHubNode) || !workflow || workflow.is_default;
+  el("modelControl").hidden = Boolean(runningHubNode) || upscale || custom;
+  el("executionControl").hidden = Boolean(runningHubNode) || custom;
   el("runningHubWorkflowControl").hidden = !runningHubNode;
   el("upscaleCategoryControl").hidden = !upscale;
   el("upscaleScaleControl").hidden = !upscale;
   el("runningHubWorkflowName").textContent = runningHubNode
     ? `${runningHubNode.workflow_name || runningHubNode.name} · ${runningHubNode.runninghub_resource_type === "ai-app" ? "AI App" : "Workflow"}`
     : "";
-  const music3 = !runningHub && isMusic3() && !upscale;
+  const music3 = !runningHub && !custom && isMusic3() && !upscale;
   const music3ExecutionOption = el("music3ExecutionOption");
   music3ExecutionOption.hidden = !music3;
   if (music3) {
@@ -1246,7 +1358,7 @@ function updateModelUi() {
     el("executionMode").value = "native";
   }
   el("executionMode").disabled = music3;
-  const nsfw = selectedExecutionMode() === "h3-nsfw";
+  const nsfw = !custom && selectedExecutionMode() === "h3-nsfw";
   const digitalHuman = isDigitalHuman();
   const dualSampling = isDualSampling();
   const h3Sa = isH3SA();
@@ -1263,16 +1375,16 @@ function updateModelUi() {
   const ref2va = isRef2VA();
   const accelerated = selectedExecutionMode() === "turbo-lora";
   const stepsMode = el("steps").dataset.mode;
-  const nextStepsMode = upscale ? "upscale" : music3 ? "music3" : vdnH3 ? "vdn-h3" : "h3";
+  const nextStepsMode = custom ? "custom" : upscale ? "upscale" : music3 ? "music3" : vdnH3 ? "vdn-h3" : "h3";
   if (stepsMode !== nextStepsMode) {
-    el("steps").value = upscale ? "1" : music3 ? "30" : vdnH3 ? "50" : "10";
+    el("steps").value = custom ? "10" : upscale ? "1" : music3 ? "30" : vdnH3 ? "50" : "10";
     el("steps").dataset.mode = nextStepsMode;
   }
-  el("steps").min = upscale ? "1" : vdnH3 ? "8" : "4";
-  el("steps").max = upscale ? "1" : "50";
-  el("steps").step = vdnH3 ? "1" : "1";
+  el("steps").min = custom ? "1" : upscale ? "1" : vdnH3 ? "8" : "4";
+  el("steps").max = custom ? "100" : upscale ? "1" : "50";
+  el("steps").step = "1";
   const duration = el("duration");
-  const maxDuration = music3 || h3Sa ? 300 : 15;
+  const maxDuration = music3 || h3Sa || custom ? 300 : 15;
   const defaultDuration = music3 ? 60 : 5;
   const currentDuration = Number(duration.value);
   duration.min = "1";
@@ -1302,10 +1414,10 @@ function updateModelUi() {
   const runningHubKinds = new Set(runningHubMediaFields().map((field) => field.media_kind));
   referenceInput.accept = runningHub
     ? [...runningHubKinds].map((kind) => kind === "file" ? "*/*" : `${kind}/*`).join(",")
-    : music3 ? "" : upscale ? "image/*,video/*" : tts ? "audio/*" : digitalHuman ? "image/*,audio/*" : dualSampling ? "image/*" : ref2va ? "image/*,video/*,audio/*" : "image/*";
+    : custom ? "image/*,video/*,audio/*" : music3 ? "" : upscale ? "image/*,video/*" : tts ? "audio/*" : digitalHuman ? "image/*,audio/*" : dualSampling ? "image/*" : ref2va ? "image/*,video/*,audio/*" : "image/*";
   el("addReference").title = state.locale === "en"
     ? runningHub ? "Add a workflow input file" : upscale ? "Add one image or video" : tts ? "Add up to three character voice references" : digitalHuman ? "Add portrait and driving audio" : dualSampling ? "Add image references for dual sampling" : ref2va ? "Add image, video, or audio references" : "Add first or last frame"
-    : runningHub ? "添加工作流输入文件" : upscale ? "添加一张图片或一段视频" : tts ? "添加最多 3 段人物音频参考" : digitalHuman ? "添加人物图片和驱动音频" : dualSampling ? "添加双采图片参考" : ref2va ? "添加图片、视频或音频参考" : "添加首帧或尾帧";
+    : custom ? localized("添加工作流输入文件", "Add workflow input files") : runningHub ? "添加工作流输入文件" : upscale ? "添加一张图片或一段视频" : tts ? "添加最多 3 段人物音频参考" : digitalHuman ? "添加人物图片和驱动音频" : dualSampling ? "添加双采图片参考" : ref2va ? "添加图片、视频或音频参考" : "添加首帧或尾帧";
   el("addReference").setAttribute("aria-label", el("addReference").title);
   el("addReference").hidden = music3 || (runningHub && runningHubKinds.size === 0);
   el("aspectControl").hidden = upscale || music3 || tts || runningHub;
@@ -1318,7 +1430,7 @@ function updateModelUi() {
   // DOM for backward-compatible saved settings, but do not expose them.
   el("saSettings").hidden = true;
   el("stepsControl").title = state.locale === "en" ? music3 ? "Music3 uses 30 steps" : h3Sa ? "H3 SA uses 8 LoRA steps" : vdnH3 ? "VDN-H3 uses 8 to 50 steps; default 50" : "Sampling steps" : music3 ? "Music3 固定使用 30 步" : h3Sa ? "H3 SA 固定使用 8 步 LoRA" : vdnH3 ? "VDN-H3 可使用 8–50 步，默认 50 步" : "采样步数";
-  el("optimizePrompt").hidden = runningHub || upscale;
+  el("optimizePrompt").hidden = runningHub || upscale || custom;
   el("optimizePrompt").title = state.locale === "en" ? music3 ? "Optimize style" : tts ? "Optimize TTS dialogue prompt" : "Optimize prompt" : music3 ? "优化曲风" : tts ? "优化 TTS 对话提示词" : "优化提示词";
   el("optimizePrompt").setAttribute("aria-label", el("optimizePrompt").title);
   el("optimizePromptLabel").textContent = el("optimizePrompt").title;
@@ -1331,13 +1443,22 @@ function updateModelUi() {
     ? primaryText
       ? runningHubFieldLabel(primaryText)
       : localized("该工作流没有主文本输入，可留空", "This workflow has no primary text input; this field may be empty")
-    : state.locale === "en"
+      : custom
+        ? localized("输入提示词（如工作流包含文本输入）…", "Enter a prompt if the workflow exposes a text input…")
+        : state.locale === "en"
       ? upscale ? "Optional note for the super-resolution task..." : music3 ? "Describe genre, mood, tempo, key, instruments, vocals, and arrangement..." : tts ? "Describe each speaker's age, personality, delivery, and exact dialogue..." : "Describe the scene, characters, action, camera, and sound..."
       : upscale ? "可选，填写超分任务说明…" : music3 ? "描述曲风、情绪、速度、调式、乐器、人声与编曲…" : tts ? "描述人物年龄、性格、说话方式和需要生成的完整对白…" : "输入自然语言，描述场景、人物、动作、镜头与声音…";
   el("dropZone").title = localized("可拖入本地文件或素材库生成产物", "Drop local files or generated assets from the library");
   renderReferences();
   const error = validateReferenceSet(state.references);
   showError(state.references.length ? error : "");
+  if (!runningHub && !custom && workflow) {
+    const matching = state.workflows.find((item) => item.is_default && item.model_variant === el("modelVariant").value && item.execution_mode === el("executionMode").value);
+    if (matching && el("workflowSelect").value !== matching.id) {
+      el("workflowSelect").value = matching.id;
+      state.selectedWorkflowId = matching.id;
+    }
+  }
 }
 
 function addFiles(files, forcedFieldKey = "") {
@@ -2729,6 +2850,10 @@ async function backfillJob(jobId) {
     promptInput.value = job.request?.prompt || "";
     el("lyrics").value = job.request?.lyrics || "";
     el("modelVariant").value = job.request?.model_variant || "fl2va-fp8";
+    if (job.request?.workflow_id && state.workflows.some((item) => item.id === job.request.workflow_id)) {
+      el("workflowSelect").value = job.request.workflow_id;
+      state.selectedWorkflowId = job.request.workflow_id;
+    }
     el("executionMode").value = job.request?.task_type === "upscale"
       ? "video-upscale"
       : job.request?.execution_mode || "native";
@@ -2794,6 +2919,10 @@ async function startEdit(jobId) {
     promptInput.value = job.request.prompt;
     el("lyrics").value = job.request.lyrics || "";
     el("modelVariant").value = job.request.model_variant || "fl2va-fp8";
+    if (job.request?.workflow_id && state.workflows.some((item) => item.id === job.request.workflow_id)) {
+      el("workflowSelect").value = job.request.workflow_id;
+      state.selectedWorkflowId = job.request.workflow_id;
+    }
     el("executionMode").value = job.request?.task_type === "upscale"
       ? "video-upscale"
       : job.request.execution_mode || "native";
@@ -2932,10 +3061,11 @@ form.addEventListener("submit", async (event) => {
   const runningHubNode = selectedRunningHubNode();
   const runningHub = Boolean(runningHubNode?.runninghub_schema);
   const upscale = isUpscale();
-  const minimumPromptLength = upscale ? 0 : isMusic3() ? 2 : 8;
+  const minimumPromptLength = upscale || isCustomWorkflow() ? 0 : isMusic3() ? 2 : 8;
   if (!runningHub && prompt.length < minimumPromptLength) return showError(localized(`请填写至少 ${minimumPromptLength} 个字符的提示词`, `Enter a prompt with at least ${minimumPromptLength} characters`));
   const steps = upscale ? 1 : isMusic3() ? 30 : selectedExecutionMode() === "turbo-lora" || isH3SA() ? 8 : isVDNH3() ? Number(el("steps").value) : isDigitalHuman() ? 20 : Number(el("steps").value);
-  if (!runningHub && !upscale && (!Number.isInteger(steps) || steps < 4 || steps > 50)) return showError(localized("采样步数请输入 4–50 的整数", "Sampling steps must be an integer from 4 to 50"));
+  if (!runningHub && !upscale && !isCustomWorkflow() && (!Number.isInteger(steps) || steps < 4 || steps > 50)) return showError(localized("采样步数请输入 4–50 的整数", "Sampling steps must be an integer from 4 to 50"));
+  if (!runningHub && isCustomWorkflow() && (!Number.isInteger(steps) || steps < 1 || steps > 100)) return showError(localized("自定义工作流步数请输入 1–100 的整数", "Custom workflow steps must be an integer from 1 to 100"));
   const [width, height] = isTTS() ? [32, 32] : getDimensions();
   const button = el("generateButton");
   button.disabled = true;
@@ -2945,6 +3075,7 @@ form.addEventListener("submit", async (event) => {
       const requestBody = {
         prompt,
         comfy_node: el("comfyNode").value,
+        ...(runningHub ? {} : { workflow_id: el("workflowSelect").value || null }),
       };
       if (runningHub) {
         requestBody.runninghub_parameters = collectRunningHubParameters();
@@ -2999,6 +3130,7 @@ form.addEventListener("submit", async (event) => {
         }
       }
       data.append("comfy_node", el("comfyNode").value);
+      if (!runningHub && el("workflowSelect").value) data.append("workflow_id", el("workflowSelect").value);
       if (state.assetFolderId && state.assetFolderId !== "__unfiled__") data.append("folder_id", state.assetFolderId);
       data.append("incognito", state.incognito ? "true" : "false");
       data.append("reference_manifest", JSON.stringify(state.references.map((item) => ({ type: item.kind, ...(item.field_key ? { field_key: item.field_key } : {}) }))));
@@ -4460,6 +4592,22 @@ el("writeLyrics").addEventListener("click", () => {
 });
 el("modelVariant").addEventListener("change", updateModelUi);
 el("executionMode").addEventListener("change", updateModelUi);
+el("workflowSelect").addEventListener("change", () => {
+  state.selectedWorkflowId = el("workflowSelect").value;
+  const workflow = selectedWorkflow();
+  if (workflow?.is_default) {
+    if (workflow.model_variant) el("modelVariant").value = workflow.model_variant;
+    if (workflow.task_type === "upscale") el("executionMode").value = "video-upscale";
+    else if (workflow.execution_mode && workflow.execution_mode !== "custom") el("executionMode").value = workflow.execution_mode;
+  }
+  updateModelUi();
+});
+el("importWorkflowButton").addEventListener("click", () => el("workflowImportInput").click());
+el("deleteWorkflowButton").addEventListener("click", deleteSelectedWorkflow);
+el("workflowImportInput").addEventListener("change", () => {
+  const file = el("workflowImportInput").files?.[0];
+  importWorkflowFile(file).finally(() => { el("workflowImportInput").value = ""; });
+});
 el("upscaleCategory").addEventListener("change", updateModelUi);
 el("upscaleScale").addEventListener("change", updateModelUi);
 el("comfyNode").addEventListener("change", updateModelUi);
@@ -4726,6 +4874,7 @@ async function initialize() {
     loadGeneralSettings().catch((error) => showError(error.message)),
     refreshPeeringStatus({ notifyEvents: false }),
     checkHealth(),
+    loadWorkflows(),
     refreshSharedData(),
   ]);
 }

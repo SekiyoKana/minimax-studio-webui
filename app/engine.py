@@ -11,6 +11,7 @@ import subprocess
 import time
 import uuid
 from datetime import UTC, datetime
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit
@@ -381,9 +382,15 @@ class ComfyUIH3Engine:
         "92": (97, "保存 MP4 产物"),
     }
 
-    def __init__(self, settings: Settings, node: ComfyNodeConfig | None = None):
+    def __init__(
+        self,
+        settings: Settings,
+        node: ComfyNodeConfig | None = None,
+        workflow_registry: Any | None = None,
+    ):
         self.settings = settings
         self.node = node or ComfyNodeConfig("default", settings.gpu_label, settings.comfy_url)
+        self.workflow_registry = workflow_registry
         self.comfy_url = self.node.url.rstrip("/")
         self.api_headers = (
             {"Authorization": f"Bearer {self.node.api_key}"}
@@ -400,7 +407,32 @@ class ComfyUIH3Engine:
     def _execution_mode(job: dict[str, Any]) -> str:
         return job.get("request", {}).get("execution_mode") or "native"
 
-    def _load_workflow(self, variant: str, execution_mode: str = "native") -> dict[str, Any]:
+    def _workflow_definition(self, workflow_id: str | None) -> dict[str, Any] | None:
+        if not workflow_id or self.workflow_registry is None:
+            return None
+        definition = self.workflow_registry.get(str(workflow_id), include_workflow=True)
+        if not definition:
+            raise ValueError(f"工作流不存在或已被删除：{workflow_id}")
+        return definition
+
+    def _load_workflow(
+        self,
+        variant: str,
+        execution_mode: str = "native",
+        workflow_id: str | None = None,
+    ) -> dict[str, Any]:
+        definition = self._workflow_definition(workflow_id)
+        if definition is None and self.workflow_registry is not None:
+            definition = self.workflow_registry.default_for(
+                variant,
+                execution_mode,
+                "generation",
+            )
+        if definition:
+            loaded = self.workflow_registry.get(definition["id"], include_workflow=True)
+            if not loaded:
+                raise ValueError(f"工作流不存在或已被删除：{definition['id']}")
+            return deepcopy(loaded["workflow"])
         workflow_paths = {
             ("fl2va-fp8", "native"): self.settings.comfy_workflow,
             ("fl2va-fp8", "turbo-lora"): self.settings.comfy_turbo_workflow,
@@ -453,6 +485,99 @@ class ComfyUIH3Engine:
             raise ValueError(f"ComfyUI 工作流缺少节点：{', '.join(missing)}")
         return workflow
 
+    @staticmethod
+    def _custom_output_node_ids(workflow: dict[str, Any]) -> list[str]:
+        output_classes = {
+            "SaveVideo",
+            "SaveAudio",
+            "VHS_VideoCombine",
+            "SaveImage",
+            "PreviewImage",
+            "SaveAnimatedWEBP",
+            "SaveAnimatedPNG",
+        }
+        ids = [
+            str(node_id)
+            for node_id, node in workflow.items()
+            if isinstance(node, dict) and str(node.get("class_type") or "") in output_classes
+        ]
+        return ids or [str(node_id) for node_id, node in workflow.items() if isinstance(node, dict)]
+
+    @staticmethod
+    def _bind_custom_workflow(
+        workflow: dict[str, Any],
+        request: dict[str, Any],
+        input_names: list[str],
+        job_id: str,
+    ) -> dict[str, Any]:
+        """Bind common MiniMax/ComfyUI API inputs without relying on node IDs."""
+        media_by_type: dict[str, list[str]] = {"image": [], "video": [], "audio": [], "file": []}
+        for item, input_name in zip(request.get("references", []), input_names, strict=False):
+            media_by_type.setdefault(str(item.get("type") or "file"), []).append(input_name)
+        cursors = {key: 0 for key in media_by_type}
+        prompt_keys = {
+            "prompt",
+            "text",
+            "text_prompt",
+            "caption",
+            "positive",
+            "positive_prompt",
+            "description",
+            "lyrics",
+            "negative",
+            "negative_prompt",
+            "negative_text",
+        }
+        for node_id, node in workflow.items():
+            if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+                continue
+            inputs = node["inputs"]
+            class_type = str(node.get("class_type") or "").lower()
+            title = str((node.get("_meta") or {}).get("title") or "").lower()
+            for key, value in list(inputs.items()):
+                normalized_key = str(key).lower()
+                if isinstance(value, list):
+                    continue
+                if normalized_key in {"seed", "noise_seed", "random_seed"}:
+                    inputs[key] = int(request.get("seed") or 0)
+                elif normalized_key in {"steps", "num_steps", "sampling_steps"}:
+                    inputs[key] = int(request.get("steps") or 1)
+                elif normalized_key in {"width", "custom_width", "target_width"}:
+                    inputs[key] = int(request.get("width") or 0)
+                elif normalized_key in {"height", "custom_height", "target_height"}:
+                    inputs[key] = int(request.get("height") or 0)
+                elif normalized_key in {"length", "num_frames", "frames", "frame_count", "frame_load_cap"}:
+                    inputs[key] = int(request.get("num_frames") or 0)
+                elif normalized_key in {"scale", "scale_by", "upscale_scale"}:
+                    inputs[key] = int(request.get("upscale_scale") or 2)
+                elif normalized_key in prompt_keys or any(token in title for token in ("prompt", "caption", "text", "歌词")):
+                    if "negative" in normalized_key or "negative" in title or "负面" in title:
+                        inputs[key] = request.get("negative_prompt") or ""
+                    elif normalized_key == "lyrics" or "lyric" in normalized_key or "歌词" in title:
+                        inputs[key] = request.get("lyrics") or "[Instrumental]"
+                    else:
+                        inputs[key] = request.get("prompt") or ""
+                elif normalized_key in {"image", "image_path"} and ("loadimage" in class_type or "image" in class_type):
+                    if cursors["image"] < len(media_by_type["image"]):
+                        inputs[key] = media_by_type["image"][cursors["image"]]
+                        cursors["image"] += 1
+                elif normalized_key in {"video", "video_path"} and ("video" in class_type or "loadvideo" in class_type):
+                    if cursors["video"] < len(media_by_type["video"]):
+                        inputs[key] = media_by_type["video"][cursors["video"]]
+                        cursors["video"] += 1
+                elif normalized_key in {"audio", "audio_path"} and ("audio" in class_type or "loadaudio" in class_type):
+                    if cursors["audio"] < len(media_by_type["audio"]):
+                        inputs[key] = media_by_type["audio"][cursors["audio"]]
+                        cursors["audio"] += 1
+            if (
+                class_type in {"savevideo", "saveaudio", "saveimage"}
+                or "videocombine" in class_type
+                or class_type.startswith("saveanimated")
+            ):
+                if "filename_prefix" in inputs:
+                    inputs["filename_prefix"] = f"minimax-studio-webui/{job_id}"
+        return workflow
+
     def _upload_inputs(self, client, job: dict[str, Any]) -> list[str]:
         paths = [Path(path) for path in job["input_paths"]]
         manifest = job["request"]["references"]
@@ -497,8 +622,18 @@ class ComfyUIH3Engine:
     ) -> dict[str, Any]:
         variant = self._variant(job)
         execution_mode = self._execution_mode(job)
-        workflow = self._load_workflow(variant, execution_mode)
         request = job["request"]
+        definition = self._workflow_definition(request.get("workflow_id"))
+        if definition and definition["is_default"]:
+            variant = str(definition.get("model_variant") or variant)
+            execution_mode = str(definition.get("execution_mode") or execution_mode)
+        workflow = self._load_workflow(
+            variant,
+            execution_mode,
+            str(request.get("workflow_id") or "") or None,
+        )
+        if definition and not definition["is_default"]:
+            return self._bind_custom_workflow(workflow, request, input_names, str(job["id"]))
         workflow["92"]["inputs"]["filename_prefix"] = f"minimax-studio-webui/{job['id']}"
         if variant == "music3-int8":
             if music3_device:
@@ -1328,24 +1463,57 @@ class ComfyUIH3Engine:
         if status.get("completed") is not True or status.get("status_str") != "success":
             messages = status.get("messages") or []
             raise RuntimeError(f"ComfyUI 未成功完成工作流：{messages[-1:]}")
-        output_items = (history.get("outputs") or {}).get("92") or {}
+        request = job.get("request") or {}
+        definition = self._workflow_definition(request.get("workflow_id"))
+        custom_workflow = (
+            bool(request.get("workflow_id"))
+            if definition is None
+            else not definition["is_default"]
+        )
+        output_items = (
+            (history.get("outputs") or {}).get("92") or {}
+            if not custom_workflow
+            else history.get("outputs") or {}
+        )
         candidates = []
         for items in output_items.values():
-            if isinstance(items, list):
+            if isinstance(items, dict):
+                for nested in items.values():
+                    if isinstance(nested, list):
+                        candidates.extend(item for item in nested if isinstance(item, dict))
+            elif isinstance(items, list):
                 candidates.extend(item for item in items if isinstance(item, dict))
-        audio_only = self._variant(job) == "music3-int8" or self._execution_mode(job) == "tts"
-        expected_suffix = ".flac" if audio_only else ".mp4"
+        audio_only = (
+            self._variant(job) == "music3-int8"
+            or self._execution_mode(job) == "tts"
+            or request.get("media_type") == "audio"
+        )
+        media_type = str(request.get("media_type") or "video")
+        allowed_suffixes = (
+            {".flac", ".wav", ".mp3", ".m4a"}
+            if audio_only
+            else {".mp4", ".webm", ".mkv", ".mov"}
+            if media_type == "video"
+            else {".png", ".jpg", ".jpeg", ".webp"}
+            if media_type == "image"
+            else None
+        )
         result_item = next(
             (
                 item
                 for item in candidates
-                if str(item.get("filename", "")).lower().endswith(expected_suffix)
+                if str(item.get("filename") or "").strip()
+                and (
+                    allowed_suffixes is None
+                    or Path(str(item.get("filename", ""))).suffix.lower() in allowed_suffixes
+                )
             ),
             None,
         )
         if not result_item:
-            media_name = "FLAC" if audio_only else "MP4"
-            raise RuntimeError(f"ComfyUI 历史记录中没有找到节点 92 的 {media_name} 产物")
+            media_name = "音频" if audio_only else "视频" if media_type == "video" else "图片"
+            raise RuntimeError(f"ComfyUI 历史记录中没有找到自定义工作流的{media_name}产物")
+        expected_suffix = Path(str(result_item.get("filename") or "")).suffix.lower() or (".flac" if audio_only else ".mp4")
         output = self.settings.outputs_dir / output_file_name(job, expected_suffix)
         if client is None:
             output_root = self.settings.comfy_output_dir.resolve()
@@ -1507,7 +1675,7 @@ class ComfyUIH3Engine:
             mapped = 70 + round(max(0, min(100, int(value))) * 0.29)
             progress(min(99, mapped), f"生成后超分 · {stage}")
 
-        output = ComfyUIUpscaleEngine(self.settings, self.node).generate(
+        output = ComfyUIUpscaleEngine(self.settings, self.node, self.workflow_registry).generate(
             auto_job,
             upscale_progress,
             cancelled,
@@ -1530,7 +1698,7 @@ class ComfyUIH3Engine:
                 checkpoint_callback=checkpoint_callback,
             )
         if job.get("request", {}).get("task_type") == "upscale":
-            return ComfyUIUpscaleEngine(self.settings, self.node).generate(
+            return ComfyUIUpscaleEngine(self.settings, self.node, self.workflow_registry).generate(
                 job,
                 progress,
                 cancelled,
@@ -1583,14 +1751,33 @@ class ComfyUIUpscaleEngine(ComfyUIH3Engine):
     ) -> dict[str, Any]:
         request = job["request"]
         media_type = request.get("media_type") or "image"
+        definition = self._workflow_definition(request.get("workflow_id"))
+        if definition is None and self.workflow_registry is not None:
+            default_id = "builtin:upscale-video" if media_type == "video" else "builtin:upscale-image"
+            definition = self._workflow_definition(default_id)
+        if definition:
+            input_workflow = self.workflow_registry.get(definition["id"], include_workflow=True)
+            if not input_workflow:
+                raise ValueError(f"工作流不存在或已被删除：{definition['id']}")
+            workflow = deepcopy(input_workflow["workflow"])
+            if not definition["is_default"]:
+                return self._bind_custom_workflow(
+                    workflow,
+                    request,
+                    [input_name],
+                    str(job["id"]),
+                )
+        else:
+            workflow = None
         workflow_path = (
             self.settings.comfy_upscale_video_workflow
             if media_type == "video"
             else self.settings.comfy_upscale_image_workflow
         )
-        if not workflow_path.exists():
-            raise FileNotFoundError(f"ComfyUI 超分工作流不存在：{workflow_path}")
-        workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+        if workflow is None:
+            if not workflow_path.exists():
+                raise FileNotFoundError(f"ComfyUI 超分工作流不存在：{workflow_path}")
+            workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
         model_name, post_scale = self.model_spec(
             str(request.get("upscale_category") or "real"),
             int(request.get("upscale_scale") or 2),
@@ -2905,7 +3092,11 @@ def probe_node(node: ComfyNodeConfig) -> dict[str, Any] | None:
     return None
 
 
-def create_engine(settings: Settings, node: ComfyNodeConfig | None = None):
+def create_engine(
+    settings: Settings,
+    node: ComfyNodeConfig | None = None,
+    workflow_registry: Any | None = None,
+):
     if settings.fake_engine:
         return FakeEngine(settings)
     if node and node.provider == "runninghub":
@@ -2913,5 +3104,5 @@ def create_engine(settings: Settings, node: ComfyNodeConfig | None = None):
     if settings.engine_backend == "sglang":
         return SGLangH3Engine(settings)
     if settings.engine_backend == "comfyui":
-        return ComfyUIH3Engine(settings, node)
+        return ComfyUIH3Engine(settings, node, workflow_registry)
     return MiniMaxH3Engine(settings)

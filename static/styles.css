@@ -499,6 +499,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .asset-detail-footer svg { width: 13px; }
 .asset-detail-error { min-width: 0; margin: 0; color: var(--danger); font-size: 9px; }
 .node-dialog { display: grid; width: min(860px, 100%); max-height: min(760px, calc(100dvh - 36px)); grid-template-rows: auto auto auto auto minmax(0, 1fr); overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); box-shadow: 0 24px 70px rgba(24, 28, 23, .28); }
+.workflow-notice { align-self: center; max-width: 280px; color: var(--quiet); font-size: 9px; line-height: 1.35; }
 .node-dialog-header { display: flex; min-height: 68px; align-items: center; justify-content: space-between; padding: 0 16px 0 18px; border-bottom: 1px solid var(--line); }
 .node-dialog-header > div { display: flex; min-width: 0; align-items: center; gap: 11px; }
 .node-dialog-mark { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border-radius: 6px; background: var(--ink); color: white; }

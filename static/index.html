@@ -112,6 +112,17 @@
                 <div class="toolbar-row toolbar-row-primary">
                   <button class="icon-button attach-button" id="addReference" type="button" title="添加参考素材" aria-label="添加参考素材"><i data-lucide="paperclip"></i></button>
 
+                  <label class="compact-control workflow-control" id="workflowControl" title="ComfyUI 工作流">
+                    <i data-lucide="workflow"></i>
+                    <select id="workflowSelect" aria-label="ComfyUI 工作流">
+                      <option value="">加载工作流…</option>
+                    </select>
+                  </label>
+                  <button class="icon-button" id="importWorkflowButton" type="button" title="导入 ComfyUI API 工作流" aria-label="导入 ComfyUI API 工作流"><i data-lucide="file-up"></i></button>
+                  <button class="icon-button" id="deleteWorkflowButton" type="button" title="删除自定义工作流" aria-label="删除自定义工作流" hidden><i data-lucide="trash-2"></i></button>
+                  <input id="workflowImportInput" type="file" accept="application/json,.json" hidden>
+                  <small class="workflow-notice" id="workflowNotice">工作流必须是 ComfyUI API 格式，且目标服务器需包含其中引用的节点和模型。</small>
+
                   <label class="compact-control" id="modelControl" title="生成模型">
                     <i data-lucide="sparkles"></i>
                     <select id="modelVariant" aria-label="生成模型">

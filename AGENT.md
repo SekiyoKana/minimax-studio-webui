@@ -174,6 +174,10 @@ curl -X POST "$BASE_URL/api/v1/comfy/nodes" \
 
 ## 5. 创建生成任务
 
+### ComfyUI 工作流配置
+
+`GET /api/v1/comfy/workflows` 返回数据库中的内置和用户导入工作流配置。导入使用 `POST /api/v1/comfy/workflows` 的 multipart 字段 `workflow_file`，文件必须是可直接提交给 ComfyUI `/prompt` 的 API JSON；ComfyUI 编辑器 UI 格式不能直接使用。生成请求可以通过 `workflow_id` 选择配置。服务只保存配置，不会替目标 ComfyUI 安装节点或模型，请先确认目标服务器已包含工作流引用的节点、模型和其他资源。通过远程互联节点执行自定义工作流前，还要在目标设备导入相同配置。
+
 接口：
 
 ```text

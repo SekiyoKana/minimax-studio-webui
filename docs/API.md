@@ -82,6 +82,18 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
 
 删除节点使用 `DELETE /api/v1/comfy/nodes/{node_id}`。正在执行任务、存在定向排队任务或属于最后一个启用节点时，服务拒绝停用或删除。
 
+## ComfyUI 工作流配置
+
+`GET /api/v1/comfy/workflows` 返回 `data/config.db` 中的内置和用户导入配置。导入 API JSON：
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/comfy/workflows \
+  -F 'name=我的 H3 工作流' \
+  -F 'workflow_file=@minimax_h3_custom_api.json;type=application/json'
+```
+
+生成请求用 `workflow_id` 选择配置。服务会根据 `SaveVideo`、`SaveAudio` 或 `SaveImage` 等输出节点识别产物类型，也可以在导入时用 `media_type=video|audio|image|file` 明确指定。文件必须是 ComfyUI API 格式（可直接提交到 `/prompt` 的节点 JSON），UI 编辑器导出的 workflow JSON 不能直接使用。服务只保存配置；执行前请确认目标 ComfyUI 已包含该工作流所需的自定义节点、模型和其他资源。通过远程互联节点执行时，需要先在目标设备导入自定义工作流配置。
+
 ## 创建超分任务
 
 超分任务通过 ComfyUI 节点执行，支持图片和视频输入。服务根据分类和倍率选择模型，视频任务逐帧处理并按源帧率合成 MP4。

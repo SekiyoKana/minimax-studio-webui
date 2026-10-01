@@ -4,6 +4,10 @@
 
 All files use the ComfyUI API JSON format and can be submitted directly to `/prompt`.
 
+At startup, the service imports the built-in workflow files into the SQLite workflow configuration table. The UI and generation API select a configuration with `workflow_id`; users can import a ComfyUI API JSON file through `POST /api/v1/comfy/workflows` and use it through the same execution path.
+
+Imported files must use ComfyUI API format, where each node ID maps to an object containing `class_type` and `inputs`. A ComfyUI editor UI workflow export is not sufficient. The service stores the JSON but does not install nodes or models on the target ComfyUI server. Confirm that the target server already contains every referenced custom node, model, and resource before running the workflow. A custom configuration used through a remote peer must also be imported on the target device first.
+
 See the [official ComfyUI MiniMax H3 tutorial](https://docs.comfy.org/tutorials/partner-nodes/minimax/minimax-h3) for the base nodes and model directories. The API workflows in this repository add server-side dynamic parameters, job-specific output names, and Turbo LoRA nodes.
 
 | File | Model | Mode | SHA-256 |

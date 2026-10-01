@@ -35,11 +35,13 @@ from .ref2va_prompts import REF2VA_SYSTEM_PROMPT
 from .tts_prompts import TTS_SYSTEM_PROMPT
 from .runninghub import assign_media_fields, normalize_parameters, output_media_type
 from .settings import settings
+from .workflows import WorkflowRegistry
 
 
 ExecutionMode = Literal["native", "turbo-lora", "dual-sampling", "h3-sa", "vdn-h3", "h3-nsfw", "digital-human", "tts", "music3"]
 ModelVariant = Literal["fl2va-fp8", "ref2va-fp8", "music3-int8"]
 TaskType = Literal["generation", "upscale"]
+MediaType = Literal["video", "audio", "image", "file"]
 UpscaleCategory = Literal["real", "anime", "3d"]
 UpscaleScale = int
 
@@ -48,9 +50,10 @@ settings.ensure_directories()
 store = JobStore(settings.jobs_dir)
 node_registry = NodeRegistry(settings.data_dir / "config.db")
 local_state = LocalStateStore(settings.data_dir / "config.db")
+workflow_registry = WorkflowRegistry(settings.data_dir / "config.db", settings)
 manager = JobManager(
     store,
-    lambda node: create_engine(settings, node),
+    lambda node: create_engine(settings, node, workflow_registry),
     nodes=node_registry.configs(),
     health_probe=(
         probe_node
@@ -137,6 +140,7 @@ class GenerationPatch(BaseModel):
     sa_stage2_denoise: float | None = Field(None, ge=0, le=1)
     lyrics: str | None = Field(None, max_length=12000)
     comfy_node: str | None = Field(None, min_length=1, max_length=200)
+    workflow_id: str | None = Field(None, min_length=3, max_length=160)
     runninghub_parameters: dict[str, object] | None = None
 
 
@@ -203,6 +207,11 @@ class ComfyNodeUpdate(BaseModel):
 
 class ComfySettingsUpdate(BaseModel):
     health_interval_seconds: float = Field(ge=5, le=3600)
+
+
+class WorkflowUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=500)
 
 
 class AISettingsUpdate(BaseModel):
@@ -440,6 +449,13 @@ def validate_references(
         return
     if counts["image"] > 9 or counts["video"] > 3 or counts["audio"] > 3:
         raise HTTPException(status_code=422, detail="Ref2VA 最多支持 9 张图片、3 段视频和 3 段音频")
+
+
+def validate_custom_references(kinds: list[str], task_type: str) -> None:
+    if len(kinds) > 9:
+        raise HTTPException(status_code=422, detail="自定义工作流最多支持 9 个参考文件")
+    if task_type == "upscale" and (len(kinds) != 1 or kinds[0] not in {"image", "video"}):
+        raise HTTPException(status_code=422, detail="自定义超分工作流需要上传 1 张图片或 1 段视频")
 
 
 def validate_execution_mode(
@@ -825,6 +841,89 @@ async def update_comfy_settings(payload: ComfySettingsUpdate):
     seconds = node_registry.set_health_interval(payload.health_interval_seconds)
     reload_comfy_nodes()
     return {"health_interval_seconds": seconds}
+
+
+@app.get("/api/v1/comfy/workflows", dependencies=[Depends(authorize)])
+async def list_comfy_workflows():
+    return {
+        "data": workflow_registry.list(include_workflow=False),
+        "warning": "ComfyUI 工作流必须使用 API 格式 JSON，并且目标 ComfyUI 服务器必须已安装其中引用的节点和模型。",
+    }
+
+
+@app.get("/api/v1/comfy/workflows/{workflow_id}", dependencies=[Depends(authorize)])
+async def get_comfy_workflow(workflow_id: str):
+    workflow = workflow_registry.get(workflow_id, include_workflow=True)
+    if not workflow:
+        raise HTTPException(status_code=404, detail="工作流不存在")
+    workflow["warning"] = "请确认目标 ComfyUI 服务器已包含此工作流引用的节点和模型。"
+    return workflow
+
+
+@app.post("/api/v1/comfy/workflows", status_code=201, dependencies=[Depends(authorize)])
+async def import_comfy_workflow(
+    workflow_file: UploadFile | None = File(default=None, description="ComfyUI API JSON 工作流文件"),
+    name: Annotated[str, Form()] = "",
+    description: Annotated[str, Form(max_length=500)] = "",
+    model_variant: Annotated[str, Form(max_length=80)] = "",
+    execution_mode: Annotated[str, Form(max_length=80)] = "custom",
+    task_type: Annotated[str, Form(max_length=40)] = "generation",
+    media_type: Annotated[MediaType | None, Form()] = None,
+    workflow_json: Annotated[str, Form()] = "",
+):
+    raw = b""
+    filename = str(workflow_file.filename or "") if workflow_file else ""
+    if workflow_file is not None:
+        raw = await workflow_file.read()
+    elif workflow_json.strip():
+        raw = workflow_json.encode("utf-8")
+    if not raw:
+        raise HTTPException(status_code=422, detail="请选择 ComfyUI API JSON 工作流文件")
+    if len(raw) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="工作流文件不能超过 50 MB")
+    try:
+        payload = json.loads(raw.decode("utf-8-sig"))
+        effective_name = name.strip() or Path(filename).stem or "自定义 ComfyUI 工作流"
+        workflow = workflow_registry.create(
+            effective_name,
+            payload,
+            description=description,
+            model_variant=model_variant,
+            execution_mode=execution_mode,
+            task_type=task_type,
+            media_type=media_type,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=422, detail="工作流文件不是有效的 UTF-8 JSON") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    workflow["warning"] = "已保存工作流配置。使用前请确认它是 ComfyUI API 格式，且目标服务器已包含对应节点和模型。"
+    return workflow
+
+
+@app.patch("/api/v1/comfy/workflows/{workflow_id}", dependencies=[Depends(authorize)])
+async def update_comfy_workflow(workflow_id: str, payload: WorkflowUpdate):
+    try:
+        return workflow_registry.update(
+            workflow_id,
+            name=payload.name,
+            description=payload.description,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="工作流不存在") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.delete("/api/v1/comfy/workflows/{workflow_id}", dependencies=[Depends(authorize)])
+async def delete_comfy_workflow(workflow_id: str):
+    try:
+        workflow_registry.delete(workflow_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="工作流不存在") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"deleted": True, "id": workflow_id}
 
 
 @app.get("/api/v1/settings/general", dependencies=[Depends(authorize)])
@@ -2281,6 +2380,7 @@ async def create_generation(
     lyrics: Annotated[str, Form(max_length=12000)] = "",
     title: Annotated[str | None, Form(max_length=120)] = None,
     comfy_node: Annotated[str, Form(max_length=200)] = "auto",
+    workflow_id: Annotated[str | None, Form(max_length=160)] = None,
     runninghub_parameters: Annotated[
         str, Form(description="JSON object keyed by RunningHub schema field keys.")
     ] = "{}",
@@ -2300,6 +2400,15 @@ async def create_generation(
         raise HTTPException(status_code=403, detail="无痕模式授权已失效")
     remote_target = parse_remote_node_id(comfy_node)
     if remote_target:
+        if workflow_id:
+            selected_workflow = workflow_registry.get(workflow_id, include_workflow=False)
+            if not selected_workflow:
+                raise HTTPException(status_code=422, detail="指定的工作流不存在")
+            if not selected_workflow.get("is_default"):
+                raise HTTPException(
+                    status_code=422,
+                    detail="自定义工作流需要先导入到目标设备的数据库，再使用远程节点",
+                )
         return await submit_proxy_generation(
             prompt=prompt,
             reference_manifest=reference_manifest,
@@ -2331,6 +2440,7 @@ async def create_generation(
             lyrics=lyrics,
             title=title,
             comfy_node=comfy_node,
+            workflow_id=workflow_id,
             runninghub_parameters=runninghub_parameters,
             incognito=incognito,
             incognito_code=incognito_code,
@@ -2355,37 +2465,74 @@ async def create_generation(
         raise HTTPException(status_code=422, detail="当前没有可用推理节点，请添加推理节点")
     if not manager.accepts_node(comfy_node):
         raise HTTPException(status_code=422, detail="指定的推理节点不存在")
+    workflow_config = None
+    if not workflow_id and task_type != "upscale":
+        default_execution_mode = "upscale" if task_type == "upscale" else execution_mode
+        workflow_config = workflow_registry.default_for(
+            model_variant,
+            default_execution_mode,
+            task_type,
+        )
+        if workflow_config:
+            workflow_id = str(workflow_config["id"])
+    if workflow_id:
+        workflow_config = workflow_config or workflow_registry.get(workflow_id, include_workflow=False)
+        if not workflow_config:
+            raise HTTPException(status_code=422, detail="指定的工作流不存在")
+        if workflow_config.get("task_type") not in {"generation", "upscale"}:
+            raise HTTPException(status_code=422, detail="工作流任务类型无效")
+        if workflow_config.get("task_type") == "upscale" and task_type != "upscale":
+            raise HTTPException(status_code=422, detail="该工作流只能用于超分任务")
+        if workflow_config.get("task_type") == "generation" and task_type == "upscale":
+            raise HTTPException(status_code=422, detail="生成工作流不能用于超分任务")
+        if workflow_config.get("is_default"):
+            model_variant = workflow_config.get("model_variant") or model_variant
+            selected_mode = workflow_config.get("execution_mode") or execution_mode
+            if selected_mode != "custom":
+                execution_mode = selected_mode
     workflow_profile = manager.workflow_profile(comfy_node)
     if manager.node_provider(comfy_node) == "runninghub" and not workflow_profile:
         raise HTTPException(status_code=422, detail="RunningHub 工作流参数定义不可用")
     is_runninghub = bool(
         workflow_profile and workflow_profile.get("provider") == "runninghub"
     )
+    if is_runninghub and workflow_id:
+        raise HTTPException(status_code=422, detail="RunningHub 节点不使用本机 ComfyUI 工作流配置")
     if is_runninghub and task_type == "upscale":
         raise HTTPException(status_code=422, detail="超分任务需要使用 ComfyUI 节点")
-    validate_auto_upscale_parameters(
-        auto_upscale,
-        task_type,
-        model_variant,
-        execution_mode,
-        auto_upscale_category,
-        auto_upscale_scale,
-        "runninghub" if is_runninghub else "comfyui",
-    )
+    is_custom_workflow = bool(workflow_config and not workflow_config.get("is_default"))
+    if is_custom_workflow and auto_upscale:
+        raise HTTPException(status_code=422, detail="自定义工作流暂不支持自动超分")
+    if not is_custom_workflow:
+        validate_auto_upscale_parameters(
+            auto_upscale,
+            task_type,
+            model_variant,
+            execution_mode,
+            auto_upscale_category,
+            auto_upscale_scale,
+            "runninghub" if is_runninghub else "comfyui",
+        )
     if not is_runninghub:
-        minimum_prompt_length = 0 if task_type == "upscale" else 2 if execution_mode == "music3" else 8
+        minimum_prompt_length = 0 if task_type == "upscale" or is_custom_workflow else 2 if execution_mode == "music3" else 8
         if len(prompt) < minimum_prompt_length:
             raise HTTPException(
                 status_code=422,
                 detail=f"提示词至少需要 {minimum_prompt_length} 个字符",
             )
         effective_execution_mode = "upscale" if task_type == "upscale" else execution_mode
-        validate_execution_mode(effective_execution_mode, model_variant, incognito)
+        if not is_custom_workflow:
+            validate_execution_mode(effective_execution_mode, model_variant, incognito)
         if execution_mode == "tts":
             width = 32
             height = 32
-        validate_generation(width, height, duration, steps, effective_execution_mode)
-        if execution_mode == "h3-sa":
+        if not is_custom_workflow:
+            validate_generation(width, height, duration, steps, effective_execution_mode)
+        elif width % 32 or height % 32 or width < 32 or height < 32:
+            raise HTTPException(status_code=422, detail="自定义工作流的宽高必须是正的 32 倍数")
+        elif not 1 <= duration <= 300 or not 1 <= steps <= 100:
+            raise HTTPException(status_code=422, detail="自定义工作流时长必须为 1–300 秒，步数必须为 1–100")
+        if execution_mode == "h3-sa" and not is_custom_workflow:
             validate_sa_parameters(
                 tau=sa_tau,
                 start_percent=sa_start_percent,
@@ -2419,6 +2566,9 @@ async def create_generation(
         else classify_upload(upload, allow_file=is_runninghub)
         for upload, expected_kind in zip(uploads, manifest_kinds, strict=True)
     ]
+    if not workflow_id and task_type == "upscale" and kinds:
+        workflow_id = "builtin:upscale-video" if kinds[0] == "video" else "builtin:upscale-image"
+        workflow_config = workflow_registry.get(workflow_id, include_workflow=False)
     if kinds != manifest_kinds:
         raise HTTPException(status_code=422, detail="素材顺序或类型与 reference_manifest 不一致")
     if is_runninghub:
@@ -2428,11 +2578,14 @@ async def create_generation(
             workflow_profile or {}, prompt, dynamic_parameters, manifest
         )
     else:
-        validate_references(
-            model_variant,
-            kinds,
-            "upscale" if task_type == "upscale" else execution_mode,
-        )
+        if workflow_config and not workflow_config.get("is_default"):
+            validate_custom_references(kinds, task_type)
+        else:
+            validate_references(
+                model_variant,
+                kinds,
+                "upscale" if task_type == "upscale" else execution_mode,
+            )
 
     job_id = secrets.token_hex(8)
     upload_dir = settings.uploads_dir / job_id
@@ -2484,15 +2637,19 @@ async def create_generation(
     media_type = (
         output_media_type(schema)
         if isinstance(schema, dict)
+        else public_manifest[0]["type"]
+        if task_type == "upscale" and public_manifest
+        else str(workflow_config.get("media_type") or "video")
+        if workflow_config
         else "audio"
         if execution_mode in {"music3", "tts"}
-        else str(public_manifest[0]["type"])
-        if task_type == "upscale"
         else "video"
     )
     workflow_name = str(
         workflow_profile.get("workflow_name") or "RunningHub"
         if is_runninghub and workflow_profile
+        else workflow_config.get("name")
+        if workflow_config and not workflow_config.get("is_default")
         else ""
     )
     upscale_title = (
@@ -2515,6 +2672,8 @@ async def create_generation(
             "lyrics": lyrics.strip() if execution_mode == "music3" else "",
             "model_variant": model_variant,
             "execution_mode": execution_mode,
+            "workflow_id": workflow_id,
+            "workflow_name": workflow_config.get("name") if workflow_config else "",
             "task_type": task_type,
             "upscale_category": upscale_category,
             "upscale_scale": upscale_scale,
@@ -2615,6 +2774,7 @@ async def submit_proxy_generation(
     lyrics: str,
     title: str | None,
     comfy_node: str,
+    workflow_id: str | None,
     runninghub_parameters: str,
     incognito: bool,
     incognito_code: str | None,
@@ -2647,6 +2807,7 @@ async def submit_proxy_generation(
         "reference_manifest": reference_manifest,
         "model_variant": model_variant,
         "execution_mode": execution_mode,
+        "workflow_id": workflow_id or "",
         "task_type": task_type,
         "upscale_category": upscale_category,
         "upscale_scale": str(upscale_scale),
@@ -2854,6 +3015,27 @@ async def update_generation(
     request_data.setdefault("model_variant", "fl2va-fp8")
     request_data.setdefault("execution_mode", "native")
     request_data.setdefault("comfy_node", "auto")
+    workflow_config = None
+    if not request_data.get("workflow_id") and request_data.get("task_type") != "upscale":
+        workflow_config = workflow_registry.default_for(
+            str(request_data.get("model_variant") or "fl2va-fp8"),
+            "upscale" if request_data.get("task_type") == "upscale" else str(request_data.get("execution_mode") or "native"),
+            str(request_data.get("task_type") or "generation"),
+        )
+        if workflow_config:
+            request_data["workflow_id"] = workflow_config["id"]
+    elif not request_data.get("workflow_id") and request_data.get("references"):
+        reference_kind = str(request_data["references"][0].get("type") or "")
+        request_data["workflow_id"] = (
+            "builtin:upscale-video" if reference_kind == "video" else "builtin:upscale-image"
+        )
+    if request_data.get("workflow_id"):
+        workflow_config = workflow_config or workflow_registry.get(str(request_data["workflow_id"]), include_workflow=False)
+        if not workflow_config:
+            raise HTTPException(status_code=422, detail="指定的工作流不存在")
+        if workflow_config.get("is_default") and workflow_config.get("execution_mode") not in {None, "custom"}:
+            request_data["model_variant"] = workflow_config.get("model_variant") or request_data["model_variant"]
+            request_data["execution_mode"] = workflow_config.get("execution_mode") or request_data["execution_mode"]
     if not manager.accepts_node(request_data["comfy_node"]):
         raise HTTPException(status_code=422, detail="指定的推理节点不存在")
     workflow_profile = manager.workflow_profile(request_data["comfy_node"])
@@ -2900,54 +3082,79 @@ async def update_generation(
     else:
         request_data.pop("provider", None)
         task_type = request_data.get("task_type", "generation")
+        custom_workflow = bool(workflow_config and not workflow_config.get("is_default"))
+        if custom_workflow and request_data.get("auto_upscale"):
+            raise HTTPException(status_code=422, detail="自定义工作流暂不支持自动超分")
+        if workflow_config and workflow_config.get("task_type") == "upscale" and task_type != "upscale":
+            raise HTTPException(status_code=422, detail="该工作流只能用于超分任务")
+        if workflow_config and workflow_config.get("task_type") == "generation" and task_type == "upscale":
+            raise HTTPException(status_code=422, detail="生成工作流不能用于超分任务")
         validate_upscale_parameters(
             task_type,
             str(request_data.get("upscale_category") or "real"),
             int(request_data.get("upscale_scale") or 2),
         )
-        validate_auto_upscale_parameters(
-            bool(request_data.get("auto_upscale")),
-            task_type,
-            str(request_data.get("model_variant") or "fl2va-fp8"),
-            str(request_data.get("execution_mode") or "native"),
-            str(request_data.get("auto_upscale_category") or "real"),
-            int(request_data.get("auto_upscale_scale") or 2),
-            "comfyui",
-        )
-        minimum_prompt_length = 0 if task_type == "upscale" else 2 if request_data["execution_mode"] == "music3" else 8
+        if not custom_workflow:
+            validate_auto_upscale_parameters(
+                bool(request_data.get("auto_upscale")),
+                task_type,
+                str(request_data.get("model_variant") or "fl2va-fp8"),
+                str(request_data.get("execution_mode") or "native"),
+                str(request_data.get("auto_upscale_category") or "real"),
+                int(request_data.get("auto_upscale_scale") or 2),
+                "comfyui",
+            )
+        minimum_prompt_length = 0 if task_type == "upscale" or custom_workflow else 2 if request_data["execution_mode"] == "music3" else 8
         if len(request_data.get("prompt", "").strip()) < minimum_prompt_length:
             raise HTTPException(
                 status_code=422,
                 detail=f"提示词至少需要 {minimum_prompt_length} 个字符",
             )
         effective_execution_mode = "upscale" if task_type == "upscale" else request_data["execution_mode"]
-        validate_execution_mode(
-            effective_execution_mode,
-            request_data["model_variant"],
-            bool(request_data.get("incognito")),
-        )
+        if not custom_workflow:
+            validate_execution_mode(
+                effective_execution_mode,
+                request_data["model_variant"],
+                bool(request_data.get("incognito")),
+            )
         if request_data["execution_mode"] == "h3-nsfw" and not secrets.compare_digest(
             incognito_code or "",
             settings.incognito_code,
         ):
             raise HTTPException(status_code=403, detail="无痕模式授权已失效")
-        validate_references(
-            request_data["model_variant"],
-            [item["type"] for item in request_data.get("references", [])],
-            effective_execution_mode,
-        )
+        if custom_workflow:
+            validate_custom_references(
+                [item.get("type") for item in request_data.get("references", [])],
+                task_type,
+            )
+        else:
+            validate_references(
+                request_data["model_variant"],
+                [item["type"] for item in request_data.get("references", [])],
+                effective_execution_mode,
+            )
         if request_data["execution_mode"] == "digital-human":
             audio_reference = next(
                 item for item in request_data["references"] if item["type"] == "audio"
             )
             request_data["duration"] = float(audio_reference["duration"])
-        validate_generation(
-            request_data["width"],
-            request_data["height"],
-            request_data["duration"],
-            request_data["steps"],
-            effective_execution_mode,
-        )
+        if not custom_workflow:
+            validate_generation(
+                request_data["width"],
+                request_data["height"],
+                request_data["duration"],
+                request_data["steps"],
+                effective_execution_mode,
+            )
+        elif not 1 <= float(request_data.get("duration", 5)) <= 300 or not 1 <= int(request_data.get("steps", 10)) <= 100:
+            raise HTTPException(status_code=422, detail="自定义工作流时长必须为 1–300 秒，步数必须为 1–100")
+        elif (
+            request_data["width"] < 32
+            or request_data["height"] < 32
+            or request_data["width"] % 32
+            or request_data["height"] % 32
+        ):
+            raise HTTPException(status_code=422, detail="自定义工作流的宽高必须是正的 32 倍数")
         if request_data["execution_mode"] == "h3-sa":
             validate_sa_parameters(
                 tau=float(request_data.get("sa_tau", 1.3)),
@@ -2959,6 +3166,8 @@ async def update_generation(
         request_data["media_type"] = (
             request_data["references"][0]["type"]
             if task_type == "upscale" and request_data.get("references")
+            else str(workflow_config.get("media_type") or "video")
+            if workflow_config
             else "audio"
             if request_data["execution_mode"] in {"music3", "tts"}
             else "video"
@@ -3032,6 +3241,19 @@ async def regenerate_generation(
     model_variant = request_data.get("model_variant", "fl2va-fp8")
     execution_mode = request_data.get("execution_mode", "native")
     comfy_node = request_data.get("comfy_node", "auto")
+    if not request_data.get("workflow_id") and request_data.get("task_type") != "upscale":
+        default_workflow = workflow_registry.default_for(
+            str(model_variant),
+            "upscale" if request_data.get("task_type") == "upscale" else str(execution_mode),
+            str(request_data.get("task_type") or "generation"),
+        )
+        if default_workflow:
+            request_data["workflow_id"] = default_workflow["id"]
+    elif not request_data.get("workflow_id") and request_data.get("references"):
+        reference_kind = str(request_data["references"][0].get("type") or "")
+        request_data["workflow_id"] = (
+            "builtin:upscale-video" if reference_kind == "video" else "builtin:upscale-image"
+        )
     incognito = bool(request_data.get("incognito"))
     if incognito and not secrets.compare_digest(incognito_code or "", settings.incognito_code):
         raise HTTPException(status_code=403, detail="无痕模式授权已失效")
@@ -3074,32 +3296,57 @@ async def regenerate_generation(
     else:
         if manager.node_provider(comfy_node) == "runninghub":
             raise HTTPException(status_code=422, detail="原任务指定节点的类型已变更")
+        workflow_config = None
+        if request_data.get("workflow_id"):
+            workflow_config = workflow_registry.get(str(request_data["workflow_id"]), include_workflow=False)
+            if not workflow_config:
+                raise HTTPException(status_code=422, detail="原任务使用的工作流已不存在")
+            if workflow_config.get("task_type") == "upscale" and request_data.get("task_type") != "upscale":
+                raise HTTPException(status_code=422, detail="原任务工作流只能用于超分任务")
+            if workflow_config.get("task_type") == "generation" and request_data.get("task_type") == "upscale":
+                raise HTTPException(status_code=422, detail="原任务工作流不能用于超分任务")
+        custom_workflow = bool(workflow_config and not workflow_config.get("is_default"))
         validate_upscale_parameters(
             str(request_data.get("task_type") or "generation"),
             str(request_data.get("upscale_category") or "real"),
             int(request_data.get("upscale_scale") or 2),
         )
-        validate_auto_upscale_parameters(
-            bool(request_data.get("auto_upscale")),
-            str(request_data.get("task_type") or "generation"),
-            model_variant,
-            execution_mode,
-            str(request_data.get("auto_upscale_category") or "real"),
-            int(request_data.get("auto_upscale_scale") or 2),
-            "comfyui",
-        )
+        if not custom_workflow:
+            validate_auto_upscale_parameters(
+                bool(request_data.get("auto_upscale")),
+                str(request_data.get("task_type") or "generation"),
+                model_variant,
+                execution_mode,
+                str(request_data.get("auto_upscale_category") or "real"),
+                int(request_data.get("auto_upscale_scale") or 2),
+                "comfyui",
+            )
         if execution_mode == "tts":
             request_data["width"] = 32
             request_data["height"] = 32
         effective_execution_mode = "upscale" if request_data.get("task_type") == "upscale" else execution_mode
-        validate_execution_mode(effective_execution_mode, model_variant, incognito)
-        validate_generation(
-            request_data.get("width", 832),
-            request_data.get("height", 480),
-            request_data.get("duration", 5),
-            request_data.get("steps", 10),
-            effective_execution_mode,
-        )
+        if not custom_workflow:
+            validate_execution_mode(effective_execution_mode, model_variant, incognito)
+        if not custom_workflow:
+            validate_generation(
+                request_data.get("width", 832),
+                request_data.get("height", 480),
+                request_data.get("duration", 5),
+                request_data.get("steps", 10),
+                effective_execution_mode,
+            )
+        elif (
+            int(request_data.get("width", 832)) < 32
+            or int(request_data.get("height", 480)) < 32
+            or int(request_data.get("width", 832)) % 32
+            or int(request_data.get("height", 480)) % 32
+            or not 1 <= float(request_data.get("duration", 5)) <= 300
+            or not 1 <= int(request_data.get("steps", 10)) <= 100
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="自定义工作流需要正的 32 倍数宽高、1–300 秒时长和 1–100 步数",
+            )
         if execution_mode == "h3-sa":
             validate_sa_parameters(
                 tau=float(request_data.get("sa_tau", 1.3)),
@@ -3108,14 +3355,22 @@ async def regenerate_generation(
                 min_tokens=int(request_data.get("sa_min_tokens", 4096)),
                 stage2_denoise=float(request_data.get("sa_stage2_denoise", 0.35)),
             )
-        validate_references(
-            model_variant,
-            [item.get("type") for item in references],
-            effective_execution_mode,
-        )
+        if custom_workflow:
+            validate_custom_references(
+                [item.get("type") for item in references],
+                str(request_data.get("task_type") or "generation"),
+            )
+        else:
+            validate_references(
+                model_variant,
+                [item.get("type") for item in references],
+                effective_execution_mode,
+            )
         request_data["media_type"] = (
             references[0].get("type")
             if request_data.get("task_type") == "upscale" and references
+            else str(workflow_config.get("media_type") or "video")
+            if workflow_config
             else "audio"
             if execution_mode in {"music3", "tts"}
             else "video"
