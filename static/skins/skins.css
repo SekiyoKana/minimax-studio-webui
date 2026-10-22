@@ -386,3 +386,7 @@ html[data-skin="aurora"] .message-actions button:hover:not(.regenerate):not(.can
 
 html[data-skin="aurora"] .composer .lyrics-input,
 html[data-skin="aurora"] .runninghub-parameters { background: rgba(255, 255, 255, 0.03); }
+
+html[data-skin="aurora"] .settings-tabs { background: rgba(255, 255, 255, 0.08); }
+html[data-skin="aurora"] .settings-tab { color: var(--muted); }
+html[data-skin="aurora"] .settings-tab.is-active { color: var(--ink); }

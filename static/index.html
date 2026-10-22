@@ -12,10 +12,11 @@
         if (storedSkin && /^[a-z0-9-]{1,40}$/.test(storedSkin)) document.documentElement.dataset.skin = storedSkin;
       } catch (error) { /* storage disabled: keep the default skin */ }
     </script>
-    <link rel="stylesheet" href="/assets/styles.css?v=52&rev=62">
-    <link rel="stylesheet" href="/assets/skins/skins.css?v=2">
+    <link rel="stylesheet" href="/assets/styles.css?v=53&rev=63">
+    <link rel="stylesheet" href="/assets/design.css?v=3">
+    <link rel="stylesheet" href="/assets/skins/skins.css?v=3">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
-    <script src="/assets/app.js?v=70&rev=81&upscale=1" defer></script>
+    <script src="/assets/app.js?v=71&rev=82&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -61,7 +62,7 @@
         <section class="asset-grid" id="assetGrid" aria-label="生成素材"></section>
       </aside>
 
-      <div class="sidebar-resizer" id="sidebarResizer" role="separator" tabindex="0" aria-label="调整素材库宽度" aria-valuemin="220" aria-valuemax="480" aria-valuenow="276"></div>
+      <div class="sidebar-resizer" id="sidebarResizer" role="separator" tabindex="0" aria-label="调整素材库宽度" aria-valuemin="220" aria-valuemax="480" aria-valuenow="300"></div>
 
       <main class="conversation-column">
         <header class="conversation-header">
@@ -75,12 +76,12 @@
               <div class="engine-state" aria-live="polite">
                 <span class="status-dot" id="healthDot"></span>
                 <span id="healthText">连接推理节点</span>
-                <button class="icon-button node-manager-trigger" id="openNodeManager" type="button" title="管理推理节点" aria-label="管理推理节点"><i data-lucide="server-cog"></i></button>
-                <button class="icon-button workflow-manager-trigger" id="openWorkflowManager" type="button" title="管理工作流" aria-label="管理工作流"><i data-lucide="workflow"></i><span>工作流</span></button>
               </div>
             </div>
           </div>
           <div class="header-actions">
+            <button class="icon-button node-manager-trigger" id="openNodeManager" type="button" title="管理推理节点" aria-label="管理推理节点"><i data-lucide="server-cog"></i></button>
+            <button class="workflow-manager-trigger" id="openWorkflowManager" type="button" title="管理工作流" aria-label="管理工作流"><i data-lucide="workflow"></i><span>工作流</span></button>
             <button class="icon-button" id="openPeering" type="button" title="多端互联" aria-label="多端互联"><i data-lucide="key-round"></i></button>
             <button class="icon-button" id="androidServerSettings" type="button" title="服务器连接" aria-label="服务器连接" hidden><i data-lucide="network"></i></button>
             <button class="icon-button" id="openGlobalSettings" type="button" title="设置" aria-label="设置"><i data-lucide="settings-2"></i></button>

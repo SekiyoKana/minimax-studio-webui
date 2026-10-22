@@ -481,6 +481,7 @@ class ContractTests(unittest.TestCase):
         app_js = (project_root / "static" / "app.js").read_text(encoding="utf-8")
         skins_css = (project_root / "static" / "skins" / "skins.css").read_text(encoding="utf-8")
 
+        self.assertIn('/assets/design.css', index)
         self.assertIn('/assets/skins/skins.css', index)
         self.assertIn('id="settingsPanelAppearance"', index)
         self.assertIn('data-skin-option="default"', index)

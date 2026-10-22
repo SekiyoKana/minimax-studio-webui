@@ -580,7 +580,7 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 界面外观通过皮肤切换，皮肤属于纯展示层。开发新模块、修改界面或新增皮肤时必须遵守以下规则，确保默认皮肤与既有皮肤都不被破坏：
 
 - 不因皮肤改变任何 API、数据结构、DOM 结构、元素顺序、可见性或交互行为。`data-skin` 只允许出现在 `<html>` 上，默认皮肤不设置该属性。
-- 所有颜色、圆角、字体使用 `:root` 设计令牌（`--canvas`、`--surface`、`--surface-soft`、`--surface-warm`、`--ink`、`--muted`、`--quiet`、`--line`、`--line-strong`、`--accent`、`--accent-soft`、`--blue`、`--green`、`--warning`、`--danger`、`--radius`、`--sans`、`--mono`）；禁止新增写死色值。
+- 所有颜色、圆角、字体使用 `:root` 设计令牌（`--canvas`、`--surface`、`--surface-soft`、`--surface-warm`、`--fill-secondary`、`--fill-tertiary`、`--fill-quaternary`、`--ink`、`--muted`、`--quiet`、`--line`、`--line-strong`、`--accent`、`--accent-soft`、`--blue`、`--green`、`--warning`、`--danger`、`--radius`、`--sans`、`--display`、`--mono`）；禁止新增写死色值。Apple 风格基线位于 `static/design.css`，新组件应复用其中已有的表面、字号和控件规则。
 - 旧组件仍写死颜色时，只允许在 `static/skins/skins.css` 内以 `html[data-skin="<id>"]` 前缀覆盖其装饰属性，不得修改基础规则。测试 `test_skins_are_scoped_and_selectable_from_settings` 会校验所有规则均已限定作用域。
 - 皮肤资源放在 `static/skins/<id>/`，预览图固定命名 `preview.jpg`（16:10）。
 - 注册新皮肤需要同时完成：`static/app.js` 的 `SKINS` 常量、`SKIN_THEME_COLORS` 主题色、设置「外观」面板中的 `data-skin-option` 卡片。切换结果保存在 `localStorage` 的 `h3-skin` 键。

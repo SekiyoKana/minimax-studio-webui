@@ -53,7 +53,7 @@ The interface appearance is a presentation layer. Switch skins in Settings > App
 
 | Skin | Style |
 |---|---|
-| Meadow (default) | Soft-radius light theme: light grey canvas, indigo accent, frosted layers |
+| Meadow (default) | Apple-inspired light theme: parchment canvas, single Action Blue, hairlines and pill controls |
 | Aurora Glass | Dark glassmorphism: aurora backdrop, cyan/violet accents, serif headings |
 
 | Aurora Glass workbench | Settings > Appearance |
@@ -63,7 +63,7 @@ The interface appearance is a presentation layer. Switch skins in Settings > App
 Rules for new modules and skins:
 
 1. Use the `:root` design tokens (`--canvas`, `--surface`, `--ink`, `--line`, `--accent`, `--blue`, ...); never hardcode colors.
-2. Scope every skin rule under `html[data-skin="<id>"]` in `static/skins/skins.css`; never edit base rules for a skin.
+2. Scope every skin rule under `html[data-skin="<id>"]` in `static/skins/skins.css`; never edit base rules for a skin. The shared visual layer lives in `static/design.css`.
 3. Skins may only override colors, borders, shadows, radius, fonts and backgrounds — no layout, sizing, order, visibility or behavior changes.
 4. Assets go in `static/skins/<id>/` with a `preview.jpg` (16:10).
 5. Register the skin in the `SKINS` and `SKIN_THEME_COLORS` constants in `static/app.js` and add its card to the Settings appearance panel.
@@ -100,13 +100,13 @@ Persistent data is stored under `data/`:
 
 ## Update log
 
-### 2026-10-22: Soft-radius Apple-inspired visual refresh
+### 2026-10-22: Apple-inspired interface rebuild
 
-- Updated the global tokens: 10px controls, 12px cards, 16px panels and 24px dialogs, with pill-shaped buttons.
-- Moved the canvas to a neutral light grey with a blue-violet ambient glow; sidebar and header use translucent frosted glass and hairline dividers.
-- Reworked the composer into a floating rounded card with a gradient focus ring; the send button and brand mark use a blue-violet gradient.
-- Switched the accent from brick red to indigo, replaced shadows with layered soft shadows, and added a shared easing curve.
-- Upgraded the default Meadow skin to the new baseline and adapted Aurora Glass to the softer radii and controls.
+- Followed apple.com's hierarchy: a parchment canvas (#f5f5f7) with white content tiles, hairline dividers and a single Action Blue (#0071e3); decorative gradients and card shadows were removed.
+- Type scale: 28px page title, 24px sidebar title, 24px dialog title, 16px conversation text; headings use SF Pro Display with negative tracking.
+- Layout: a 320px sidebar, an 88px top bar, node and workflow entries moved to the right action cluster, a 28px-radius composer surface, and 44px control heights.
+- Components: pill buttons, a segmented Settings control, 18px cards, circular icon buttons and a 0.97 press scale.
+- Added a large empty state with supporting copy; Aurora Glass now mirrors the new type scale, sidebar width and segmented control.
 
 ### 2026-10-22: Skin system and Aurora Glass
 

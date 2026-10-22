@@ -98,7 +98,7 @@ const referenceInput = el("referenceInput");
 const MUSIC3_DURATIONS = [30, 60, 120, 180, 240, 300];
 const RUNNINGHUB_TARGET_PREFIX = "rh:";
 const SIDEBAR_WIDTH_STORAGE_KEY = "h3-asset-sidebar-width";
-const SIDEBAR_WIDTH_MIN = 220;
+const SIDEBAR_WIDTH_MIN = 260;
 const SIDEBAR_WIDTH_MAX_RATIO = 0.5;
 const ANDROID_CLIENT = new URLSearchParams(window.location.search).get("h3_client") === "android";
 
@@ -2815,7 +2815,7 @@ function upsertConversation(job) {
     el("conversationFeed").append(elementFromHtml(renderJobExchange(job)));
     el("conversationFeed").scrollTop = el("conversationFeed").scrollHeight;
   }
-  if (!state.conversations.length) el("conversationFeed").innerHTML = `<div class="chat-empty"><span>H3</span><h2>${t("startCreating")}</h2></div>`;
+  if (!state.conversations.length) el("conversationFeed").innerHTML = `${chatEmptyMarkup()}`;
   refreshIcons();
 }
 
@@ -2847,7 +2847,7 @@ function applyJobDelete(jobId) {
   jobElement(el("conversationFeed"), "data-job-id", jobId)?.remove();
   if (knownJob && assetMatchesCurrentView(knownJob)) state.assetTotal = Math.max(0, state.assetTotal - 1);
   if (!state.assets.length) el("assetGrid").innerHTML = `<div class="library-empty">${icon("images")}<span>${t("noAssets")}</span></div>`;
-  if (!state.conversations.length) el("conversationFeed").innerHTML = `<div class="chat-empty"><span>H3</span><h2>${t("startCreating")}</h2></div>`;
+  if (!state.conversations.length) el("conversationFeed").innerHTML = `${chatEmptyMarkup()}`;
   state.assetPages = Math.max(1, Math.ceil(state.assetTotal / state.assetPageSize));
   updateAssetChrome();
   refreshIcons();
@@ -3059,6 +3059,10 @@ function renderJobExchange(job) {
   </section>`;
 }
 
+function chatEmptyMarkup() {
+  return `<div class="chat-empty"><span>H3</span><h2>${t("startCreating")}</h2><p>${localized("用一句话描述画面，或从素材库选择参考图开始。", "Describe a shot in one line, or start from a reference in the library.")}</p></div>`;
+}
+
 function renderConversationFeed(mode = "preserve") {
   const feed = el("conversationFeed");
   if (mode === "bottom") state.conversationReady = false;
@@ -3070,7 +3074,7 @@ function renderConversationFeed(mode = "preserve") {
     .map((job) => ({ type: "job", at: job.created_at, data: job }))
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   const content = timeline.map((item) => renderJobExchange(item.data)).join("");
-  feed.innerHTML = content || `<div class="chat-empty"><span>H3</span><h2>${t("startCreating")}</h2></div>`;
+  feed.innerHTML = content || `${chatEmptyMarkup()}`;
   refreshIcons();
   requestAnimationFrame(() => {
     if (mode === "bottom" || (mode === "preserve" && nearBottom)) {
@@ -4521,7 +4525,7 @@ function setSidebarWidth(value, persist = false) {
   const shell = document.querySelector(".app-shell");
   const resizer = el("sidebarResizer");
   if (!shell || window.innerWidth <= 860) return;
-  const width = Math.round(Math.min(sidebarWidthLimit(), Math.max(SIDEBAR_WIDTH_MIN, Number(value) || 276)));
+  const width = Math.round(Math.min(sidebarWidthLimit(), Math.max(SIDEBAR_WIDTH_MIN, Number(value) || 320)));
   shell.style.setProperty("--asset-sidebar-width", `${width}px`);
   resizer?.setAttribute("aria-valuemax", String(sidebarWidthLimit()));
   resizer?.setAttribute("aria-valuenow", String(width));
@@ -4530,7 +4534,7 @@ function setSidebarWidth(value, persist = false) {
 
 function restoreSidebarWidth() {
   const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
-  setSidebarWidth(Number.isFinite(stored) && stored > 0 ? stored : 276);
+  setSidebarWidth(Number.isFinite(stored) && stored > 0 ? stored : 320);
 }
 
 let sidebarResizeState = null;
@@ -4538,7 +4542,7 @@ function startSidebarResize(event) {
   if (window.innerWidth <= 860 || event.button !== 0) return;
   event.preventDefault();
   const shell = document.querySelector(".app-shell");
-  const width = shell?.getBoundingClientRect().width ? el("assetSidebar").getBoundingClientRect().width : 276;
+  const width = shell?.getBoundingClientRect().width ? el("assetSidebar").getBoundingClientRect().width : 320;
   sidebarResizeState = { startX: event.clientX, startWidth: width };
   document.body.classList.add("sidebar-resizing");
 }
