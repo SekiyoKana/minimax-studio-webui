@@ -1910,6 +1910,7 @@ function positionDurationTooltip() {
 
 async function api(url, options = {}) {
   const headers = new Headers(options.headers || {});
+  headers.set("Accept-Language", state.locale === "en" ? "en-US,en;q=0.9" : "zh-CN");
   if (state.incognito && !headers.has("X-H3-Incognito-Code")) headers.set("X-H3-Incognito-Code", state.incognitoCode);
   const response = await fetch(url, { cache: "no-store", ...options, headers });
   let payload = null;
@@ -1921,10 +1922,12 @@ async function api(url, options = {}) {
   if (!response.ok) {
     const detail = payload.detail;
     if (Array.isArray(detail)) {
+      const fieldSeparator = state.locale === "en" ? ": " : "：";
+      const messageSeparator = state.locale === "en" ? "; " : "；";
       const message = detail.map((item) => {
         const field = Array.isArray(item.loc) ? item.loc.filter((part) => part !== "body").join(".") : "";
-        return field ? `${field}：${item.msg}` : item.msg;
-      }).filter(Boolean).join("；");
+        return field ? `${field}${fieldSeparator}${item.msg}` : item.msg;
+      }).filter(Boolean).join(messageSeparator);
       throw new Error(message || localized(`请求失败 (${response.status})`, `Request failed (${response.status})`));
     }
     throw new Error(typeof detail === "string" ? detail : localized(`请求失败 (${response.status})`, `Request failed (${response.status})`));
@@ -4584,7 +4587,7 @@ async function assistMusic(task) {
   try {
     const response = await fetch("/api/v1/music/assist", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Accept-Language": state.locale === "en" ? "en-US,en;q=0.9" : "zh-CN" },
       body: JSON.stringify({
         task,
         prompt: source,
@@ -4637,7 +4640,7 @@ async function optimizePrompt() {
   try {
     const response = await fetch("/api/v1/prompts/optimize", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Accept-Language": state.locale === "en" ? "en-US,en;q=0.9" : "zh-CN" },
       body: JSON.stringify({
         prompt: source,
         base_url: baseUrl,

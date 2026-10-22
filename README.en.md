@@ -124,6 +124,12 @@ Persistent data is stored under `data/`:
 
 ## Update log
 
+### 2026-10-22: Bilingual API errors
+
+- Frontend requests now send `Accept-Language`; backend `HTTPException` responses are translated from that header.
+- Added `app/i18n.py` with 149 fixed messages plus dynamic templates for file sizes, reference indexes, and remote connection failures. Unknown or upstream errors keep their original text.
+- Validation separators and the desktop 403 message also follow the selected language.
+
 ### 2026-10-22: Bilingual coverage pass
 
 - Audited both locales and filled missing English copy, placeholders, buttons, confirmations, titles, and aria labels across settings, nodes, workflow editing, asset details, local assets, upscaling, and device sharing.

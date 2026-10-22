@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from .engine import create_engine, probe_node
+from .i18n import translate_api_detail
 from .jobs import JobManager, JobStore, ROOT_FOLDER_ID, TERMINAL_STATES, UNFILED_FOLDER_ID, create_video_preview, output_file_name, output_file_stem, utc_now
 from .local_state import LocalStateStore
 from .music_prompts import MUSIC3_ARRANGEMENT_SYSTEM_PROMPT, MUSIC3_LYRICS_SYSTEM_PROMPT
@@ -109,7 +110,15 @@ async def desktop_network_boundary(request: Request, call_next):
             or path.startswith("/api/v1/peering/proxy/")
         )
         if not remote_allowed:
-            return JSONResponse(status_code=403, content={"detail": "桌面应用仅允许本机访问普通接口"})
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "detail": translate_api_detail(
+                        "桌面应用仅允许本机访问普通接口",
+                        request.headers.get("accept-language"),
+                    )
+                },
+            )
     return await call_next(request)
 
 
@@ -4399,5 +4408,12 @@ async def index():
 
 
 @app.exception_handler(HTTPException)
-async def http_error(_: Request, exc: HTTPException):
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+async def http_error(request: Request, exc: HTTPException):
+    detail = exc.detail
+    if isinstance(detail, str):
+        detail = translate_api_detail(detail, request.headers.get("accept-language"))
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": detail},
+        headers=getattr(exc, "headers", None),
+    )
