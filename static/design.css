@@ -966,9 +966,12 @@ button { appearance: none; -webkit-appearance: none; }
 /* Dark-mode consistency fixes for asset detail and asset meta */
 .asset-detail-preview { background: var(--fill-secondary); }
 .asset-detail-footer .detail-reuse {
+  height: 36px;
+  padding: 0 11px;
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--blue);
+  font-size: var(--text-caption);
 }
 .asset-detail-footer .detail-reuse:hover {
   border-color: var(--line-strong);
