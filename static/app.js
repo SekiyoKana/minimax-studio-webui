@@ -321,7 +321,8 @@ function applyStaticLocale() {
   setText("#clearVisibleLogs", "Clear");
   setText(".log-section .quiet", "Waiting for events");
   setText("#nodeDialogTitle", "Inference nodes");
-  setText(".node-dialog-header p", "ComfyUI and RunningHub configuration");
+  setText("#nodeDialogSubtitle", "ComfyUI and RunningHub node configuration");
+  setText("#nodeEditorSubtitle", "Configure a ComfyUI or RunningHub endpoint");
   setText("#globalSettingsTitle", "Settings");
   setText("#globalSettingsSubtitle", "Model, appearance, system, and upload preferences");
   setText("#settingsTabModel", "Model");

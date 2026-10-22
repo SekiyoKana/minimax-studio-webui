@@ -29,7 +29,7 @@
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
     <script src="/assets/dropdown.js?v=4" defer></script>
-    <script src="/assets/app.js?v=85&rev=96&upscale=1" defer></script>
+    <script src="/assets/app.js?v=86&rev=97&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -271,7 +271,7 @@
     <div class="modal-overlay node-modal" id="nodeModal" hidden>
       <section class="node-dialog" role="dialog" aria-modal="true" aria-labelledby="nodeDialogTitle">
         <header class="node-dialog-header">
-          <div><span class="node-dialog-mark"><i data-lucide="server-cog"></i></span><div><h2 id="nodeDialogTitle">推理节点</h2><p>ComfyUI 与 RunningHub 节点配置</p></div></div>
+          <div><span class="node-dialog-mark"><i data-lucide="server-cog"></i></span><div><h2 id="nodeDialogTitle">推理节点</h2><p id="nodeDialogSubtitle">ComfyUI 与 RunningHub 节点配置</p></div></div>
           <button class="icon-button" id="closeNodeManager" type="button" title="关闭" aria-label="关闭节点管理"><i data-lucide="x"></i></button>
         </header>
 
@@ -290,7 +290,7 @@
     <div class="modal-overlay node-editor-modal" id="nodeEditorModal" hidden>
       <form class="node-editor-dialog" id="nodeEditor" role="dialog" aria-modal="true" aria-labelledby="nodeEditorTitle">
         <header class="node-dialog-header">
-          <div><span class="node-dialog-mark"><i data-lucide="server-cog"></i></span><div><h2 id="nodeEditorTitle">新增节点</h2><p>配置 ComfyUI 或 RunningHub 端点</p></div></div>
+          <div><span class="node-dialog-mark"><i data-lucide="server-cog"></i></span><div><h2 id="nodeEditorTitle">新增节点</h2><p id="nodeEditorSubtitle">配置 ComfyUI 或 RunningHub 端点</p></div></div>
           <button class="icon-button" id="cancelNodeEditIcon" type="button" title="关闭编辑" aria-label="关闭节点编辑"><i data-lucide="x"></i></button>
         </header>
         <div class="node-editor-body">
