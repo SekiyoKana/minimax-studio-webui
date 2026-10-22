@@ -124,6 +124,10 @@ Persistent data is stored under `data/`:
 
 ## Update log
 
+### 2026-10-22: Music3 side-by-side inputs
+
+- Switching the workflow to Music3 INT8 now places the prompt and lyrics side by side at their original height, with the toolbar unchanged below.
+
 ### 2026-10-22: Node banners and RunningHub switch
 
 - Added "Enable RunningHub endpoint workflows" under Settings > System, enabled by default; disabling it blocks adding or editing RunningHub nodes while keeping existing ones.

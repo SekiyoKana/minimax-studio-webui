@@ -24,12 +24,12 @@
       })();
     </script>
     <link rel="stylesheet" href="/assets/styles.css?v=57&rev=67">
-    <link rel="stylesheet" href="/assets/design.css?v=26">
+    <link rel="stylesheet" href="/assets/design.css?v=27">
     <link rel="stylesheet" href="/assets/skins/skins.css?v=7">
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
     <script src="/assets/dropdown.js?v=4" defer></script>
-    <script src="/assets/app.js?v=82&rev=93&upscale=1" defer></script>
+    <script src="/assets/app.js?v=83&rev=94&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -126,8 +126,10 @@
           <input id="referenceInput" type="file" accept="image/*" multiple hidden>
 
           <div class="composer-box" id="dropZone">
-            <textarea id="prompt" name="prompt" rows="3" maxlength="12000" placeholder="输入自然语言，描述场景、人物、动作、镜头与声音…" aria-haspopup="menu" aria-controls="mentionMenu" aria-expanded="false"></textarea>
-            <textarea class="lyrics-input" id="lyrics" name="lyrics" rows="5" maxlength="12000" placeholder="输入歌词，使用 [Intro]、[Verse]、[Chorus]、[Bridge]、[Instrumental]、[Outro] 等段落标签" hidden></textarea>
+            <div class="composer-fields">
+              <textarea id="prompt" name="prompt" rows="3" maxlength="12000" placeholder="输入自然语言，描述场景、人物、动作、镜头与声音…" aria-haspopup="menu" aria-controls="mentionMenu" aria-expanded="false"></textarea>
+              <textarea class="lyrics-input" id="lyrics" name="lyrics" rows="5" maxlength="12000" placeholder="输入歌词，使用 [Intro]、[Verse]、[Chorus]、[Bridge]、[Instrumental]、[Outro] 等段落标签" hidden></textarea>
+            </div>
             <div class="runninghub-parameters" id="runningHubParameters" hidden></div>
 
             <div class="composer-toolbar">

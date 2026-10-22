@@ -1899,6 +1899,7 @@ function updateModelUi() {
     el("saSettings").hidden = true;
     el("optimizePrompt").hidden = !fields.has("prompt");
     el("writeLyrics").hidden = !fields.has("lyrics");
+  el("dropZone").classList.remove("music3-mode");
     el("prompt").placeholder = state.locale === "en" ? "Enter a prompt for this workflow..." : "输入工作流提示词…";
     el("dropZone").title = "";
     renderReferences();
@@ -1906,6 +1907,7 @@ function updateModelUi() {
     return;
   }
   el("lyrics").hidden = !isMusic3();
+  el("dropZone").classList.toggle("music3-mode", isMusic3() && !upscale && !runningHub);
   el("upscaleCategoryControl").hidden = !upscale;
   el("upscaleScaleControl").hidden = !upscale;
   el("runningHubWorkflowName").textContent = runningHubNode
