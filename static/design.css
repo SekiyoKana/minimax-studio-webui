@@ -834,3 +834,40 @@ button:active:not(:disabled) { transform: scale(.97); }
 .log-row p b { color: var(--quiet); }
 .log-row.error p { color: var(--danger); }
 .ops-window .quiet { color: var(--quiet); }
+
+/* Buttons: suppress native (especially Safari) chrome so token styling is exact */
+button { appearance: none; -webkit-appearance: none; }
+
+/* Persistent runtime launcher follows the active skin too */
+.ops-launcher {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-md);
+}
+.ops-launcher:hover { box-shadow: var(--shadow-lg); }
+.launcher-signal { background: var(--fill-tertiary); color: var(--green); }
+.launcher-copy small { color: var(--muted); }
+.ops-launcher > b { background: var(--accent); color: #fff; }
+
+/* Log labels: token-based chips with reliable contrast in both skins */
+.log-row { grid-template-columns: 52px 50px minmax(0, 1fr); }
+.log-row button {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--fill-tertiary);
+  color: var(--blue);
+  font-size: var(--text-micro);
+  font-weight: 500;
+}
+.log-row button:hover { background: var(--accent-soft); }
+.log-source,
+.log-node {
+  border-color: var(--line);
+  background: var(--fill-tertiary);
+  color: var(--muted);
+}
