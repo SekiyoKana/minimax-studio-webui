@@ -833,13 +833,11 @@ function renderManagedNodes() {
       ? ` · ${localized("并发", "capacity")} ${running}/${capacity}`
       : node.queue_depth ? ` · 排队 ${node.queue_depth}` : "";
     const restricted = node.provider === "runninghub" && state.runninghubEnabled === false;
-    const iconName = node.remote_proxy ? "waypoints" : node.provider === "runninghub" ? "workflow" : "server";
-    const badge = `<span class="node-banner-icon ${status.className}" aria-hidden="true">${icon(iconName)}<i class="node-state-dot"></i></span>`;
+    const statusDot = `<i class="node-status-dot ${status.className}" title="${escapeHtml(status.label)}${escapeHtml(activity)}"></i>`;
     if (node.remote_proxy) {
       const owner = node.owner_name || node.source?.name || "远程设备";
       return `<div class="node-banner remote-node" data-node-id="${escapeHtml(node.id)}">
-        ${badge}
-        <div class="node-banner-body"><div class="node-banner-head"><strong>${escapeHtml(node.name || "远程推理节点")}</strong><span class="node-status-pill ${status.className}">${escapeHtml(status.label)}${activity}</span></div><small>${escapeHtml(localized("远程代理节点", "Remote proxy node"))} · ${escapeHtml(t("owner"))} ${escapeHtml(owner)}</small></div>
+        <div class="node-banner-body"><div class="node-banner-head"><strong>${escapeHtml(node.name || "远程推理节点")}</strong>${statusDot}</div><small>${escapeHtml(localized("远程代理节点", "Remote proxy node"))} · ${escapeHtml(t("owner"))} ${escapeHtml(owner)}${escapeHtml(activity)}</small></div>
         <div class="node-row-actions" aria-hidden="true"></div>
       </div>`;
     }
@@ -866,12 +864,11 @@ function renderManagedNodes() {
       ? node.account_error ? t("balanceFailed") : t("balanceUpdated")
       : localized("检测", "checked");
     return `<div class="node-banner${restricted ? " is-restricted" : ""}" data-node-id="${escapeHtml(node.id)}">
-      ${badge}
       <div class="node-banner-body">
-        <div class="node-banner-head"><strong>${escapeHtml(node.provider === "runninghub" ? node.workflow_name || node.name : node.name)}</strong><span class="node-status-pill ${status.className}">${escapeHtml(status.label)}${activity}</span></div>
+        <div class="node-banner-head"><strong>${escapeHtml(node.provider === "runninghub" ? node.workflow_name || node.name : node.name)}</strong>${statusDot}</div>
         <code title="${escapeHtml(node.url)}">${escapeHtml(node.url)}</code>
         ${accounting}${workflowIssue}
-        <small>${provider}${workflow}${node.provider === "runninghub" && node.workflow_name && node.workflow_name !== node.name ? ` · ${escapeHtml(node.name)}` : ""}${keyState} · ID ${escapeHtml(node.id)}${node.last_checked ? ` · ${formatTime(node.last_checked, true)} ${checkedLabel}` : ""}</small>
+        <small>${provider}${workflow}${node.provider === "runninghub" && node.workflow_name && node.workflow_name !== node.name ? ` · ${escapeHtml(node.name)}` : ""}${keyState} · ID ${escapeHtml(node.id)}${node.last_checked ? ` · ${formatTime(node.last_checked, true)} ${checkedLabel}` : ""}${escapeHtml(activity)}</small>
         ${restricted ? `<small class="node-restricted">${localized("RunningHub 端点工作流已关闭", "RunningHub endpoint workflows are disabled")}</small>` : ""}
       </div>
       <div class="node-row-actions"><button type="button" data-node-action="edit" title="编辑节点" aria-label="编辑 ${escapeHtml(node.name)}">${icon("pencil")}</button><button type="button" data-node-action="delete" title="删除节点" aria-label="删除 ${escapeHtml(node.name)}">${icon("trash-2")}</button></div>

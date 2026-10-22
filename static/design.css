@@ -1073,10 +1073,10 @@ button { appearance: none; -webkit-appearance: none; }
 .node-banner {
   display: flex;
   flex: 0 0 calc((100% - 24px) / 3);
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 12px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
@@ -1084,61 +1084,28 @@ button { appearance: none; -webkit-appearance: none; }
 }
 .node-banner:hover { border-color: var(--line-strong); }
 .node-banner.is-restricted { opacity: .72; }
-.node-banner-icon {
-  position: relative;
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border-radius: 10px;
-  background: var(--fill-tertiary);
-  color: var(--muted);
-}
-.node-banner-icon svg { width: 15px; height: 15px; }
-.node-banner-icon.online { color: var(--green); background: rgba(3, 161, 14, .1); }
-.node-banner-icon.busy { color: var(--blue); background: rgba(0, 113, 227, .1); }
-.node-banner-icon.offline { color: var(--danger); background: rgba(227, 0, 0, .08); }
-.node-state-dot {
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 6px;
-  height: 6px;
-  border: 1.5px solid var(--surface);
+.node-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
   border-radius: 50%;
   background: var(--quiet);
 }
-.node-banner-icon.online .node-state-dot { background: var(--green); }
-.node-banner-icon.busy .node-state-dot { background: var(--blue); }
-.node-banner-icon.offline .node-state-dot { background: var(--danger); }
+.node-status-dot.online { background: var(--green); box-shadow: 0 0 0 3px rgba(52, 116, 87, .11); }
+.node-status-dot.busy { background: var(--blue); box-shadow: 0 0 0 3px rgba(62, 111, 149, .12); }
+.node-status-dot.offline { background: var(--danger); }
 
-.node-banner-body { display: grid; width: 100%; flex: 1; min-width: 0; gap: 4px; }
-.node-banner-head { display: flex; flex-wrap: wrap; min-width: 0; align-items: center; gap: 3px 6px; }
+.node-banner-body { display: grid; width: auto; flex: 1; min-width: 0; gap: 4px; }
+.node-banner-head { display: flex; min-width: 0; align-items: center; gap: 6px; }
 .node-banner-head strong {
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   overflow: hidden;
   font-size: var(--text-caption);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.node-status-pill {
-  display: inline-flex;
-  height: 20px;
-  flex: 0 0 auto;
-  align-items: center;
-  margin-left: 0;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--fill-tertiary);
-  color: var(--muted);
-  font-size: var(--text-micro);
-  white-space: nowrap;
-}
-.node-status-pill.online { color: var(--green); background: rgba(3, 161, 14, .1); }
-.node-status-pill.busy { color: var(--blue); background: rgba(0, 113, 227, .1); }
-.node-status-pill.offline { color: var(--danger); background: rgba(227, 0, 0, .08); }
 .node-banner-body code {
   overflow: hidden;
   color: var(--blue);
@@ -1153,7 +1120,7 @@ button { appearance: none; -webkit-appearance: none; }
 }
 .node-banner-body .node-accounting { color: var(--muted); font-size: 11px; }
 .node-banner-body .node-restricted { color: var(--warning); }
-.node-banner .node-row-actions { align-self: flex-end; margin-top: auto; }
+.node-banner .node-row-actions { align-self: center; margin-top: 0; }
 .node-banner .node-row-actions button { width: 26px; height: 26px; border-radius: 8px; }
 .node-banner .node-row-actions svg { width: 12px; height: 12px; }
 
@@ -1229,9 +1196,8 @@ button { appearance: none; -webkit-appearance: none; }
 @media (max-width: 620px) {
   .node-dialog { height: calc(100dvh - 24px); max-height: none; border-radius: 20px; }
   .node-list { padding: 12px; }
-  .node-banner { grid-template-columns: 38px minmax(0, 1fr); padding: 14px; }
-  .node-banner .node-row-actions { grid-column: 2; justify-content: flex-end; }
-  .node-banner-icon { width: 38px; height: 38px; border-radius: 12px; }
+  .node-banner { padding: 12px; }
+  .node-banner .node-row-actions { justify-content: flex-end; }
   .node-editor-dialog { width: 100%; max-height: calc(100dvh - 24px); border-radius: 20px; }
 }
 
