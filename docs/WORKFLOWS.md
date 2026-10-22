@@ -1,5 +1,11 @@
 # 工作流清单
 
+## 工作流配置
+
+服务启动时会把本目录中的内置工作流迁入 SQLite 的工作流配置表。前端和生成 API 使用 `workflow_id` 选择配置；用户也可以在网页工作流管理面板上传自己的 ComfyUI API JSON，或通过 `POST /api/v1/workflows` 创建自定义工作流。内置预设只能调整是否在生成区显示，自定义工作流支持修改、删除、下载和 `POST /api/v1/workflows/{workflow_id}/sync` 节点同步校验。
+
+导入的文件必须是 ComfyUI 的 API 格式（节点 ID 映射到包含 `class_type` 和 `inputs` 的对象），不能直接使用 ComfyUI 编辑器导出的 UI 工作流格式。配置只保存工作流 JSON，不会把节点或模型安装到目标 ComfyUI。执行前请确认目标服务器已经包含该工作流引用的自定义节点、模型和相关资源，否则任务会在 ComfyUI 侧失败。通过远程互联节点时，还需要先把自定义配置导入目标设备。
+
 [English](en/WORKFLOWS.md)
 
 所有文件均为 ComfyUI API 格式 JSON，可直接提交给 `/prompt`。

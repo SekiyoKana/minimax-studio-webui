@@ -82,6 +82,40 @@ Read field keys from `runninghub_schema` returned by `GET /api/v1/comfy/nodes`. 
 
 Delete a node with `DELETE /api/v1/comfy/nodes/{node_id}`. The service rejects disabling or deleting a node that is running a job, has manually targeted queued jobs, or is the final enabled node.
 
+## ComfyUI Workflow Configurations
+
+Workflow configurations are stored in `data/config.db`. Built-in presets are seeded from `workflows/` and can only change `visible_in_composer`; custom workflows support full CRUD:
+
+```text
+GET    /api/v1/workflows
+POST   /api/v1/workflows
+GET    /api/v1/workflows/{workflow_id}
+PATCH  /api/v1/workflows/{workflow_id}
+DELETE /api/v1/workflows/{workflow_id}
+POST   /api/v1/workflows/{workflow_id}/sync
+```
+
+Create a custom workflow with a JSON body:
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/workflows \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "My H3 workflow",
+    "workflow_json": {"92": {"class_type": "SaveVideo", "inputs": {"filename_prefix": "custom"}}},
+    "field_mappings": {"prompt": {"node_id": "6", "input": "text"}},
+    "reference_mappings": [],
+    "result_node_id": "92",
+    "media_type": "video",
+    "target_node_ids": ["local"],
+    "visible_in_composer": true
+  }'
+```
+
+The workflow JSON must use ComfyUI API format (each node ID maps to an object containing `class_type` and `inputs`); a UI editor export is not directly usable. `field_mappings` supports `prompt`, `lyrics`, `width`, `height`, `duration`, `num_frames`, `steps` and `seed`; each value is `{"node_id": "...", "input": "..."}`. `reference_mappings` binds uploaded media by `type`, one-based `index`, `node_id` and `input`. `result_node_id` must point to a node with a `filename_prefix` input.
+
+Select the configuration with `workflow_id` when creating a generation. The service stores a snapshot of the graph, mappings, version and target nodes with the job. Saving or syncing uploads `workflows/h3studio-{workflow_id}.json` to each target ComfyUI through `/userdata/{file}` and verifies its SHA-256; per-node state is `synced`, `pending` or `failed`. The service stores the configuration only. Confirm that the target ComfyUI server already contains every required custom node, model, and resource. Workflows created in private mode are visible only with a valid `X-H3-Incognito-Code` header.
+
 ## Create a VDN-H3 Job
 
 VDN-H3 supports 8–50 steps for FL2VA and Ref2VA. Eight steps automatically selects `stage-dmd-step-250`; 9–50 steps selects `stage-b-step-2000`:

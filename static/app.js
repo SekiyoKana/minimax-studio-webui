@@ -100,6 +100,7 @@ const RUNNINGHUB_TARGET_PREFIX = "rh:";
 const SIDEBAR_WIDTH_STORAGE_KEY = "h3-asset-sidebar-width";
 const SIDEBAR_WIDTH_MIN = 220;
 const SIDEBAR_WIDTH_MAX_RATIO = 0.5;
+const ANDROID_CLIENT = new URLSearchParams(window.location.search).get("h3_client") === "android";
 
 const COPY = {
   "zh-CN": {
@@ -1248,11 +1249,11 @@ function isAnonymousQueueJob(job) {
 }
 
 function selectedVariant() {
-  return el("modelVariant").value;
+  return ANDROID_CLIENT ? "fl2va-fp8" : el("modelVariant").value;
 }
 
 function selectedExecutionMode() {
-  return el("executionMode").value;
+  return ANDROID_CLIENT ? "turbo-lora" : el("executionMode").value;
 }
 
 function isUpscale(executionMode = selectedExecutionMode()) {
@@ -5452,6 +5453,14 @@ window.addEventListener("resize", () => {
 });
 
 async function initialize() {
+  if (ANDROID_CLIENT) {
+    document.body.classList.add("android-client");
+    el("androidServerSettings").hidden = false;
+    el("openGlobalSettings").hidden = true;
+    el("languageToggle").hidden = true;
+    el("apiDocsLink").hidden = true;
+    el("androidServerSettings").addEventListener("click", () => window.AndroidApp?.openServerSettings());
+  }
   restoreSidebarWidth();
   applyStaticLocale();
   updateModelUi();
@@ -5468,6 +5477,15 @@ async function initialize() {
     checkHealth(),
     refreshSharedData(),
   ]);
+  if (ANDROID_CLIENT) {
+    const select = el("workflowSelect");
+    if (select && Array.from(select.options).some((option) => option.value === "preset-fl2va-turbo")) {
+      select.value = "preset-fl2va-turbo";
+    }
+    el("steps").value = "8";
+    el("autoUpscale").checked = false;
+    updateModelUi();
+  }
 }
 
 initialize();

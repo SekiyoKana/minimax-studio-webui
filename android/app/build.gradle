@@ -1,0 +1,16 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "ai.minimax.h3studio"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "ai.minimax.h3studio"
+        minSdk 23
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+}
