@@ -962,3 +962,21 @@ button { appearance: none; -webkit-appearance: none; }
 /* Video upscale dialog */
 .video-upscale-dialog { width: min(460px, 100%); }
 .video-upscale-dialog .settings-body { padding-top: 4px; }
+
+/* Dark-mode consistency fixes for asset detail and asset meta */
+.asset-detail-preview { background: var(--fill-secondary); }
+.asset-detail-footer .detail-reuse {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--blue);
+}
+.asset-detail-footer .detail-reuse:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-soft);
+  color: var(--blue);
+}
+.asset-owner {
+  border-color: var(--line-strong);
+  background: var(--fill-tertiary);
+  color: var(--muted);
+}

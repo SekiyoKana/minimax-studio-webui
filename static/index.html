@@ -24,10 +24,10 @@
       })();
     </script>
     <link rel="stylesheet" href="/assets/styles.css?v=57&rev=67">
-    <link rel="stylesheet" href="/assets/design.css?v=15">
+    <link rel="stylesheet" href="/assets/design.css?v=17">
     <link rel="stylesheet" href="/assets/skins/skins.css?v=6">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
-    <script src="/assets/app.js?v=78&rev=89&upscale=1" defer></script>
+    <script src="/assets/app.js?v=79&rev=90&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -162,7 +162,7 @@
                   </label>
 
                   <label class="compact-control" id="upscaleScaleControl" title="超分倍率" hidden>
-                    <i data-lucide="wand-sparkles"></i>
+                    <i data-lucide="expand"></i>
                     <select id="upscaleScale" aria-label="超分倍率">
                       <option value="2" selected>2x</option>
                       <option value="4">4x</option>
@@ -371,7 +371,7 @@
     <div class="asset-detail-layer asset-detail-modal" id="assetDetailModal" hidden aria-live="polite"></div>
     <div class="modal-overlay video-upscale-modal" id="videoUpscaleModal" hidden>
       <form class="settings-dialog video-upscale-dialog" id="videoUpscaleForm" role="dialog" aria-modal="true" aria-labelledby="videoUpscaleTitle">
-        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="wand-sparkles"></i></span><div><h2 id="videoUpscaleTitle">视频超分</h2><p id="videoUpscaleSubtitle">选择超分类型与倍率；使用独立超分工作流，不改变当前选中的工作流。</p></div></div><button class="icon-button" id="closeVideoUpscale" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
+        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="expand"></i></span><div><h2 id="videoUpscaleTitle">视频超分</h2><p id="videoUpscaleSubtitle">选择超分类型与倍率；使用独立超分工作流，不改变当前选中的工作流。</p></div></div><button class="icon-button" id="closeVideoUpscale" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
         <div class="settings-body">
           <label id="videoUpscaleCategoryField">超分类型<select id="videoUpscaleCategory"><option value="real">真人</option><option value="anime">动画</option><option value="3d">3D</option></select></label>
           <label id="videoUpscaleScaleField">超分倍率<select id="videoUpscaleScale"><option value="2">2x</option><option value="4">4x</option></select></label>
@@ -399,7 +399,7 @@
         <div class="asset-detail-body" id="assetDetailBody"><div class="feed-loading"><span></span><span></span><span></span></div></div>
         <footer class="asset-detail-footer">
       <p class="asset-detail-error" id="assetDetailError" role="alert"></p>
-      <div><button class="detail-delete" id="deleteAssetDetail" type="button" data-detail-action="delete"><i data-lucide="trash-2"></i><span>删除记录</span></button><button class="detail-rename" id="renameAssetDetail" type="button" data-detail-action="rename" hidden><i data-lucide="pencil"></i><span>重命名文件</span></button><a class="detail-download" id="downloadAssetDetail" data-detail-download href="#" download hidden><i data-lucide="download"></i><span>下载 MP4</span></a><button class="detail-output-input" id="reuseOutputAssetDetail" type="button" data-detail-action="input" disabled><i data-lucide="file-input"></i><span>作为输入</span></button><button class="detail-upscale" id="upscaleVideoAssetDetail" type="button" data-detail-action="video-upscale" hidden><i data-lucide="wand-sparkles"></i><span>视频超分</span></button><button class="detail-regenerate" id="regenerateAssetDetail" type="button" data-detail-action="regenerate"><i data-lucide="rotate-ccw"></i><span>重新生成</span></button><button class="detail-reuse" id="reuseAssetDetail" type="button" data-detail-action="reuse"><i data-lucide="corner-down-left"></i><span>回填到发送区</span></button></div>
+      <div><button class="detail-delete" id="deleteAssetDetail" type="button" data-detail-action="delete"><i data-lucide="trash-2"></i><span>删除记录</span></button><button class="detail-rename" id="renameAssetDetail" type="button" data-detail-action="rename" hidden><i data-lucide="pencil"></i><span>重命名文件</span></button><a class="detail-download" id="downloadAssetDetail" data-detail-download href="#" download hidden><i data-lucide="download"></i><span>下载 MP4</span></a><button class="detail-output-input" id="reuseOutputAssetDetail" type="button" data-detail-action="input" disabled><i data-lucide="file-input"></i><span>作为输入</span></button><button class="detail-upscale" id="upscaleVideoAssetDetail" type="button" data-detail-action="video-upscale" hidden><i data-lucide="expand"></i><span>视频超分</span></button><button class="detail-regenerate" id="regenerateAssetDetail" type="button" data-detail-action="regenerate"><i data-lucide="rotate-ccw"></i><span>重新生成</span></button><button class="detail-reuse" id="reuseAssetDetail" type="button" data-detail-action="reuse"><i data-lucide="corner-down-left"></i><span>回填到发送区</span></button></div>
         </footer>
       </section>
     </template>

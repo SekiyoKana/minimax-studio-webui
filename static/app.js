@@ -2646,12 +2646,12 @@ function canVideoUpscale(job) {
 function videoUpscaleAction(job) {
   if (!canVideoUpscale(job)) return "";
   const jobId = escapeHtml(job.id);
-  return `<button type="button" data-job-action="video-upscale" data-job-id="${jobId}" title="${t("videoUpscale")}" aria-label="${t("videoUpscale")}">${icon("wand-sparkles")}</button>`;
+  return `<button type="button" data-job-action="video-upscale" data-job-id="${jobId}" title="${t("videoUpscale")}" aria-label="${t("videoUpscale")}">${icon("expand")}</button>`;
 }
 
 function videoUpscaleMessageAction(job) {
   if (!canVideoUpscale(job)) return "";
-  return `<button type="button" data-job-action="video-upscale" data-job-id="${escapeHtml(job.id)}">${icon("wand-sparkles")}<span>${t("videoUpscale")}</span></button>`;
+  return `<button type="button" data-job-action="video-upscale" data-job-id="${escapeHtml(job.id)}">${icon("expand")}<span>${t("videoUpscale")}</span></button>`;
 }
 
 function assetAction(job) {
