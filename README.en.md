@@ -60,9 +60,26 @@ The interface appearance is a presentation layer. Switch skins in Settings > App
 |---|---|
 | ![Aurora Glass](docs/images/h3-studio-aurora.jpg) | ![Skin settings](docs/images/h3-studio-skins.jpg) |
 
+### Type scale
+
+All interface text uses ten tokens from `:root`; new modules must not hard-code `font-size`.
+
+| Token | Size | Use |
+|---|---:|---|
+| `--text-micro` | 10px | Uppercase group labels and badges |
+| `--text-caption` | 11px | Metadata and helper text |
+| `--text-small` | 12px | Secondary labels and controls |
+| `--text-ui` | 13px | Forms, buttons and lists |
+| `--text-body` | 14px | Base body copy |
+| `--text-lead` | 16px | Conversation text and emphasis |
+| `--text-heading-sm` | 20px | Section headings |
+| `--text-heading` | 24px | Dialog and sidebar titles |
+| `--text-display` | 28px | Page title |
+| `--text-hero` | 32px | Empty-state headline |
+
 Rules for new modules and skins:
 
-1. Use the `:root` design tokens (`--canvas`, `--surface`, `--ink`, `--line`, `--accent`, `--blue`, ...); never hardcode colors.
+1. Use the `:root` design tokens (`--canvas`, `--surface`, `--ink`, `--line`, `--accent`, `--blue`, `--text-*`, ...); never hardcode colors or `font-size`.
 2. Scope every skin rule under `html[data-skin="<id>"]` in `static/skins/skins.css`; never edit base rules for a skin. The shared visual layer lives in `static/design.css`.
 3. Skins may only override colors, borders, shadows, radius, fonts and backgrounds — no layout, sizing, order, visibility or behavior changes.
 4. Assets go in `static/skins/<id>/` with a `preview.jpg` (16:10).
@@ -103,7 +120,7 @@ Persistent data is stored under `data/`:
 ### 2026-10-22: Apple-inspired interface rebuild
 
 - Followed apple.com's hierarchy: a parchment canvas (#f5f5f7) with white content tiles, hairline dividers and a single Action Blue (#0071e3); decorative gradients and card shadows were removed.
-- Type scale: 28px page title, 24px sidebar title, 24px dialog title, 16px conversation text; headings use SF Pro Display with negative tracking.
+- Type scale: 28px page title, 24px sidebar title, 24px dialog title and 16px conversation text; every size now resolves through the ten `--text-*` tokens from 10px to 32px, with SF Pro Display negative tracking on headings.
 - Layout: a 320px sidebar, an 88px top bar, node and workflow entries moved to the right action cluster, a 28px-radius composer surface, and 44px control heights.
 - Components: pill buttons, a segmented Settings control, 18px cards, circular icon buttons and a 0.97 press scale.
 - Added a large empty state with supporting copy; Aurora Glass now mirrors the new type scale, sidebar width and segmented control.

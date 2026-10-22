@@ -71,11 +71,28 @@ MiniMax H3 Studio 为 MiniMax H3、H3 TTS、数字人、Music3 和通用 Running
 
 皮肤是纯展示层：CSS 只覆盖设计令牌和装饰属性，不改变 DOM 结构、元素顺序、可见性、文案或任何 JavaScript 行为。生成、队列、素材、工作流和 API 在两种皮肤下完全一致。
 
+### 文字层级
+
+界面文字统一为 10 级，全部通过 `:root` 的 `--text-*` 令牌引用。新增模块不得写死 `font-size`，需要新字号时先扩展令牌。
+
+| 令牌 | 字号 | 用途 |
+|---|---:|---|
+| `--text-micro` | 10px | 大写分组标签、徽标 |
+| `--text-caption` | 11px | 元信息、辅助说明 |
+| `--text-small` | 12px | 次级标签、控件文字 |
+| `--text-ui` | 13px | 表单、按钮、列表 |
+| `--text-body` | 14px | 基础正文 |
+| `--text-lead` | 16px | 对话正文、强调 |
+| `--text-heading-sm` | 20px | 分区标题 |
+| `--text-heading` | 24px | 弹窗与侧栏标题 |
+| `--text-display` | 28px | 页面标题 |
+| `--text-hero` | 32px | 空状态主标题 |
+
 ### 新增皮肤的规则
 
 追加新模块或新皮肤时遵守以下约定，默认皮肤和既有皮肤都不会被破坏：
 
-1. 组件颜色只使用 `:root` 设计令牌（`--canvas`、`--surface`、`--surface-soft`、`--ink`、`--muted`、`--line`、`--accent`、`--blue` 等），不要写死色值。
+1. 组件颜色与字号只使用 `:root` 设计令牌（`--canvas`、`--surface`、`--ink`、`--line`、`--accent`、`--blue`、`--text-*` 等），不要写死色值或 `font-size`。
 2. 皮肤样式写入 [`static/skins/skins.css`](static/skins/skins.css)，且必须限定在 `html[data-skin="<id>"]` 之下；不得为了某个皮肤修改基础规则。
 3. 皮肤只能覆盖颜色、边框、阴影、圆角、字体和背景；不得改变布局结构、尺寸、元素顺序、可见性或交互逻辑。
 4. 皮肤资源放在 `static/skins/<id>/`，预览图固定命名 `preview.jpg`（16:10）。
@@ -116,7 +133,7 @@ flowchart LR
 ### 2026-10-22：Apple 风格界面重做
 
 - 参考 apple.com 的布局与层级：浅灰画布 `#f5f5f7` 搭配白色内容区、发丝分隔线和单一 Action Blue `#0071e3`，移除装饰性渐变与卡片投影。
-- 字体层级：页面标题 28px、侧栏标题 24px、弹窗标题 24px、对话正文 16px；标题使用 SF Pro Display 负字距，正文 14 至 16px。
+- 字体层级：页面标题 28px、侧栏标题 24px、弹窗标题 24px、对话正文 16px；标题使用 SF Pro Display 负字距，全部文字收敛为 10 至 32px 的十级 `--text-*` 令牌。
 - 布局：侧栏加宽到 320px，顶栏 88px，节点与工作流入口移到右侧操作区；输入区改为 28px 圆角浅灰面板，控件高度 44px。
 - 组件：胶囊按钮、分段式设置页签、18px 卡片圆角、圆形图标按钮，以及按下缩放 0.97 的反馈。
 - 新增空状态大标题与说明；极光玻璃皮肤同步适配新的字号、侧栏宽度和分段控件。
