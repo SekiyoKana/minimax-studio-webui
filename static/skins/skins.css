@@ -23,6 +23,9 @@ html[data-skin="aurora"] {
   --surface: #0f1622;
   --surface-soft: #18212f;
   --surface-warm: #1a2230;
+  --fill-secondary: #0b111b;
+  --fill-tertiary: #18212f;
+  --fill-quaternary: #223044;
   --ink: #eaf1f8;
   --muted: #9fb0c4;
   --quiet: #7486a0;

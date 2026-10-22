@@ -802,3 +802,35 @@ button:active:not(:disabled) { transform: scale(.97); }
 }
 .workflow-add-button:hover { background: #0077ed; color: #fff; }
 .workflow-dialog { grid-template-rows: auto auto minmax(0, 1fr); }
+
+/* Runtime status window follows the active skin tokens instead of a fixed dark palette */
+.ops-window {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-lg);
+}
+.ops-window.dragging { box-shadow: var(--shadow-lg); }
+.ops-header { border-bottom: 1px solid var(--line); }
+.ops-drag-grip { color: var(--quiet); }
+.ops-header p { color: var(--muted); }
+.ops-header .icon-button { color: var(--muted); }
+.ops-header .icon-button:hover { background: var(--fill-tertiary); color: var(--ink); }
+.live-dot { background: var(--green); box-shadow: 0 0 0 4px rgba(3, 161, 14, .12); }
+.queue-section { border-bottom: 1px solid var(--line); }
+.ops-section-title { color: var(--muted); }
+.ops-section-title b { background: var(--fill-tertiary); color: var(--ink); }
+.ops-section-title button { color: var(--quiet); }
+.ops-section-title button:hover { color: var(--ink); }
+.queue-row:hover { background: var(--fill-tertiary); }
+.queue-position { border-color: var(--line-strong); color: var(--muted); }
+.queue-row small { color: var(--muted); }
+.queue-row > button { color: var(--muted); }
+.queue-row > button:hover { background: var(--accent-soft); color: var(--danger); }
+.log-row { border-bottom-color: var(--line); }
+.log-row time { color: var(--quiet); }
+.log-row button { color: var(--blue); }
+.log-row p { color: var(--ink); }
+.log-row p b { color: var(--quiet); }
+.log-row.error p { color: var(--danger); }
+.ops-window .quiet { color: var(--quiet); }
