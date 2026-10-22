@@ -341,8 +341,10 @@ function applyStaticLocale() {
   setText("#settingsPanelSystem label:nth-child(2) > span:first-child", "Show runtime logs");
   setText("#settingsPanelSystem label:nth-child(3) > span:first-child", "Show device sharing entry");
   setText("#settingsPanelSystem label:nth-child(4) > span:first-child", "Back up generated outputs locally");
+  setText("#settingsPanelSystem label:nth-child(5) > span:first-child", "Enable RunningHub endpoint workflows");
+  setText("#runninghubHelp", "When disabled, RunningHub nodes cannot be added or edited; existing nodes are kept.");
   setLeadingText("#remoteDisconnectPolicy", "Handle remote records when disconnected");
-  setLeadingText("#settingsPanelSystem label:nth-of-type(6)", "Remote records key");
+  setLeadingText("#settingsPanelSystem label:nth-of-type(7)", "Remote records key");
   setText("#manageLocalAssets span", "Manage local assets");
   setText("#globalSettingsForm .settings-form-actions button span", "Save settings");
   setText("#settingsPanelUpload .settings-help", "Images over 1 MB are compressed locally before upload.");
@@ -787,6 +789,9 @@ function nodeStatus(node) {
 }
 
 function syncNodeProviderFields() {
+  if (state.runninghubEnabled === false && el("nodeProvider")?.value === "runninghub") {
+    el("nodeProvider").value = "comfyui";
+  }
   const provider = el("nodeProvider")?.value || "comfyui";
   const runningHub = provider === "runninghub";
   if (runningHub && !el("nodeUrl").value.trim()) {
@@ -825,11 +830,14 @@ function renderManagedNodes() {
     const activity = node.busy
       ? ` · ${localized("并发", "capacity")} ${running}/${capacity}`
       : node.queue_depth ? ` · 排队 ${node.queue_depth}` : "";
+    const restricted = node.provider === "runninghub" && state.runninghubEnabled === false;
+    const iconName = node.remote_proxy ? "waypoints" : node.provider === "runninghub" ? "workflow" : "server";
+    const badge = `<span class="node-banner-icon ${status.className}" aria-hidden="true">${icon(iconName)}<i class="node-state-dot"></i></span>`;
     if (node.remote_proxy) {
       const owner = node.owner_name || node.source?.name || "远程设备";
-      return `<div class="node-row remote-node" data-node-id="${escapeHtml(node.id)}">
-        <span class="node-state ${status.className}" aria-hidden="true"></span>
-        <div class="node-row-copy"><div><strong>${escapeHtml(node.name || "远程推理节点")}</strong><span>${escapeHtml(status.label)}${activity}</span></div><small>${escapeHtml(localized("远程代理节点", "Remote proxy node"))} · ${escapeHtml(t("owner"))} ${escapeHtml(owner)}</small></div>
+      return `<div class="node-banner remote-node" data-node-id="${escapeHtml(node.id)}">
+        ${badge}
+        <div class="node-banner-body"><div class="node-banner-head"><strong>${escapeHtml(node.name || "远程推理节点")}</strong><span class="node-status-pill ${status.className}">${escapeHtml(status.label)}${activity}</span></div><small>${escapeHtml(localized("远程代理节点", "Remote proxy node"))} · ${escapeHtml(t("owner"))} ${escapeHtml(owner)}</small></div>
         <div class="node-row-actions" aria-hidden="true"></div>
       </div>`;
     }
@@ -855,9 +863,15 @@ function renderManagedNodes() {
     const checkedLabel = node.provider === "runninghub"
       ? node.account_error ? t("balanceFailed") : t("balanceUpdated")
       : localized("检测", "checked");
-    return `<div class="node-row" data-node-id="${escapeHtml(node.id)}">
-      <span class="node-state ${status.className}" aria-hidden="true"></span>
-      <div class="node-row-copy"><div><strong>${escapeHtml(node.provider === "runninghub" ? node.workflow_name || node.name : node.name)}</strong><span>${escapeHtml(status.label)}${activity}</span></div><code title="${escapeHtml(node.url)}">${escapeHtml(node.url)}</code>${accounting}${workflowIssue}<small>${provider}${workflow}${node.provider === "runninghub" && node.workflow_name && node.workflow_name !== node.name ? ` · ${escapeHtml(node.name)}` : ""}${keyState} · ID ${escapeHtml(node.id)}${node.last_checked ? ` · ${formatTime(node.last_checked, true)} ${checkedLabel}` : ""}</small></div>
+    return `<div class="node-banner${restricted ? " is-restricted" : ""}" data-node-id="${escapeHtml(node.id)}">
+      ${badge}
+      <div class="node-banner-body">
+        <div class="node-banner-head"><strong>${escapeHtml(node.provider === "runninghub" ? node.workflow_name || node.name : node.name)}</strong><span class="node-status-pill ${status.className}">${escapeHtml(status.label)}${activity}</span></div>
+        <code title="${escapeHtml(node.url)}">${escapeHtml(node.url)}</code>
+        ${accounting}${workflowIssue}
+        <small>${provider}${workflow}${node.provider === "runninghub" && node.workflow_name && node.workflow_name !== node.name ? ` · ${escapeHtml(node.name)}` : ""}${keyState} · ID ${escapeHtml(node.id)}${node.last_checked ? ` · ${formatTime(node.last_checked, true)} ${checkedLabel}` : ""}</small>
+        ${restricted ? `<small class="node-restricted">${localized("RunningHub 端点工作流已关闭", "RunningHub endpoint workflows are disabled")}</small>` : ""}
+      </div>
       <div class="node-row-actions"><button type="button" data-node-action="edit" title="编辑节点" aria-label="编辑 ${escapeHtml(node.name)}">${icon("pencil")}</button><button type="button" data-node-action="delete" title="删除节点" aria-label="删除 ${escapeHtml(node.name)}">${icon("trash-2")}</button></div>
     </div>`;
   }).join("") : `<p class="quiet">${state.locale === "en" ? "No nodes" : "暂无节点"}</p>`;
@@ -905,23 +919,36 @@ function openNodeEditor(nodeId = null) {
   el("nodeMaxConcurrency").value = String(node?.max_concurrency || 1);
   el("nodeEnabled").checked = node ? Boolean(node.enabled) : true;
   el("nodeEnabled").closest(".node-enabled-row").hidden = !node;
-  el("nodeEditor").hidden = false;
+  el("nodeEditorModal").hidden = false;
+  document.body.classList.add("modal-open");
   el("nodeManagerError").textContent = "";
+  applyRunningHubAvailability();
   syncNodeProviderFields();
+  refreshIcons();
   requestAnimationFrame(() => el("nodeName").focus());
 }
 
 function closeNodeEditor() {
   state.nodeEditingId = null;
   el("nodeEditor").reset();
-  el("nodeEditor").hidden = true;
+  el("nodeEditorModal").hidden = true;
   el("nodeManagerError").textContent = "";
+}
+
+function applyRunningHubAvailability() {
+  const enabled = state.runninghubEnabled !== false;
+  const option = el("nodeProvider")?.querySelector('option[value="runninghub"]');
+  if (option) option.disabled = !enabled;
+  if (!enabled && el("nodeProvider")?.value === "runninghub" && !state.nodeEditingId) {
+    el("nodeProvider").value = "comfyui";
+  }
 }
 
 async function openNodeManager() {
   el("nodeModal").hidden = false;
   document.body.classList.add("modal-open");
   el("nodeManagerError").textContent = "";
+  applyRunningHubAvailability();
   refreshIcons();
   try {
     await loadManagedNodes();
@@ -963,6 +990,10 @@ async function saveNodeSettings() {
 async function saveNode(event) {
   event.preventDefault();
   el("nodeManagerError").textContent = "";
+  if (el("nodeProvider").value === "runninghub" && state.runninghubEnabled === false) {
+    el("nodeManagerError").textContent = localized("RunningHub 端点工作流已关闭", "RunningHub endpoint workflows are disabled");
+    return;
+  }
   const editing = state.nodeEditingId;
   const body = {
     name: el("nodeName").value.trim(),
@@ -4064,6 +4095,9 @@ async function loadGeneralSettings() {
   el("showPeering").checked = payload.show_peering !== false;
   el("backupOutputs").checked = Boolean(payload.backup_outputs);
   el("autoCompressLargeImages").checked = payload.auto_compress_large_images !== false;
+  state.runninghubEnabled = payload.runninghub_enabled !== false;
+  el("runninghubEnabled").checked = state.runninghubEnabled;
+  applyRunningHubAvailability();
   el("remoteDisconnectPolicy").value = payload.remote_disconnect_policy || "encrypt";
   el("remoteRecordsKey").value = payload.remote_records_key || "";
   el("opsLauncher").hidden = payload.show_runtime_logs === false;
@@ -4095,6 +4129,7 @@ async function saveGeneralSettings(event) {
         show_peering: el("showPeering").checked,
         backup_outputs: el("backupOutputs").checked,
         auto_compress_large_images: el("autoCompressLargeImages").checked,
+        runninghub_enabled: el("runninghubEnabled").checked,
         remote_disconnect_policy: el("remoteDisconnectPolicy").value,
         remote_records_key: key,
       }),
@@ -4108,6 +4143,9 @@ async function saveGeneralSettings(event) {
     el("opsLauncher").hidden = !el("showRuntimeLogs").checked;
     el("openPeering").hidden = !el("showPeering").checked;
     state.generalSettings.auto_compress_large_images = el("autoCompressLargeImages").checked;
+    state.runninghubEnabled = el("runninghubEnabled").checked;
+    applyRunningHubAvailability();
+    renderManagedNodes();
     if (!el("showRuntimeLogs").checked) closeOpsWindow();
     el("globalSettingsModal").hidden = true;
     document.body.classList.remove("modal-open");
@@ -5386,6 +5424,9 @@ el("closeNodeManager").addEventListener("click", closeNodeManager);
 el("addNodeButton").addEventListener("click", () => openNodeEditor());
 el("cancelNodeEdit").addEventListener("click", closeNodeEditor);
 el("cancelNodeEditIcon").addEventListener("click", closeNodeEditor);
+el("nodeEditorModal").addEventListener("click", (event) => {
+  if (event.target === el("nodeEditorModal")) closeNodeEditor();
+});
 if (el("saveNodeSettings")) el("saveNodeSettings").addEventListener("click", saveNodeSettings);
 el("nodeEditor").addEventListener("submit", saveNode);
 el("nodeProvider").addEventListener("change", syncNodeProviderFields);
@@ -5480,6 +5521,10 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "Escape" && !el("secretOverlay").hidden) closeSecretDialog();
   if (event.key === "Escape" && !el("peeringModal").hidden) closePeeringDialog();
+  if (event.key === "Escape" && !el("nodeEditorModal").hidden) {
+    closeNodeEditor();
+    return;
+  }
   if (event.key === "Escape" && !el("nodeModal").hidden) closeNodeManager();
   if (event.key === "Escape" && !el("assetDetailModal").hidden) closeAssetDetail();
 });

@@ -24,12 +24,12 @@
       })();
     </script>
     <link rel="stylesheet" href="/assets/styles.css?v=57&rev=67">
-    <link rel="stylesheet" href="/assets/design.css?v=25">
+    <link rel="stylesheet" href="/assets/design.css?v=26">
     <link rel="stylesheet" href="/assets/skins/skins.css?v=7">
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
-    <script src="/assets/dropdown.js?v=3" defer></script>
-    <script src="/assets/app.js?v=80&rev=91&upscale=1" defer></script>
+    <script src="/assets/dropdown.js?v=4" defer></script>
+    <script src="/assets/app.js?v=81&rev=92&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -281,34 +281,41 @@
 
         <div class="node-manager-body">
           <div class="node-list" id="nodeList" aria-live="polite"></div>
-
-          <form class="node-editor" id="nodeEditor" hidden>
-            <div class="node-editor-title"><h3 id="nodeEditorTitle">新增节点</h3><button class="icon-button" id="cancelNodeEditIcon" type="button" title="关闭编辑" aria-label="关闭节点编辑"><i data-lucide="x"></i></button></div>
-            <label for="nodeProvider">节点类型</label>
-            <select id="nodeProvider" name="provider" required>
-              <option value="comfyui">ComfyUI API</option>
-              <option value="runninghub">RunningHub API</option>
-            </select>
-            <label for="nodeName" id="nodeNameLabel">节点名称</label>
-            <input id="nodeName" name="name" type="text" maxlength="120" autocomplete="off" required>
-            <label for="nodeUrl" id="nodeUrlLabel">API 地址</label>
-            <input id="nodeUrl" name="url" type="url" maxlength="500" placeholder="http://127.0.0.1:8188" autocomplete="off" required>
-            <label for="nodeApiKey">API Key</label>
-            <input id="nodeApiKey" name="api_key" type="password" maxlength="2000" autocomplete="new-password" placeholder="ComfyUI 可留空">
-            <small class="node-field-hint" id="nodeApiKeyHint">ComfyUI 未启用鉴权时可留空</small>
-            <div class="node-provider-field" data-node-provider="runninghub" hidden>
-              <label for="nodeWorkflowUrl">RunningHub 工作流或 AI 应用地址</label>
-              <input id="nodeWorkflowUrl" name="workflow_url" type="url" maxlength="500" placeholder="https://www.runninghub.ai/zh-cn/ai-detail/..." autocomplete="off">
-            </div>
-            <div class="node-provider-field" data-node-provider="runninghub" hidden>
-              <label for="nodeMaxConcurrency">API 最大并发数</label>
-              <input id="nodeMaxConcurrency" name="max_concurrency" type="number" min="1" max="64" step="1" value="1" inputmode="numeric">
-            </div>
-            <label class="switch-row node-enabled-row"><span>启用节点</span><input id="nodeEnabled" type="checkbox" checked><span class="switch"></span></label>
-            <div class="node-editor-actions"><button id="cancelNodeEdit" type="button">取消</button><button class="primary" type="submit">保存节点</button></div>
-          </form>
         </div>
       </section>
+    </div>
+
+    <div class="modal-overlay node-editor-modal" id="nodeEditorModal" hidden>
+      <form class="node-editor-dialog" id="nodeEditor" role="dialog" aria-modal="true" aria-labelledby="nodeEditorTitle">
+        <header class="node-dialog-header">
+          <div><span class="node-dialog-mark"><i data-lucide="server-cog"></i></span><div><h2 id="nodeEditorTitle">新增节点</h2><p>配置 ComfyUI 或 RunningHub 端点</p></div></div>
+          <button class="icon-button" id="cancelNodeEditIcon" type="button" title="关闭编辑" aria-label="关闭节点编辑"><i data-lucide="x"></i></button>
+        </header>
+        <div class="node-editor-body">
+          <label for="nodeProvider">节点类型</label>
+          <select id="nodeProvider" name="provider" required>
+            <option value="comfyui">ComfyUI API</option>
+            <option value="runninghub">RunningHub API</option>
+          </select>
+          <label for="nodeName" id="nodeNameLabel">节点名称</label>
+          <input id="nodeName" name="name" type="text" maxlength="120" autocomplete="off" required>
+          <label for="nodeUrl" id="nodeUrlLabel">API 地址</label>
+          <input id="nodeUrl" name="url" type="url" maxlength="500" placeholder="http://127.0.0.1:8188" autocomplete="off" required>
+          <label for="nodeApiKey">API Key</label>
+          <input id="nodeApiKey" name="api_key" type="password" maxlength="2000" autocomplete="new-password" placeholder="ComfyUI 可留空">
+          <small class="node-field-hint" id="nodeApiKeyHint">ComfyUI 未启用鉴权时可留空</small>
+          <div class="node-provider-field" data-node-provider="runninghub" hidden>
+            <label for="nodeWorkflowUrl">RunningHub 工作流或 AI 应用地址</label>
+            <input id="nodeWorkflowUrl" name="workflow_url" type="url" maxlength="500" placeholder="https://www.runninghub.ai/zh-cn/ai-detail/..." autocomplete="off">
+          </div>
+          <div class="node-provider-field" data-node-provider="runninghub" hidden>
+            <label for="nodeMaxConcurrency">API 最大并发数</label>
+            <input id="nodeMaxConcurrency" name="max_concurrency" type="number" min="1" max="64" step="1" value="1" inputmode="numeric">
+          </div>
+          <label class="switch-row node-enabled-row"><span>启用节点</span><input id="nodeEnabled" type="checkbox" checked><span class="switch"></span></label>
+        </div>
+        <div class="node-editor-actions"><button id="cancelNodeEdit" type="button">取消</button><button class="primary" type="submit">保存节点</button></div>
+      </form>
     </div>
 
     <div class="modal-overlay workflow-modal" id="workflowModal" hidden>
@@ -529,6 +536,8 @@
             <label class="switch-row"><span>显示运行日志</span><input id="showRuntimeLogs" type="checkbox"><span class="switch"></span></label>
             <label class="switch-row"><span>显示连接互联入口</span><input id="showPeering" type="checkbox"><span class="switch"></span></label>
             <label class="switch-row"><span>本地备份生成产物</span><input id="backupOutputs" type="checkbox"><span class="switch"></span></label>
+            <label class="switch-row"><span>启用 RunningHub 端点工作流</span><input id="runninghubEnabled" type="checkbox" checked><span class="switch"></span></label>
+            <p class="settings-help" id="runninghubHelp">关闭后无法新增或修改 RunningHub 节点，已有节点仍会保留。</p>
             <label>互联断开时处理远程记录<select id="remoteDisconnectPolicy"><option value="encrypt">加密</option><option value="delete">删除</option></select></label>
             <label>远程记录密钥<span class="password-field"><input id="remoteRecordsKey" type="password" minlength="8" maxlength="256" autocomplete="new-password"><button class="password-toggle" id="toggleRemoteRecordsKey" type="button" title="显示密钥" aria-label="显示密钥"><i data-lucide="eye"></i></button></span><small>至少 8 个字符，最多 256 个字符</small></label>
             <div class="settings-actions"><button type="button" id="manageLocalAssets"><i data-lucide="folder-cog"></i><span>管理本地素材</span></button></div>

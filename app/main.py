@@ -259,6 +259,7 @@ class GeneralSettingsUpdate(BaseModel):
     show_peering: bool | None = None
     backup_outputs: bool | None = None
     auto_compress_large_images: bool | None = None
+    runninghub_enabled: bool | None = None
     remote_disconnect_policy: Literal["encrypt", "delete"] | None = None
     remote_records_key: str | None = Field(default=None, min_length=8, max_length=256)
 
@@ -721,6 +722,8 @@ async def list_comfy_nodes():
 
 @app.post("/api/v1/comfy/nodes", status_code=201, dependencies=[Depends(authorize)])
 async def create_comfy_node(payload: ComfyNodeCreate):
+    if payload.provider == "runninghub" and not local_state.general_settings()["runninghub_enabled"]:
+        raise HTTPException(status_code=422, detail="RunningHub 端点工作流已关闭")
     node_id = f"node-{secrets.token_hex(4)}"
     try:
         profile: dict[str, object] = {}
@@ -763,6 +766,8 @@ async def update_comfy_node(node_id: str, payload: ComfyNodeUpdate):
     if not existing:
         raise HTTPException(status_code=404, detail="推理节点不存在")
     provider = payload.provider or existing["provider"]
+    if provider == "runninghub" and not local_state.general_settings()["runninghub_enabled"]:
+        raise HTTPException(status_code=422, detail="RunningHub 端点工作流已关闭")
     workflow_url = (
         payload.workflow_url
         if payload.workflow_url is not None

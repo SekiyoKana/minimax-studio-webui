@@ -13,6 +13,7 @@
     ".settings-body select",
     ".auto-upscale-confirm-dialog select",
     ".video-upscale-dialog select",
+    ".node-editor-body select",
   ].join(",");
 
   const instances = new WeakMap();

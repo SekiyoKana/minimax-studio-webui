@@ -124,6 +124,12 @@ Persistent data is stored under `data/`:
 
 ## Update log
 
+### 2026-10-22: Node banners and RunningHub switch
+
+- Added "Enable RunningHub endpoint workflows" under Settings > System, enabled by default; disabling it blocks adding or editing RunningHub nodes while keeping existing ones.
+- The node dialog now has a fixed 940 × 700 size and renders each node as a status banner.
+- Adding or editing a node now opens a dedicated dialog instead of an inline panel.
+
 ### 2026-10-22: Standalone video upscale entry
 
 - Added an icon to the video upscale action and replaced the composer hand-off with a type/scale dialog.
