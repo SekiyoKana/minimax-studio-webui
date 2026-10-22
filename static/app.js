@@ -1036,7 +1036,12 @@ function workflowSyncLabel(workflow) {
 
 function renderWorkflowList() {
   const list = el("workflowList");
-  el("workflowManagerSummary").textContent = state.locale === "en" ? `${state.workflows.length} workflows` : `${state.workflows.length} 个工作流`;
+  const count = state.workflows.length;
+  const summary = el("workflowManagerSummary");
+  summary.textContent = String(count);
+  const summaryLabel = state.locale === "en" ? `${count} workflows` : `${count} 个工作流`;
+  summary.title = summaryLabel;
+  summary.setAttribute("aria-label", summaryLabel);
   list.innerHTML = state.workflows.map((workflow) => {
     const custom = workflow.source === "custom";
     const syncText = workflowSyncLabel(workflow);

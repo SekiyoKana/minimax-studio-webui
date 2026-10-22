@@ -12,11 +12,11 @@
         if (storedSkin && /^[a-z0-9-]{1,40}$/.test(storedSkin)) document.documentElement.dataset.skin = storedSkin;
       } catch (error) { /* storage disabled: keep the default skin */ }
     </script>
-    <link rel="stylesheet" href="/assets/styles.css?v=54&rev=64">
-    <link rel="stylesheet" href="/assets/design.css?v=6">
-    <link rel="stylesheet" href="/assets/skins/skins.css?v=3">
+    <link rel="stylesheet" href="/assets/styles.css?v=55&rev=65">
+    <link rel="stylesheet" href="/assets/design.css?v=7">
+    <link rel="stylesheet" href="/assets/skins/skins.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
-    <script src="/assets/app.js?v=74&rev=85&upscale=1" defer></script>
+    <script src="/assets/app.js?v=75&rev=86&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -301,13 +301,12 @@
     <div class="modal-overlay workflow-modal" id="workflowModal" hidden>
       <section class="node-dialog workflow-dialog" role="dialog" aria-modal="true" aria-labelledby="workflowDialogTitle">
         <header class="node-dialog-header">
-          <div><span class="node-dialog-mark"><i data-lucide="workflow"></i></span><div><h2 id="workflowDialogTitle">工作流</h2><p>ComfyUI API 格式 · 内置预设与自定义工作流</p></div></div>
-          <button class="icon-button" id="closeWorkflowManager" type="button" title="关闭" aria-label="关闭工作流管理"><i data-lucide="x"></i></button>
+          <div><span class="node-dialog-mark"><i data-lucide="workflow"></i></span><div><div class="workflow-title-line"><h2 id="workflowDialogTitle">工作流</h2><span class="workflow-count" id="workflowManagerSummary" aria-live="polite">0</span></div><p>ComfyUI API 格式 · 内置预设与自定义工作流</p></div></div>
+          <div class="workflow-header-actions">
+            <button class="icon-button workflow-add-button" id="addWorkflowButton" type="button" title="新增工作流" aria-label="新增工作流"><i data-lucide="plus"></i></button>
+            <button class="icon-button" id="closeWorkflowManager" type="button" title="关闭" aria-label="关闭工作流管理"><i data-lucide="x"></i></button>
+          </div>
         </header>
-        <div class="node-manager-toolbar">
-          <span id="workflowManagerSummary">0 个工作流</span>
-          <button id="addWorkflowButton" type="button"><i data-lucide="plus"></i><span>新增工作流</span></button>
-        </div>
         <p class="node-manager-error" id="workflowManagerError" role="alert"></p>
         <div class="workflow-manager-body">
           <div class="workflow-list" id="workflowList" aria-live="polite"></div>

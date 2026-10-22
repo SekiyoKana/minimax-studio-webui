@@ -245,7 +245,6 @@ html[data-skin="aurora"] .incognito-status {
 
 html[data-skin="aurora"] .modal-overlay {
   background: rgba(3, 6, 11, 0.68);
-  backdrop-filter: blur(10px);
 }
 
 html[data-skin="aurora"] .settings-dialog,

@@ -307,7 +307,6 @@ body {
 /* ------------------------------------------------------------------ */
 .modal-overlay {
   background: rgba(0, 0, 0, .32);
-  backdrop-filter: saturate(180%) blur(20px);
 }
 
 .settings-dialog,
@@ -777,3 +776,29 @@ button:active:not(:disabled) { transform: scale(.97); }
 }
 .workflow-row-side .workflow-row-actions { justify-content: flex-end; }
 .workflow-row-side .workflow-visibility { margin: 0; }
+
+
+/* Workflow header actions: count badge in the title, icon-only add button */
+.workflow-title-line { display: flex; align-items: center; gap: 8px; }
+.workflow-count {
+  display: inline-flex;
+  min-width: 26px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--fill-quaternary);
+  color: var(--muted);
+  font: 500 var(--text-caption)/1 var(--sans);
+  font-variant-numeric: tabular-nums;
+}
+.workflow-header-actions { display: flex; align-items: center; gap: 6px; }
+.workflow-add-button {
+  width: 36px;
+  height: 36px;
+  background: var(--blue);
+  color: #fff;
+}
+.workflow-add-button:hover { background: #0077ed; color: #fff; }
+.workflow-dialog { grid-template-rows: auto auto minmax(0, 1fr); }
