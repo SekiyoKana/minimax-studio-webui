@@ -342,9 +342,11 @@ function applyStaticLocale() {
   setText("#settingsPanelSystem label:nth-child(3) > span:first-child", "Show device sharing entry");
   setText("#settingsPanelSystem label:nth-child(4) > span:first-child", "Back up generated outputs locally");
   setText("#settingsPanelSystem label:nth-child(5) > span:first-child", "Enable RunningHub endpoint workflows");
+  setText("#settingsPanelSystem label:nth-child(7) > span:first-child", "Exclude RunningHub nodes from auto scheduling");
   setText("#runninghubHelp", "When disabled, RunningHub nodes cannot be added or edited; existing nodes are kept.");
+  setText("#excludeRunningHubHelp", "When enabled, jobs using auto scheduling never run on RunningHub API nodes; select a RunningHub node manually instead.");
   setLeadingText("#remoteDisconnectPolicy", "Handle remote records when disconnected");
-  setLeadingText("#settingsPanelSystem label:nth-of-type(7)", "Remote records key");
+  setLeadingText("#settingsPanelSystem label:nth-of-type(8)", "Remote records key");
   setText("#manageLocalAssets span", "Manage local assets");
   setText("#globalSettingsForm .settings-form-actions button span", "Save settings");
   setText("#settingsPanelUpload .settings-help", "Images over 1 MB are compressed locally before upload.");
@@ -4097,6 +4099,8 @@ async function loadGeneralSettings() {
   el("autoCompressLargeImages").checked = payload.auto_compress_large_images !== false;
   state.runninghubEnabled = payload.runninghub_enabled !== false;
   el("runninghubEnabled").checked = state.runninghubEnabled;
+  state.excludeRunningHubAuto = payload.exclude_runninghub_auto === true;
+  el("excludeRunningHubAuto").checked = state.excludeRunningHubAuto;
   applyRunningHubAvailability();
   el("remoteDisconnectPolicy").value = payload.remote_disconnect_policy || "encrypt";
   el("remoteRecordsKey").value = payload.remote_records_key || "";
@@ -4130,6 +4134,7 @@ async function saveGeneralSettings(event) {
         backup_outputs: el("backupOutputs").checked,
         auto_compress_large_images: el("autoCompressLargeImages").checked,
         runninghub_enabled: el("runninghubEnabled").checked,
+        exclude_runninghub_auto: el("excludeRunningHubAuto").checked,
         remote_disconnect_policy: el("remoteDisconnectPolicy").value,
         remote_records_key: key,
       }),
@@ -4144,6 +4149,7 @@ async function saveGeneralSettings(event) {
     el("openPeering").hidden = !el("showPeering").checked;
     state.generalSettings.auto_compress_large_images = el("autoCompressLargeImages").checked;
     state.runninghubEnabled = el("runninghubEnabled").checked;
+    state.excludeRunningHubAuto = el("excludeRunningHubAuto").checked;
     applyRunningHubAvailability();
     renderManagedNodes();
     if (!el("showRuntimeLogs").checked) closeOpsWindow();

@@ -115,6 +115,7 @@ class LocalStateStore:
                 "backup_outputs": "0",
                 "auto_compress_large_images": "1",
                 "runninghub_enabled": "1",
+                "exclude_runninghub_auto": "0",
                 "remote_disconnect_policy": "encrypt",
                 "remote_records_key": secrets.token_urlsafe(32),
             }
@@ -242,6 +243,7 @@ class LocalStateStore:
             "backup_outputs": self.get_setting("backup_outputs", "0") == "1",
             "auto_compress_large_images": self.get_setting("auto_compress_large_images", "1") == "1",
             "runninghub_enabled": self.get_setting("runninghub_enabled", "1") == "1",
+            "exclude_runninghub_auto": self.get_setting("exclude_runninghub_auto", "0") == "1",
             "remote_disconnect_policy": self.get_setting(
                 "remote_disconnect_policy", "encrypt"
             ),
@@ -258,6 +260,7 @@ class LocalStateStore:
         backup_outputs: bool | None = None,
         auto_compress_large_images: bool | None = None,
         runninghub_enabled: bool | None = None,
+        exclude_runninghub_auto: bool | None = None,
         remote_disconnect_policy: str | None = None,
         remote_records_key: str | None = None,
     ) -> dict[str, Any]:
@@ -267,6 +270,7 @@ class LocalStateStore:
             "backup_outputs": backup_outputs,
             "auto_compress_large_images": auto_compress_large_images,
             "runninghub_enabled": runninghub_enabled,
+            "exclude_runninghub_auto": exclude_runninghub_auto,
         }
         for key, value in bool_values.items():
             if value is not None:

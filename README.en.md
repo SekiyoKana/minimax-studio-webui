@@ -127,6 +127,7 @@ Persistent data is stored under `data/`:
 ### 2026-10-22: Node banners and RunningHub switch
 
 - Added "Enable RunningHub endpoint workflows" under Settings > System, enabled by default; disabling it blocks adding or editing RunningHub nodes while keeping existing ones.
+- Added "Exclude RunningHub nodes from auto scheduling", off by default; when enabled, auto scheduling never picks a RunningHub node and auto-submitted RunningHub workflows are rejected.
 - The node dialog now has a fixed 940 × 700 size and renders each node as a status banner.
 - Adding or editing a node now opens a dedicated dialog instead of an inline panel.
 

@@ -29,7 +29,7 @@
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
     <script src="/assets/dropdown.js?v=4" defer></script>
-    <script src="/assets/app.js?v=81&rev=92&upscale=1" defer></script>
+    <script src="/assets/app.js?v=82&rev=93&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -538,6 +538,8 @@
             <label class="switch-row"><span>本地备份生成产物</span><input id="backupOutputs" type="checkbox"><span class="switch"></span></label>
             <label class="switch-row"><span>启用 RunningHub 端点工作流</span><input id="runninghubEnabled" type="checkbox" checked><span class="switch"></span></label>
             <p class="settings-help" id="runninghubHelp">关闭后无法新增或修改 RunningHub 节点，已有节点仍会保留。</p>
+            <label class="switch-row"><span>自动调度时排除 RunningHub 节点</span><input id="excludeRunningHubAuto" type="checkbox"><span class="switch"></span></label>
+            <p class="settings-help" id="excludeRunningHubHelp">开启后，选择「自动调度」的任务不会使用 RunningHub API 节点，需要手动选择 RunningHub 节点。</p>
             <label>互联断开时处理远程记录<select id="remoteDisconnectPolicy"><option value="encrypt">加密</option><option value="delete">删除</option></select></label>
             <label>远程记录密钥<span class="password-field"><input id="remoteRecordsKey" type="password" minlength="8" maxlength="256" autocomplete="new-password"><button class="password-toggle" id="toggleRemoteRecordsKey" type="button" title="显示密钥" aria-label="显示密钥"><i data-lucide="eye"></i></button></span><small>至少 8 个字符，最多 256 个字符</small></label>
             <div class="settings-actions"><button type="button" id="manageLocalAssets"><i data-lucide="folder-cog"></i><span>管理本地素材</span></button></div>

@@ -65,6 +65,7 @@ manager = JobManager(
     health_interval=node_registry.health_interval(),
     node_runtime_update=node_registry.update_runtime,
 )
+manager.exclude_runninghub_auto = local_state.general_settings()["exclude_runninghub_auto"]
 proxy_poll_tasks: dict[str, asyncio.Task] = {}
 
 
@@ -260,6 +261,7 @@ class GeneralSettingsUpdate(BaseModel):
     backup_outputs: bool | None = None
     auto_compress_large_images: bool | None = None
     runninghub_enabled: bool | None = None
+    exclude_runninghub_auto: bool | None = None
     remote_disconnect_policy: Literal["encrypt", "delete"] | None = None
     remote_records_key: str | None = Field(default=None, min_length=8, max_length=256)
 
@@ -1118,6 +1120,7 @@ async def update_general_settings(payload: GeneralSettingsUpdate):
         result = local_state.update_general_settings(**payload.model_dump(exclude_none=True))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    manager.exclude_runninghub_auto = result["exclude_runninghub_auto"]
     return {**result, "health_interval_seconds": node_registry.health_interval()}
 
 
@@ -2730,6 +2733,8 @@ async def create_generation(
         raise HTTPException(status_code=422, detail="指定节点尚未同步该自定义工作流")
     if is_runninghub and task_type == "upscale":
         raise HTTPException(status_code=422, detail="超分任务需要使用 ComfyUI 节点")
+    if is_runninghub and comfy_node == "auto" and manager.exclude_runninghub_auto:
+        raise HTTPException(status_code=422, detail="自动调度已排除 RunningHub 节点，请手动选择 RunningHub 节点")
     validate_auto_upscale_parameters(
         auto_upscale,
         task_type,

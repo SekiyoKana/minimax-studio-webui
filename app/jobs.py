@@ -740,6 +740,7 @@ class JobManager:
         self.health_probe = health_probe
         self.health_interval = max(5.0, health_interval)
         self.node_runtime_update = node_runtime_update
+        self.exclude_runninghub_auto = False
         configured_nodes = list(
             nodes
             if nodes is not None
@@ -1404,6 +1405,8 @@ class JobManager:
                         if workflow_node_ids is not None and node_id not in workflow_node_ids:
                             continue
                         if target == "auto":
+                            if self.exclude_runninghub_auto and node["provider"] == "runninghub":
+                                continue
                             request = job.get("request", {})
                             resource_id = str(
                                 request.get("runninghub_resource_id") or ""
