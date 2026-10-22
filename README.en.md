@@ -37,7 +37,7 @@ MiniMax H3 Studio provides a Web interface, HTTP API, and desktop entry point fo
 | Local asset management | Capacity statistics, 30-day video cleanup preview, ownership checks, and artifact deletion |
 | Detail windows | No blurred backdrop, window shadow, multiple open windows, independent dragging, and a collapsible detail rail |
 | Node manager | ComfyUI and RunningHub configuration, health checks, enablement, and concurrency settings |
-| Skin system | Switchable UI skins in Settings; the default skin is unchanged and skins affect appearance only |
+| Skin system | Switchable UI skins in Settings; the default skin is the current baseline and skins affect appearance only |
 | Device sharing | LAN or Tailscale pairing, authorization revocation, proxy jobs, and read-only remote assets |
 | Agent integration | Swagger UI, OpenAPI JSON, public `AGENT.md`, and Skill creation guidance |
 
@@ -45,7 +45,7 @@ The interface also supports a resizable asset sidebar with `localStorage` persis
 
 ## Screenshot
 
-![API documentation](docs/images/h3-api-docs.jpg)
+![Studio workbench](docs/images/h3-studio-overview.jpg)
 
 ## Skins
 
@@ -53,7 +53,7 @@ The interface appearance is a presentation layer. Switch skins in Settings > App
 
 | Skin | Style |
 |---|---|
-| Meadow (default) | Light editorial: warm canvas, brick accent, sans-serif |
+| Meadow (default) | Soft-radius light theme: light grey canvas, indigo accent, frosted layers |
 | Aurora Glass | Dark glassmorphism: aurora backdrop, cyan/violet accents, serif headings |
 
 | Aurora Glass workbench | Settings > Appearance |
@@ -68,7 +68,7 @@ Rules for new modules and skins:
 4. Assets go in `static/skins/<id>/` with a `preview.jpg` (16:10).
 5. Register the skin in the `SKINS` and `SKIN_THEME_COLORS` constants in `static/app.js` and add its card to the Settings appearance panel.
 6. Canvas, WebGL and chart modules must listen for the `h3:skinchange` event and repaint using `event.detail.skin`; read `currentSkin()` once at startup.
-7. Verify the default skin is unchanged and manually check the other skin before merging.
+7. Verify the default skin still matches the current baseline, refresh documentation screenshots and asset versions after a base design change, and manually check the other skin before merging.
 
 ## Data flow
 
@@ -100,9 +100,17 @@ Persistent data is stored under `data/`:
 
 ## Update log
 
+### 2026-10-22: Soft-radius Apple-inspired visual refresh
+
+- Updated the global tokens: 10px controls, 12px cards, 16px panels and 24px dialogs, with pill-shaped buttons.
+- Moved the canvas to a neutral light grey with a blue-violet ambient glow; sidebar and header use translucent frosted glass and hairline dividers.
+- Reworked the composer into a floating rounded card with a gradient focus ring; the send button and brand mark use a blue-violet gradient.
+- Switched the accent from brick red to indigo, replaced shadows with layered soft shadows, and added a shared easing curve.
+- Upgraded the default Meadow skin to the new baseline and adapted Aurora Glass to the softer radii and controls.
+
 ### 2026-10-22: Skin system and Aurora Glass
 
-- Added a switchable skin system; the default skin keeps the previous interface unchanged.
+- Added a switchable skin system; the default skin keeps the then-current interface, and skins only change appearance.
 - Added the Aurora Glass dark skin: aurora backdrop, glass panels, serif headings, cyan and violet accents.
 - Settings > Appearance applies a skin immediately and stores it in `localStorage` under the `h3-skin` key.
 - Skin CSS lives in `static/skins/skins.css` and is fully scoped to `html[data-skin="<id>"]`.

@@ -171,11 +171,11 @@ function setControlTitle(id, value) {
 }
 
 const SKINS = [
-  { id: "default", name: "原野", nameEn: "Meadow", note: "默认 · 明亮编辑风", noteEn: "Default · light editorial" },
+  { id: "default", name: "原野", nameEn: "Meadow", note: "默认 · 柔性圆角", noteEn: "Default · soft radius" },
   { id: "aurora", name: "极光玻璃", nameEn: "Aurora Glass", note: "深色 · 玻璃拟态", noteEn: "Dark · glassmorphism" },
 ];
 const SKIN_STORAGE_KEY = "h3-skin";
-const SKIN_THEME_COLORS = { default: "#f4f5f2", aurora: "#070b12" };
+const SKIN_THEME_COLORS = { default: "#f5f5f7", aurora: "#070b12" };
 
 function normalizeSkin(id) {
   return SKINS.some((skin) => skin.id === id) ? id : "default";

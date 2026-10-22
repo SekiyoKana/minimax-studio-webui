@@ -586,4 +586,4 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 - 注册新皮肤需要同时完成：`static/app.js` 的 `SKINS` 常量、`SKIN_THEME_COLORS` 主题色、设置「外观」面板中的 `data-skin-option` 卡片。切换结果保存在 `localStorage` 的 `h3-skin` 键。
 - Canvas、WebGL、图表等无法被 CSS 换肤的绘制，必须监听 `document` 上的 `h3:skinchange` 事件，读取 `event.detail.skin` 后重绘；初始化时使用 `currentSkin()` 获取当前皮肤。若模块在皮肤切换前创建，也应读取一次初始值。
 - 自动化 Agent 调用 API 时不依赖皮肤，皮肤不会产生任何接口、字段或错误码差异。
-- 发布前验证默认皮肤与改动前一致，并手动检查「极光玻璃」皮肤下的工作台、设置、工作流管理、素材库、节点管理和任务详情页面。
+- 发布前验证默认皮肤仍符合当前视觉基线；调整基础设计时同步更新 README 截图和静态资源版本号，并手动检查「极光玻璃」皮肤下的工作台、设置、工作流管理、素材库、节点管理和任务详情页面。
