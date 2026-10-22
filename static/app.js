@@ -1048,12 +1048,12 @@ function renderWorkflowList() {
     const scope = workflow.incognito_only
       ? `<span class="workflow-scope">${localized("私密", "Private")}</span>`
       : "";
-    const toggle = `<label title="${localized("显示在生成区", "Show in composer")}"><input type="checkbox" data-workflow-action="visibility"${workflow.visible_in_composer ? " checked" : ""} aria-label="${localized("显示工作流", "Show workflow")}"></label>`;
+    const toggle = `<label class="workflow-visibility" title="${localized("显示在生成区", "Show in composer")}"><span>${localized("生成区", "Composer")}</span><input type="checkbox" role="switch" data-workflow-action="visibility"${workflow.visible_in_composer ? " checked" : ""} aria-label="${localized("显示工作流", "Show workflow")}"><span class="switch"></span></label>`;
     const actions = custom
       ? `<button type="button" data-workflow-action="edit" title="${localized("编辑工作流", "Edit workflow")}" aria-label="${localized("编辑工作流", "Edit workflow")}">${icon("pencil")}</button><button type="button" data-workflow-action="download" title="${localized("下载 API JSON", "Download API JSON")}" aria-label="${localized("下载 API JSON", "Download API JSON")}">${icon("download")}</button><button type="button" data-workflow-action="sync" title="${localized("重试同步", "Retry sync")}" aria-label="${localized("重试同步", "Retry sync")}">${icon("refresh-cw")}</button><button type="button" data-workflow-action="verify" title="${localized("验证手动上传副本", "Verify manual upload")}" aria-label="${localized("验证手动上传副本", "Verify manual upload")}">${icon("badge-check")}</button><button type="button" data-workflow-action="delete" title="${t("delete")}" aria-label="${t("delete")}">${icon("trash-2")}</button>`
       : "";
     const status = custom ? `<small class="workflow-status ${syncClass}" title="${escapeHtml(syncText)}">${escapeHtml(syncText.replaceAll("\n", " · "))}</small>` : "";
-    return `<article class="workflow-row" data-workflow-id="${escapeHtml(workflow.id)}"><div class="workflow-row-copy"><div class="workflow-row-title"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong>${scope}</div>${description ? `<small class="workflow-description" title="${escapeHtml(description)}">${escapeHtml(description)}</small>` : ""}${status}</div><div class="workflow-row-actions">${toggle}${actions}</div></article>`;
+    return `<article class="workflow-row" data-workflow-id="${escapeHtml(workflow.id)}"><div class="workflow-row-copy"><div class="workflow-row-title"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong>${scope}</div>${description ? `<small class="workflow-description" title="${escapeHtml(description)}">${escapeHtml(description)}</small>` : ""}${status}</div><div class="workflow-row-footer">${toggle}<div class="workflow-row-actions">${actions}</div></div></article>`;
   }).join("") || `<p class="quiet">${localized("暂无工作流", "No workflows")}</p>`;
   refreshIcons();
 }
@@ -2384,8 +2384,8 @@ function folderBackGlyph() {
 function renderAssetFolderCard(folder) {
   const actions = `<span class="asset-actions asset-folder-actions"><button type="button" data-folder-action="rename" data-folder-id="${escapeHtml(folder.id)}" title="${t("renameFolder")}" aria-label="${t("renameFolder")}">${icon("pencil")}</button><button type="button" data-folder-action="delete" data-folder-id="${escapeHtml(folder.id)}" title="${t("deleteFolder")}" aria-label="${t("deleteFolder")}">${icon("trash-2")}</button></span>`;
   return `<article class="asset-card asset-folder-card${state.assetFolderId === folder.id ? " active" : ""}" data-asset-folder-card="${escapeHtml(folder.id)}" data-folder-drop-id="${escapeHtml(folder.id)}" tabindex="0" role="button" aria-label="${escapeHtml(folder.name)}">
-    <div class="asset-folder-preview">${folderGlyph("folder")}${actions}</div>
-    <div class="asset-folder-meta"><strong title="${escapeHtml(folder.name)}">${escapeHtml(folder.name)}</strong><small>${Number(folder.count || 0)} 项素材</small></div>
+    <div class="asset-folder-preview">${folderGlyph("folder")}</div>
+    <div class="asset-folder-meta"><strong title="${escapeHtml(folder.name)}">${escapeHtml(folder.name)}</strong><small>${Number(folder.count || 0)} 项素材</small>${actions}</div>
   </article>`;
 }
 

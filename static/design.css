@@ -623,3 +623,115 @@ button:active:not(:disabled) { transform: scale(.97); }
 .workflow-row-actions button { border-radius: 50%; }
 
 .settings-dialog { width: min(640px, 100%); }
+
+/* Folder hover actions: a compact frosted capsule aligned to the card corner */
+.asset-folder-actions {
+  top: 6px;
+  right: 6px;
+  gap: 0;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .12);
+  backdrop-filter: blur(10px);
+}
+.asset-folder-actions button {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+.asset-folder-actions button:hover { background: var(--fill-tertiary); color: var(--ink); }
+.asset-folder-actions button[data-folder-action="delete"]:hover {
+  background: rgba(227, 0, 0, .08);
+  color: var(--danger);
+}
+.asset-folder-card:hover .asset-folder-preview { background: var(--fill-quaternary); }
+
+/* Workflow cards: labeled composer visibility switch in the footer */
+.workflow-row-footer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 6px;
+  grid-column: 1 / -1;
+}
+.workflow-visibility {
+  display: inline-flex;
+  min-width: 0;
+  height: 28px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px 0 10px;
+  border-radius: 999px;
+  background: var(--fill-tertiary);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.workflow-visibility:hover { background: var(--fill-quaternary); color: var(--ink); }
+.workflow-visibility:has(input:checked) { color: var(--ink); }
+.workflow-visibility input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.workflow-visibility .switch {
+  width: 28px;
+  height: 16px;
+  background: rgba(0, 0, 0, .18);
+}
+.workflow-visibility .switch::after {
+  top: 3px;
+  left: 3px;
+  width: 10px;
+  height: 10px;
+}
+.workflow-visibility input:checked + .switch { background: var(--blue); }
+.workflow-visibility input:checked + .switch::after { transform: translateX(12px); }
+.workflow-visibility:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+.workflow-row-actions button { width: 24px; height: 24px; }
+
+/* Editor visibility row as an inset card */
+.workflow-visible-row {
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--fill-tertiary);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Folder actions sit on the caption row so they never cover the folder art */
+.asset-folder-card .asset-folder-meta { position: relative; padding-right: 62px; }
+.asset-folder-actions {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  gap: 2px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.asset-folder-actions button {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--fill-tertiary);
+  color: var(--muted);
+}
+.asset-folder-actions button svg { color: inherit; stroke: currentColor; width: 13px; height: 13px; }
+.asset-folder-actions button:hover { background: var(--fill-quaternary); color: var(--ink); }
+.asset-folder-actions button[data-folder-action="delete"]:hover {
+  background: rgba(227, 0, 0, .08);
+  color: var(--danger);
+}
