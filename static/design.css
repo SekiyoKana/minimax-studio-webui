@@ -988,3 +988,36 @@ button { appearance: none; -webkit-appearance: none; }
   background: var(--fill-tertiary);
   border-color: var(--line-strong);
 }
+
+/* Conversation meta and reference cards follow the active skin */
+.message-meta { color: var(--muted); }
+.message-asset {
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--fill-tertiary);
+}
+.message-asset:hover {
+  border-color: var(--line-strong);
+  border-left-color: var(--blue);
+  background: var(--fill-quaternary);
+}
+.message-asset > img,
+.message-asset > video { background: var(--fill-quaternary); }
+.message-plan.speed,
+.message-plan.turbo,
+.message-plan.h3-sa,
+.message-plan.vdn-h3,
+.message-plan.digital-human,
+.message-plan.music3 {
+  border-color: var(--line-strong);
+  background: var(--fill-tertiary);
+  color: var(--muted);
+}
+.message-plan.nsfw {
+  border-color: var(--line-strong);
+  background: var(--accent-soft);
+  color: var(--danger);
+}
+.progress-track { background: var(--fill-quaternary); }
+.assistant-message.output-focus { background: var(--accent-soft); }
