@@ -118,7 +118,7 @@ const COPY = {
   },
   en: {
     assetLibrary: "Assets", assetSearch: "Search assets", allStatuses: "All statuses", queued: "Queued", running: "Running", completed: "Completed", failed: "Failed", cancelled: "Cancelled",
-    conversation: "H3 Chat", switchLanguage: "切换为中文", apiDocs: "API documentation", newGeneration: "New generation", close: "Close", assets: "Assets",
+    conversation: "H3 Chat", switchLanguage: "Switch to Chinese", apiDocs: "API documentation", newGeneration: "New generation", close: "Close", assets: "Assets",
     connectEngine: "Connecting to inference nodes", offline: "Service offline", autoSchedule: "Auto", nodePending: "Awaiting node", online: "Online", available: "available", nodeOffline: "Offline", disabled: "Disabled", busy: "Running",
     balance: "Balance", credits: "credits", recentCost: "Recent call cost", accountUnavailable: "Account unavailable", workflowUnavailable: "Workflow information unavailable", balancePending: "Loading balance", accountTasks: "Account tasks", balanceUpdated: "balance updated", balanceFailed: "balance read failed",
     noAssets: "No assets", loading: "Loading", allLoaded: "All assets loaded", loadFailed: "Load failed", startCreating: "Start creating", you: "You", allAssets: "All assets", unfiled: "Unfiled", folders: "Folders", editAssets: "Edit assets", exitAssetEdit: "Exit editing", selectedAssets: "Selected", newFolder: "New folder", renameFolder: "Rename folder", deleteFolder: "Delete folder", moveTo: "Move to", noSelection: "No assets selected", folderName: "Folder name", folderPurpose: "Organize short-drama generation tasks", folderDeleteConfirm: "Deleting this folder also deletes its task records, source files, and generated outputs. Continue?", activeFolderDelete: "This folder contains active tasks. Cancel or wait for them first.", regenerateFolder: "Choose a folder for the regenerated task",
@@ -387,6 +387,82 @@ function applyStaticLocale() {
   setText(".node-enabled-row > span:first-child", "Enable node");
   setText("#cancelNodeEdit", "Cancel");
   setText("#nodeEditor button.primary", "Save node");
+  setTitle("#closeNodeManager", "Close node manager");
+  setTitle("#cancelNodeEditIcon", "Close node editor");
+  setTitle("#closeWorkflowManager", "Close workflow manager");
+  setTitle("#addWorkflowButton", "Add workflow");
+  setTitle("#cancelWorkflowEditIcon", "Close workflow editor");
+  setTitle("#refreshAssets", "Refresh assets");
+  document.querySelector("#assetFoldersPanel")?.setAttribute("aria-label", "Asset folders");
+  document.querySelector("#sidebarResizer")?.setAttribute("aria-label", "Resize asset library");
+  setTitle("#workflowControl", "Workflow");
+  setTitle("#nodeControl", "Inference node");
+  document.querySelector("#mentionMenu")?.setAttribute("aria-label", "Quick actions and images");
+  document.querySelector("#opsWindow")?.setAttribute("aria-label", "Runtime status and logs");
+  setText("#aiPromptSwitch > span:first-child", "Enable AI prompt assistance");
+  el("autoUpscale").setAttribute("aria-label", "Upscale after generation");
+  setText("#remoteDisconnectLabel", "Handle remote records when disconnected");
+  setText('#remoteDisconnectPolicy option[value="encrypt"]', "Encrypt");
+  setText('#remoteDisconnectPolicy option[value="delete"]', "Delete");
+  setText("#remoteRecordsKeyLabel", "Remote records key");
+  setText("#remoteRecordsKeyHelp", "At least 8 and at most 256 characters");
+  setTitle("#toggleRemoteRecordsKey", "Show key");
+  setText("#workflowEditorSubtitle", "Configure the API graph, field mappings, and target nodes");
+  setText("#workflowFileStatus", "Choose a ComfyUI API-format workflow");
+  setText("#workflowFileHelp", "If syncing fails, download the JSON, place it in ComfyUI's user workflows folder, then validate.");
+  setTitle("#addWorkflowFieldMapping", "Add field mapping");
+  setTitle("#addWorkflowReferenceMapping", "Add reference mapping");
+  setTitle("#closePeering", "Close device sharing");
+  setTitle("#closeGlobalSettings", "Close settings");
+  setTitle("#closeVideoUpscale", "Close");
+  setTitle("#cancelAutoUpscaleConfirm", "Close");
+  setTitle("#closeLocalAssets", "Close");
+  setTitle("#closeOldVideoCleanup", "Close");
+  setTitle("#closeLocalAssetPreview", "Close preview");
+  setTitle("#closeUnlockAssets", "Close");
+  setTitle("#closeAssetDetail", "Close asset details");
+  setTitle("#closeAssetFolderName", "Close");
+  setTitle("#closeAssetFolderPicker", "Close");
+  setText("#autoUpscaleConfirmSubtitle", "Choose the upscale plan to run after generation");
+  setLeadingText("#autoUpscaleCategoryLabel", "Upscale type");
+  setLeadingText("#autoUpscaleScaleLabel", "Upscale scale");
+  setText("#confirmAutoUpscaleLabel", "Confirm");
+  setText('#videoUpscaleCategory option[value="real"]', "Live action");
+  setText('#videoUpscaleCategory option[value="anime"]', "Animation");
+  setText('#videoUpscaleCategory option[value="3d"]', "3D");
+  setText('#autoUpscaleConfirmCategory option[value="real"]', "Live action");
+  setText('#autoUpscaleConfirmCategory option[value="anime"]', "Animation");
+  setText('#autoUpscaleConfirmCategory option[value="3d"]', "3D");
+  setText("#localAssetsSubtitle", "Delete output files while keeping task and workflow records");
+  setText("#localAssetsSelectAllLabel", "Select all loaded assets");
+  setTitle("#clearOldVideos", "Delete video assets older than 30 days");
+  setText("#clearOldVideos span", "Clear videos older than 30 days");
+  setText("#deleteLocalArtifactsLabel", "Delete selected outputs");
+  setText("#oldVideoCleanupSubtitle", "The following items will be deleted after confirmation; task records are kept");
+  setText("#cancelOldVideoCleanup", "Cancel");
+  setText("#confirmOldVideoCleanup span", "Delete");
+  setText("#unlockAssetsTitle", "Unlock encrypted assets");
+  setText("#unlockAssetsKeyLabel", "Device key");
+  setTitle("#toggleUnlockAssetsKey", "Show key");
+  setText("#unlockAssetsSubmitLabel", "Unlock this device's assets");
+  setText("#assetFolderPickerTitle", "Choose a folder");
+  setText("#assetFolderPickerHint", "Choose the destination folder for the selected assets");
+  setText("#cancelAssetFolderName", "Cancel");
+  setText("#assetFolderNameForm button.primary", "Save");
+  setText("#incognitoStatus span", t("incognito"));
+  setTitle("#incognitoStatus", "Exit incognito mode");
+  setTitle("#closeSecret", "Close");
+  setText("#localAssetsTitle", "Manage local assets");
+  setText("#oldVideoCleanupTitle", "Clear videos older than 30 days");
+  setText("#autoUpscaleConfirmTitle", "Confirm auto upscale");
+  setTitle("#assetStatusFilter", "Asset status filter");
+  setTitle("#conversationDeviceFilter", "Conversation device filter");
+  setText("#conversationFilters span", "Device filter");
+  setText("#conversationFilterPanel label > span", "Show devices");
+  el("themeGrid").setAttribute("aria-label", "Appearance");
+  document.querySelector(".local-asset-preview-dialog")?.setAttribute("aria-label", "Local asset preview");
+  el("workflowSelect").setAttribute("aria-label", "Workflow");
+  document.querySelectorAll("select").forEach((select) => select.dispatchEvent(new Event("cs:sync")));
   setText(".secret-dialog h2", "Incognito access");
   setText('label[for="secretCode"]', "Access code");
   setText(".secret-submit", "Enter incognito mode");
@@ -481,7 +557,7 @@ function togglePasswordField(inputId, buttonId) {
   const visible = input.type === "text";
   input.type = visible ? "password" : "text";
   button.innerHTML = icon(visible ? "eye" : "eye-off");
-  button.title = visible ? "显示密钥" : "隐藏密钥";
+  button.title = visible ? localized("显示密钥", "Hide key") : localized("隐藏密钥", "Show key");
   button.setAttribute("aria-label", button.title);
   refreshIcons();
 }
@@ -522,7 +598,8 @@ function modelLabel(job) {
   if (job.request?.workflow_id?.startsWith("wf-")) return localized("自定义工作流", "Custom workflow");
   if (job.request?.model_variant === "music3-int8") return "Music3 INT8";
   if (job.request?.task_type === "upscale") {
-    return `${{ real: "真人", anime: "动画", "3d": "3D" }[job.request?.upscale_category] || "超分"} · ${job.request?.upscale_scale || 2}x`;
+    const category = { real: localized("真人", "Live action"), anime: localized("动画", "Animation"), "3d": "3D" }[job.request?.upscale_category] || localized("超分", "Upscale");
+  return `${category} · ${job.request?.upscale_scale || 2}x`;
   }
   return job.request?.model_variant === "ref2va-fp8" ? "Ref2VA FP8" : "FL2VA FP8";
 }
@@ -832,13 +909,13 @@ function renderManagedNodes() {
     const capacity = Number(node.capacity || node.max_concurrency || 1);
     const activity = node.busy
       ? ` · ${localized("并发", "capacity")} ${running}/${capacity}`
-      : node.queue_depth ? ` · 排队 ${node.queue_depth}` : "";
+      : node.queue_depth ? ` · ${localized("排队", "queued")} ${node.queue_depth}` : "";
     const restricted = node.provider === "runninghub" && state.runninghubEnabled === false;
     const statusDot = `<i class="node-status-dot ${status.className}" title="${escapeHtml(status.label)}${escapeHtml(activity)}"></i>`;
     if (node.remote_proxy) {
-      const owner = node.owner_name || node.source?.name || "远程设备";
+      const owner = node.owner_name || node.source?.name || localized("远程设备", "Remote device");
       return `<div class="node-banner remote-node" data-node-id="${escapeHtml(node.id)}">
-        <div class="node-banner-body"><div class="node-banner-head"><strong>${escapeHtml(node.name || "远程推理节点")}</strong>${statusDot}</div><small>${escapeHtml(localized("远程代理节点", "Remote proxy node"))} · ${escapeHtml(t("owner"))} ${escapeHtml(owner)}${escapeHtml(activity)}</small></div>
+        <div class="node-banner-body"><div class="node-banner-head"><strong>${escapeHtml(node.name || localized("远程推理节点", "Remote inference node"))}</strong>${statusDot}</div><small>${escapeHtml(localized("远程代理节点", "Remote proxy node"))} · ${escapeHtml(t("owner"))} ${escapeHtml(owner)}${escapeHtml(activity)}</small></div>
         <div class="node-row-actions" aria-hidden="true"></div>
       </div>`;
     }
@@ -873,7 +950,7 @@ function renderManagedNodes() {
         <small>${location}${provider}${workflow}${node.provider === "runninghub" && node.workflow_name && node.workflow_name !== node.name ? ` · ${escapeHtml(node.name)}` : ""}${keyState} · ID ${escapeHtml(node.id)}${node.last_checked ? ` · ${formatTime(node.last_checked, true)} ${checkedLabel}` : ""}${escapeHtml(activity)}</small>
         ${restricted ? `<small class="node-restricted">${localized("RunningHub 端点工作流已关闭", "RunningHub endpoint workflows are disabled")}</small>` : ""}
       </div>
-      <div class="node-row-actions"><button type="button" data-node-action="edit" title="编辑节点" aria-label="编辑 ${escapeHtml(node.name)}">${icon("pencil")}</button><button type="button" data-node-action="delete" title="删除节点" aria-label="删除 ${escapeHtml(node.name)}">${icon("trash-2")}</button></div>
+      <div class="node-row-actions"><button type="button" data-node-action="edit" title="${localized("编辑节点", "Edit node")}" aria-label="${localized("编辑节点", "Edit node")} ${escapeHtml(node.name)}">${icon("pencil")}</button><button type="button" data-node-action="delete" title="${localized("删除节点", "Delete node")}" aria-label="${localized("删除节点", "Delete node")} ${escapeHtml(node.name)}">${icon("trash-2")}</button></div>
     </div>`;
   }).join("") : `<p class="quiet">${state.locale === "en" ? "No nodes" : "暂无节点"}</p>`;
   refreshIcons();
@@ -1050,7 +1127,7 @@ function workflowNodeSelect(graph, selected = "", className = "workflow-node-sel
   const options = Object.entries(graph || {}).map(([nodeId, node]) => (
     `<option value="${escapeHtml(nodeId)}"${nodeId === selected ? " selected" : ""}>${escapeHtml(`${nodeId} · ${node.class_type || "Node"}`)}</option>`
   )).join("");
-  return `<select class="${className}" aria-label="工作流节点">${options}</select>`;
+  return `<select class="${className}" aria-label="${localized("工作流节点", "Workflow node")}">${options}</select>`;
 }
 
 function updateWorkflowMappingInputOptions(row) {
@@ -1072,7 +1149,7 @@ function renderWorkflowFieldMapping(mapping = {}) {
   const fieldOptions = WORKFLOW_FIELDS.map(([value, label]) => `<option value="${value}"${mapping.field === value ? " selected" : ""}>${state.locale === "en" ? value : label}</option>`).join("");
   const row = document.createElement("div");
   row.className = "workflow-mapping-row";
-  row.innerHTML = `<select data-workflow-field aria-label="生成字段">${fieldOptions}</select>${workflowNodeSelect(state.workflowDraftJson, nodeId, "workflow-node-select")}<select data-workflow-input aria-label="节点输入"></select><button type="button" data-remove-mapping title="移除映射" aria-label="移除映射">${icon("trash-2")}</button>`;
+  row.innerHTML = `<select data-workflow-field aria-label="${localized("生成字段", "Field")}">${fieldOptions}</select>${workflowNodeSelect(state.workflowDraftJson, nodeId, "workflow-node-select")}<select data-workflow-input aria-label="${localized("节点输入", "Node input")}"></select><button type="button" data-remove-mapping title="${localized("移除映射", "Remove mapping")}" aria-label="${localized("移除映射", "Remove mapping")}">${icon("trash-2")}</button>`;
   row.querySelector(".workflow-node-select").dataset.workflowNode = "";
   row.querySelector(".workflow-node-select").classList.remove("workflow-node-select");
   row.querySelector("[data-workflow-node]").addEventListener("change", () => updateWorkflowMappingInputOptions(row));
@@ -1088,7 +1165,7 @@ function renderWorkflowReferenceMapping(mapping = {}) {
   row.className = "workflow-mapping-row reference-row";
   const type = mapping.type || "image";
   const typeOptions = ["image", "video", "audio"].map((value) => `<option value="${value}"${type === value ? " selected" : ""}>${value}</option>`).join("");
-  row.innerHTML = `<select data-ref-type aria-label="素材类型">${typeOptions}</select><input data-ref-index type="number" min="1" max="15" value="${Number(mapping.index || 1)}" aria-label="同类型序号">${workflowNodeSelect(state.workflowDraftJson, nodeId, "workflow-node-select")}<select data-workflow-input aria-label="节点输入"></select><label class="workflow-required-option"><input data-ref-required type="checkbox"${mapping.required === false ? "" : " checked"}><span>${localized("必需", "Required")}</span></label><button type="button" data-remove-mapping title="移除映射" aria-label="移除映射">${icon("trash-2")}</button>`;
+  row.innerHTML = `<select data-ref-type aria-label="${localized("素材类型", "Reference type")}">${typeOptions}</select><input data-ref-index type="number" min="1" max="15" value="${Number(mapping.index || 1)}" aria-label="${localized("同类型序号", "Reference index")}">${workflowNodeSelect(state.workflowDraftJson, nodeId, "workflow-node-select")}<select data-workflow-input aria-label="${localized("节点输入", "Node input")}"></select><label class="workflow-required-option"><input data-ref-required type="checkbox"${mapping.required === false ? "" : " checked"}><span>${localized("必需", "Required")}</span></label><button type="button" data-remove-mapping title="${localized("移除映射", "Remove mapping")}" aria-label="${localized("移除映射", "Remove mapping")}">${icon("trash-2")}</button>`;
   row.querySelector(".workflow-node-select").dataset.workflowNode = "";
   row.querySelector(".workflow-node-select").classList.remove("workflow-node-select");
   row.querySelector("[data-workflow-node]").addEventListener("change", () => updateWorkflowMappingInputOptions(row));
@@ -1382,7 +1459,7 @@ async function handleWorkflowJsonFile(file) {
   }
   try {
     const graph = JSON.parse(await file.text());
-    if (!graph || typeof graph !== "object" || Array.isArray(graph) || !Object.keys(graph).length) throw new Error("JSON 顶层必须是非空节点对象");
+    if (!graph || typeof graph !== "object" || Array.isArray(graph) || !Object.keys(graph).length) throw new Error(localized("JSON 顶层必须是非空节点对象", "The JSON root must be a non-empty node object"));
     state.workflowDraftJson = graph;
     renderWorkflowMappingRows();
     renderWorkflowResultNodes();
@@ -1848,9 +1925,9 @@ async function api(url, options = {}) {
         const field = Array.isArray(item.loc) ? item.loc.filter((part) => part !== "body").join(".") : "";
         return field ? `${field}：${item.msg}` : item.msg;
       }).filter(Boolean).join("；");
-      throw new Error(message || `请求失败 (${response.status})`);
+      throw new Error(message || localized(`请求失败 (${response.status})`, `Request failed (${response.status})`));
     }
-    throw new Error(typeof detail === "string" ? detail : `请求失败 (${response.status})`);
+    throw new Error(typeof detail === "string" ? detail : localized(`请求失败 (${response.status})`, `Request failed (${response.status})`));
   }
   return payload;
 }
@@ -2265,12 +2342,12 @@ function renderReferences() {
         ? `<video src="${escapeHtml(item.url)}" muted playsinline preload="metadata" aria-label="${escapeHtml(name)}"></video>`
         : `<span class="reference-type">${icon(kind === "video" ? "film" : kind === "audio" ? "audio-lines" : kind === "file" ? "file" : "image")}</span>`;
     const thumb = item.url
-      ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer" class="reference-link" aria-label="查看${escapeHtml(name)}">${media}</a>`
+      ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer" class="reference-link" aria-label="${localized("查看", "View")} ${escapeHtml(name)}">${media}</a>`
       : media;
     return `<div class="reference-chip" title="${escapeHtml(name)}">
       <span class="reference-preview">${thumb}</span>
       <span class="reference-info"><b>${escapeHtml(labels[index])}</b><small>${escapeHtml(name)}${item.size ? ` · ${formatBytes(item.size)}` : ""}</small></span>
-      ${item.remote ? "" : `<button type="button" data-remove-reference="${index}" title="移除素材" aria-label="移除素材">${icon("x")}</button>`}
+      ${item.remote ? "" : `<button type="button" data-remove-reference="${index}" title="${localized("移除素材", "Remove file")}" aria-label="${localized("移除素材", "Remove file")}">${icon("x")}</button>`}
     </div>`;
   }).join("");
   renderRunningHubParameters();
@@ -2491,7 +2568,7 @@ function renderAssetFolderCard(folder) {
   const actions = `<span class="asset-actions asset-folder-actions"><button type="button" data-folder-action="rename" data-folder-id="${escapeHtml(folder.id)}" title="${t("renameFolder")}" aria-label="${t("renameFolder")}">${icon("pencil")}</button><button type="button" data-folder-action="delete" data-folder-id="${escapeHtml(folder.id)}" title="${t("deleteFolder")}" aria-label="${t("deleteFolder")}">${icon("trash-2")}</button></span>`;
   return `<article class="asset-card asset-folder-card${state.assetFolderId === folder.id ? " active" : ""}" data-asset-folder-card="${escapeHtml(folder.id)}" data-folder-drop-id="${escapeHtml(folder.id)}" tabindex="0" role="button" aria-label="${escapeHtml(folder.name)}">
     <div class="asset-folder-preview">${folderGlyph("folder")}</div>
-    <div class="asset-folder-meta"><strong title="${escapeHtml(folder.name)}">${escapeHtml(folder.name)}</strong><small>${Number(folder.count || 0)} 项素材</small>${actions}</div>
+    <div class="asset-folder-meta"><strong title="${escapeHtml(folder.name)}">${escapeHtml(folder.name)}</strong><small>${Number(folder.count || 0)} ${localized("项素材", Number(folder.count || 0) === 1 ? "asset" : "assets")}</small>${actions}</div>
   </article>`;
 }
 
@@ -2706,15 +2783,15 @@ function assetAction(job) {
     return inputAction || upscaleAction ? `<span class="asset-actions">${inputAction}${upscaleAction}</span>` : "";
   }
   if (job.status === "queued") {
-    return `<span class="asset-actions"><button type="button" data-job-action="edit" data-job-id="${jobId}" title="修改" aria-label="修改">${icon("pencil")}</button><button type="button" data-job-action="cancel" data-job-id="${jobId}" title="取消" aria-label="取消">${icon("square")}</button></span>`;
+    return `<span class="asset-actions"><button type="button" data-job-action="edit" data-job-id="${jobId}" title="${localized("修改", "Edit")}" aria-label="${localized("修改", "Edit")}">${icon("pencil")}</button><button type="button" data-job-action="cancel" data-job-id="${jobId}" title="${localized("取消", "Cancel")}" aria-label="${localized("取消", "Cancel")}">${icon("square")}</button></span>`;
   }
   if (job.status === "running") {
-    return `<span class="asset-actions"><button type="button" data-job-action="cancel" data-job-id="${jobId}" title="取消" aria-label="取消">${icon("square")}</button></span>`;
+    return `<span class="asset-actions"><button type="button" data-job-action="cancel" data-job-id="${jobId}" title="${localized("取消", "Cancel")}" aria-label="${localized("取消", "Cancel")}">${icon("square")}</button></span>`;
   }
   const inputAction = job.status === "completed" && job.result_url
     ? `<button type="button" data-asset-input="${jobId}" title="${t("useAsInput")}" aria-label="${t("useAsInput")}">${icon("file-input")}</button>`
     : "";
-  return `<span class="asset-actions">${inputAction}${videoUpscaleAction(job)}<button type="button" data-job-action="delete" data-job-id="${jobId}" title="删除" aria-label="删除">${icon("trash-2")}</button></span>`;
+  return `<span class="asset-actions">${inputAction}${videoUpscaleAction(job)}<button type="button" data-job-action="delete" data-job-id="${jobId}" title="${t("delete")}" aria-label="${t("delete")}">${icon("trash-2")}</button></span>`;
 }
 
 function renderAssetCard(job) {
@@ -2729,17 +2806,17 @@ function renderAssetCard(job) {
         ? `<img src="${escapeHtml(job.result_url)}" alt="${escapeHtml(modelLabel(job))}" loading="lazy">`
         : mediaType === "file"
           ? `<span class="asset-audio-icon" aria-hidden="true">${icon("file")}</span>`
-        : `<video src="${escapeHtml(job.preview_url || job.result_url)}" muted playsinline preload="none" aria-label="${escapeHtml(modelLabel(job))} 生成视频"></video><span class="asset-play">${icon("play")}</span>`
+        : `<video src="${escapeHtml(job.preview_url || job.result_url)}" muted playsinline preload="none" aria-label="${escapeHtml(modelLabel(job))} ${localized("生成视频", "generated video")}"></video><span class="asset-play">${icon("play")}</span>`
     : `<span class="asset-placeholder ${job.status}">${icon(job.status === "running" ? "loader-circle" : job.status === "queued" ? "clock-3" : job.status === "failed" ? "triangle-alert" : "circle-slash-2")}${job.status === "running" ? `<b>${job.progress || 0}%</b>` : ""}</span>`;
   const editable = state.assetEditMode && !job.peer_asset && !job.request?.incognito;
   const draggable = editable ? "true" : job.status === "completed" && job.result_url ? "true" : "false";
   const selected = state.assetSelectedIds.has(job.id);
   const select = editable
-    ? `<label class="asset-select" data-asset-select><input type="checkbox" value="${escapeHtml(job.id)}" aria-label="选择 ${escapeHtml(shortTitle(job))}" ${selected ? "checked" : ""}></label>`
+    ? `<label class="asset-select" data-asset-select><input type="checkbox" value="${escapeHtml(job.id)}" aria-label="${localized("选择", "Select")} ${escapeHtml(shortTitle(job))}" ${selected ? "checked" : ""}></label>`
     : "";
   const owner = job.owner_name ? `<span class="asset-owner" title="${t("owner")}: ${escapeHtml(job.owner_name)}">${icon("tag")}<span>${escapeHtml(job.owner_name)}</span></span>` : "";
   const renameAction = !job.peer_asset && job.status === "completed" && job.result_url
-    ? `<button type="button" data-job-action="rename" data-job-id="${escapeHtml(job.id)}" title="重命名生成文件" aria-label="重命名生成文件">${icon("pencil")}</button>`
+    ? `<button type="button" data-job-action="rename" data-job-id="${escapeHtml(job.id)}" title="${localized("重命名生成文件", "Rename generated file")}" aria-label="${localized("重命名生成文件", "Rename generated file")}">${icon("pencil")}</button>`
     : "";
   return `<article class="asset-card${editable ? " editable" : ""}${selected ? " selected" : ""}" data-asset-job="${escapeHtml(job.id)}" data-asset-output="${editable ? "false" : draggable}" data-asset-editable="${editable}" draggable="${draggable}" tabindex="0" aria-label="${escapeHtml(executionModeLabel(job))}, ${escapeHtml(modelLabel(job))}, ${escapeHtml(statusLabel(job.status))}">
     <div class="asset-preview${audio || mediaType === "file" ? " music" : ""}">${select}${preview}${assetAction(job)}</div>
@@ -2758,7 +2835,7 @@ function renderAssetDirectoryHeader() {
     : state.assetFolders.find((item) => item.id === state.assetFolderId);
   if (!folder) return "";
   const kind = state.assetFolderId === "__unfiled__" ? "unfiled" : "folder";
-  return `<div class="asset-directory-header" data-directory-folder-id="${escapeHtml(state.assetFolderId)}">${folderGlyph(kind)}<span class="asset-directory-copy"><strong>${escapeHtml(folder.name)}</strong><small>${Number(folder.count || state.assetTotal)} 项素材</small></span></div>`;
+  return `<div class="asset-directory-header" data-directory-folder-id="${escapeHtml(state.assetFolderId)}">${folderGlyph(kind)}<span class="asset-directory-copy"><strong>${escapeHtml(folder.name)}</strong><small>${Number(folder.count || state.assetTotal)} ${localized("项素材", "assets")}</small></span></div>`;
 }
 
 function renderAssets(total = state.assetTotal) {
@@ -3001,7 +3078,7 @@ function updateConversationDevices(devices) {
   state.conversationDevices = devices;
   const select = el("conversationDeviceFilter");
   if (!select) return;
-  select.innerHTML = devices.map((device) => `<option value="${escapeHtml(device.device_id)}">${escapeHtml(device.name)}${device.local ? " · 本机" : ""}</option>`).join("");
+  select.innerHTML = devices.map((device) => `<option value="${escapeHtml(device.device_id)}">${escapeHtml(device.name)}${device.local ? ` · ${localized("本机", "This device")}` : ""}</option>`).join("");
   Array.from(select.options).forEach((option) => { option.selected = state.conversationDeviceIds.has(option.value); });
   el("conversationFilters").hidden = devices.length < 2;
   if (devices.length < 2) {
@@ -3018,10 +3095,10 @@ function updateConversationFilterChrome() {
   if (!select || !count) return;
   const selected = Array.from(select.selectedOptions);
   count.textContent = selected.length === 0
-    ? "全部"
+    ? localized("全部", "All")
     : selected.length === 1
       ? selected[0].textContent
-      : `${selected.length} 个设备`;
+      : `${selected.length} ${localized("个设备", "devices")}`;
 }
 
 async function refreshSharedRuntime() {
@@ -3071,7 +3148,7 @@ function referenceSummary(job) {
   if (!references.length) return "";
   return `<div class="message-assets">${references.map((item, index) => {
     const itemIcon = item.type === "image" ? "image" : item.type === "video" ? "film" : "audio-lines";
-    const name = item.name || "参考素材";
+    const name = item.name || localized("参考素材", "Reference file");
     const url = item.url || `/api/v1/generations/${encodeURIComponent(job.id)}/references/${index}`;
     let preview = `<span class="message-asset-icon">${icon(itemIcon)}</span>`;
     if (item.type === "image") {
@@ -3081,7 +3158,7 @@ function referenceSummary(job) {
     } else if (item.type === "audio") {
       preview = `<audio src="${escapeHtml(url)}" controls preload="metadata" aria-label="${escapeHtml(name)}"></audio>`;
     }
-    return `<a class="message-asset" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="查看${escapeHtml(name)}">${preview}<span class="message-asset-copy"><b>${escapeHtml(labels[index])}</b><small>${escapeHtml(name)}</small></span></a>`;
+    return `<a class="message-asset" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="${localized("查看", "View")} ${escapeHtml(name)}">${preview}<span class="message-asset-copy"><b>${escapeHtml(labels[index])}</b><small>${escapeHtml(name)}</small></span></a>`;
   }).join("")}</div>`;
 }
 
@@ -3323,6 +3400,11 @@ async function openAssetDetail(jobId) {
   const windowNode = el("assetDetailTemplate").content.cloneNode(true).firstElementChild;
   const cascade = Math.min(state.assetDetailWindowOrder.length * 28, 168);
   windowNode.querySelector("#assetDetailTitle").textContent = t("assetDetail");
+  const detailClose = windowNode.querySelector("#closeAssetDetail");
+  if (detailClose) {
+    detailClose.title = localized("关闭素材详情", "Close asset details");
+    detailClose.setAttribute("aria-label", localized("关闭素材详情", "Close asset details"));
+  }
   windowNode.querySelector("[data-detail-toggle] span").textContent = localized("详情", "Details");
   windowNode.querySelector("[data-detail-toggle]").title = localized("显示详情", "Show details");
   windowNode.querySelector("[data-detail-toggle]").setAttribute("aria-label", localized("显示详情", "Show details"));
@@ -3937,13 +4019,13 @@ function renderQueue(queue) {
     if (isAnonymousQueueJob(job)) {
       return `<div class="queue-row">
         <span class="queue-position">${job.status === "running" ? icon("loader-circle") : job.queue_position}</span>
-        <span><strong>${escapeHtml(job.stage || "有任务正在运行中")}</strong></span>
+        <span><strong>${escapeHtml(job.stage || localized("有任务正在运行中", "A task is running"))}</strong></span>
       </div>`;
     }
     return `<div class="queue-row" data-scroll-job="${job.id}">
       <span class="queue-position">${job.status === "running" ? icon("loader-circle") : job.queue_position}</span>
       <span><strong>${escapeHtml(shortTitle(job))}</strong><small>${escapeHtml(nodeLabel(job))} · ${escapeHtml(executionModeLabel(job))} · ${escapeHtml(job.stage || statusLabel(job.status))} · ${job.progress || 0}% · ${formatElapsed(job.elapsed_seconds)}</small></span>
-      <button type="button" data-job-action="cancel" data-job-id="${job.id}" title="取消任务" aria-label="取消任务">${icon("square")}</button>
+      <button type="button" data-job-action="cancel" data-job-id="${job.id}" title="${localized("取消任务", "Cancel task")}" aria-label="${localized("取消任务", "Cancel task")}">${icon("square")}</button>
     </div>`;
   }).join("") : `<p class="quiet">${state.locale === "en" ? "Queue empty" : "队列为空"}</p>`;
   refreshIcons();
@@ -4117,12 +4199,12 @@ async function saveGeneralSettings(event) {
   const seconds = Number(el("globalHealthInterval").value);
   const key = el("remoteRecordsKey").value;
   if (!Number.isInteger(seconds) || seconds < 5 || seconds > 3600) {
-    errorBox.textContent = "节点状态查询周期必须为 5 至 3600 秒";
+    errorBox.textContent = localized("节点状态查询周期必须为 5 至 3600 秒", "Node status interval must be between 5 and 3600 seconds");
     return;
   }
   const keyLength = Array.from(key).length;
   if (keyLength < 8 || keyLength > 256) {
-    errorBox.textContent = "远程记录密钥长度必须为 8 至 256 个字符";
+    errorBox.textContent = localized("远程记录密钥长度必须为 8 至 256 个字符", "Remote records key must be 8 to 256 characters");
     return;
   }
   try {
@@ -4156,7 +4238,7 @@ async function saveGeneralSettings(event) {
     if (!el("showRuntimeLogs").checked) closeOpsWindow();
     el("globalSettingsModal").hidden = true;
     document.body.classList.remove("modal-open");
-    showToast("设置已保存");
+    showToast(localized("设置已保存", "Settings saved"));
   } catch (error) {
     errorBox.textContent = error.message;
   }
@@ -4188,12 +4270,18 @@ function closeGlobalSettings() {
 }
 
 function localAssetTypeLabel(mediaType) {
-  return { video: "视频", audio: "音频", image: "图片", file: "文件" }[mediaType] || "文件";
+  const labels = {
+    video: localized("视频", "Video"),
+    audio: localized("音频", "Audio"),
+    image: localized("图片", "Image"),
+    file: localized("文件", "File"),
+  };
+  return labels[mediaType] || labels.file;
 }
 
 function localAssetPreviewMarkup(asset) {
   if (asset.locked) {
-    return `<button class="local-asset-locked" type="button" data-unlock-owner="${escapeHtml(asset.owner_device_id)}" data-unlock-name="${escapeHtml(asset.owner_name)}" title="输入所属设备密钥">${icon("lock-keyhole")}<b>文件被加密</b></button>`;
+    return `<button class="local-asset-locked" type="button" data-unlock-owner="${escapeHtml(asset.owner_device_id)}" data-unlock-name="${escapeHtml(asset.owner_name)}" title="${localized("输入所属设备密钥", "Enter the device key")}">${icon("lock-keyhole")}<b>${localized("文件被加密", "File encrypted")}</b></button>`;
   }
   if (asset.asset_deleted) {
     return `<span class="asset-placeholder deleted">${icon("file-x-2")}<b>${t("assetDeleted")}</b></span>`;
@@ -4213,7 +4301,7 @@ function localAssetPreviewMarkup(asset) {
 function openLocalAssetPreview(asset) {
   if (!asset.preview_url || asset.asset_deleted || asset.locked) return;
   const url = escapeHtml(asset.preview_url);
-  const name = escapeHtml(asset.name || asset.file_name || "本地素材");
+  const name = escapeHtml(asset.name || asset.file_name || localized("本地素材", "Local asset"));
   const mediaType = asset.media_type || "file";
   const preview = mediaType === "image"
     ? `<img src="${url}" alt="${name}">`
@@ -4221,7 +4309,7 @@ function openLocalAssetPreview(asset) {
       ? `<video src="${url}" controls playsinline autoplay preload="metadata" aria-label="${name}"></video>`
       : mediaType === "audio"
         ? `<audio src="${url}" controls autoplay preload="metadata" aria-label="${name}"></audio>`
-        : `<div class="local-asset-preview-unsupported">${icon("file")}<span>该文件无法直接预览</span></div>`;
+        : `<div class="local-asset-preview-unsupported">${icon("file")}<span>${localized("该文件无法直接预览", "This file cannot be previewed directly")}</span></div>`;
   el("localAssetPreviewBody").innerHTML = preview;
   el("localAssetPreviewModal").hidden = false;
   document.body.classList.add("modal-open");
@@ -4263,11 +4351,11 @@ function selectLocalAssetFolder(folderId) {
 function renderLocalAssetManager() {
   const list = el("localAssetsList");
   const folderCards = state.localAssetFolderId === "__root__"
-    ? state.assetFolders.map((folder) => `<article class="asset-card local-asset-folder-card" data-local-folder-card="${escapeHtml(folder.id)}" tabindex="0" role="button" aria-label="${escapeHtml(folder.name)}"><div class="asset-folder-preview">${folderGlyph("folder")}</div><div class="asset-folder-meta"><strong>${escapeHtml(folder.name)}</strong><small>${Number(folder.count || 0)} 项素材</small><button type="button" data-local-folder-delete="${escapeHtml(folder.id)}" title="删除文件夹" aria-label="删除文件夹">${icon("trash-2")}</button></div></article>`).join("")
-    : `<article class="asset-card local-asset-folder-card back" data-local-folder-back="true" tabindex="0" role="button" aria-label="返回根目录"><div class="asset-folder-preview">${folderBackGlyph()}</div><div class="asset-folder-meta"><strong>返回根目录</strong></div></article>`;
+    ? state.assetFolders.map((folder) => `<article class="asset-card local-asset-folder-card" data-local-folder-card="${escapeHtml(folder.id)}" tabindex="0" role="button" aria-label="${escapeHtml(folder.name)}"><div class="asset-folder-preview">${folderGlyph("folder")}</div><div class="asset-folder-meta"><strong>${escapeHtml(folder.name)}</strong><small>${Number(folder.count || 0)} ${localized("项素材", Number(folder.count || 0) === 1 ? "asset" : "assets")}</small><button type="button" data-local-folder-delete="${escapeHtml(folder.id)}" title="${localized("删除文件夹", "Delete folder")}" aria-label="${localized("删除文件夹", "Delete folder")}">${icon("trash-2")}</button></div></article>`).join("")
+    : `<article class="asset-card local-asset-folder-card back" data-local-folder-back="true" tabindex="0" role="button" aria-label="${localized("返回根目录", "Back to root")}"><div class="asset-folder-preview">${folderBackGlyph()}</div><div class="asset-folder-meta"><strong>${localized("返回根目录", "Back to root")}</strong></div></article>`;
   const cards = state.localAssets.map((asset) => {
     const encryptedMessage = asset.locked
-      ? `文件被加密，所属设备：${asset.owner_name}`
+      ? `${localized("文件被加密，所属设备：", "File encrypted; device: ")}${asset.owner_name}`
       : asset.asset_deleted
         ? t("assetDeleted")
         : asset.file_name || formatTime(asset.created_at, true);
@@ -4275,10 +4363,10 @@ function renderLocalAssetManager() {
     const audioOrFile = mediaType === "audio" || mediaType === "file";
     return `<article class="asset-card local-asset-card" data-local-asset-id="${escapeHtml(asset.id)}" tabindex="0" aria-label="${escapeHtml(asset.name)}">
       <div class="asset-preview${audioOrFile ? " music" : ""}">
-        ${asset.can_delete ? `<label class="local-asset-select" data-local-asset-select><input type="checkbox" value="${escapeHtml(asset.id)}" aria-label="选择 ${escapeHtml(asset.name)}" ${state.localAssetSelected.has(asset.id) ? "checked" : ""}></label>` : ""}
+        ${asset.can_delete ? `<label class="local-asset-select" data-local-asset-select><input type="checkbox" value="${escapeHtml(asset.id)}" aria-label="${localized("选择", "Select")} ${escapeHtml(asset.name)}" ${state.localAssetSelected.has(asset.id) ? "checked" : ""}></label>` : ""}
         ${localAssetPreviewMarkup(asset)}
       </div>
-      <div class="asset-meta"><span class="task-status completed"></span><strong title="${escapeHtml(asset.name)}">${escapeHtml(asset.name)}</strong><small class="asset-plan">${escapeHtml(localAssetTypeLabel(mediaType))}</small><span class="asset-owner" title="来源：${escapeHtml(asset.owner_name)}">${icon("tag")}<span>${escapeHtml(asset.owner_name)}</span></span><time title="${escapeHtml(encryptedMessage)}">${escapeHtml(encryptedMessage)}</time></div>
+      <div class="asset-meta"><span class="task-status completed"></span><strong title="${escapeHtml(asset.name)}">${escapeHtml(asset.name)}</strong><small class="asset-plan">${escapeHtml(localAssetTypeLabel(mediaType))}</small><span class="asset-owner" title="${localized("来源：", "Source: ")}${escapeHtml(asset.owner_name)}">${icon("tag")}<span>${escapeHtml(asset.owner_name)}</span></span><time title="${escapeHtml(encryptedMessage)}">${escapeHtml(encryptedMessage)}</time></div>
     </article>`;
   }).join("");
   const loading = state.localAssetLoading
@@ -4287,7 +4375,8 @@ function renderLocalAssetManager() {
       ? `<p class="local-assets-loading">${t("allLoaded")}</p>`
       : "";
   list.innerHTML = (folderCards || cards || state.localAssetLoading) ? `${folderCards}${cards}${loading}` : `<p class="quiet">${t("noAssets")}</p>`;
-  el("localAssetsCount").textContent = `${state.localAssetTotal} 项`;
+  const localCount = Number(state.localAssetTotal || 0);
+  el("localAssetsCount").textContent = `${localCount} ${localized("项", localCount === 1 ? "item" : "items")}`;
   el("localAssetsSize").textContent = formatBytes(state.localAssetLibrarySize || state.localAssetSize);
   syncLocalAssetSelectAll();
   refreshIcons();
@@ -4347,14 +4436,14 @@ function closeLocalAssets() {
 async function deleteLocalArtifacts() {
   const ids = Array.from(state.localAssetSelected).filter((assetId) => localAssetCanDelete(state.localAssets.find((asset) => asset.id === assetId) || {}));
   if (!ids.length) return;
-  if (!window.confirm(`确认删除选中的 ${ids.length} 项本地产物？任务与工作流记录会保留。`)) return;
+  if (!window.confirm(localized(`确认删除选中的 ${ids.length} 项本地产物？任务与工作流记录会保留。`, `Delete the selected ${ids.length} local outputs? Task and workflow records are kept.`))) return;
   try {
     const result = await api("/api/v1/assets/local/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset_ids: ids }) });
     state.localAssetChanged = Boolean(result.deleted?.length);
     state.localAssetSelected.clear();
     await loadLocalAssets({ reset: true });
     if (state.localAssetChanged) await refreshSharedData();
-    if (result.rejected?.length) el("localAssetsError").textContent = `${result.rejected.length} 项未能删除`;
+    if (result.rejected?.length) el("localAssetsError").textContent = localized(`${result.rejected.length} 项未能删除`, `${result.rejected.length} items could not be deleted`);
   } catch (error) {
     el("localAssetsError").textContent = error.message;
   }
@@ -4374,7 +4463,7 @@ async function clearOldVideos() {
 
 function renderOldVideoCleanupPreview(payload) {
   const items = payload.items || [];
-  el("oldVideoCleanupSummary").textContent = `${items.length} 项 · ${formatBytes(payload.total_size || 0)}`;
+  el("oldVideoCleanupSummary").textContent = `${items.length} ${localized("项", items.length === 1 ? "item" : "items")} · ${formatBytes(payload.total_size || 0)}`;
   el("oldVideoCleanupList").innerHTML = items.length
     ? items.map((item) => `<div class="old-video-cleanup-row"><span><strong>${escapeHtml(item.name || item.file_name)}</strong><small>${escapeHtml(item.file_name || "")} · ${formatTime(item.created_at, true)}</small></span><b>${formatBytes(item.size || 0)}</b></div>`).join("")
     : `<p class="quiet">${localized("没有符合条件的视频素材", "No video assets match the cleanup rule")}</p>`;
@@ -4383,11 +4472,14 @@ function renderOldVideoCleanupPreview(payload) {
 
 async function confirmOldVideoCleanup() {
   const summary = el("oldVideoCleanupSummary").textContent;
-  if (!window.confirm(`确认清除以下 ${summary} 的视频素材？任务记录会保留。`)) return;
+  const confirmMessage = state.locale === "en"
+    ? `Delete the following ${summary} of video assets? Task records will be kept.`
+    : `确认清除以下 ${summary} 的视频素材？任务记录会保留。`;
+  if (!window.confirm(confirmMessage)) return;
   try {
     const result = await api("/api/v1/assets/local/clear-old-video", { method: "POST" });
     closeOldVideoCleanup();
-    showToast(`已清除 ${result.count || 0} 项视频素材`);
+    showToast(localized(`已清除 ${result.count || 0} 项视频素材`, `Cleared ${result.count || 0} video assets`));
     await loadLocalAssets({ reset: true });
     await refreshSharedData();
   } catch (error) {
@@ -4402,7 +4494,7 @@ function closeOldVideoCleanup() {
 
 function openUnlockAssets(ownerDeviceId, ownerName) {
   state.unlockOwnerDeviceId = ownerDeviceId;
-  el("unlockAssetsOwner").textContent = `所属设备：${ownerName || ownerDeviceId}`;
+  el("unlockAssetsOwner").textContent = `${localized("所属设备：", "Device: ")}${ownerName || ownerDeviceId}`;
   el("unlockAssetsKey").value = "";
   el("unlockAssetsKey").type = "password";
   el("unlockAssetsError").textContent = "";
@@ -4423,7 +4515,7 @@ async function unlockLocalAssets(event) {
   const recordsKey = el("unlockAssetsKey").value;
   const keyLength = Array.from(recordsKey).length;
   if (keyLength < 8 || keyLength > 256) {
-    el("unlockAssetsError").textContent = "密钥长度必须为 8 至 256 个字符";
+    el("unlockAssetsError").textContent = localized("密钥长度必须为 8 至 256 个字符", "The key must be 8 to 256 characters");
     return;
   }
   try {
@@ -4434,7 +4526,7 @@ async function unlockLocalAssets(event) {
     });
     closeUnlockAssets();
     await loadLocalAssets({ reset: true });
-    showToast("该设备的本地加密素材已解锁");
+    showToast(localized("该设备的本地加密素材已解锁", "Encrypted assets for this device are unlocked"));
   } catch (error) {
     el("unlockAssetsError").textContent = error.message;
   }
@@ -4443,7 +4535,7 @@ async function unlockLocalAssets(event) {
 async function parseSseResponse(response, onEvent) {
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.detail || `请求失败 (${response.status})`);
+    throw new Error(payload.detail || localized(`请求失败 (${response.status})`, `Request failed (${response.status})`));
   }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -4474,7 +4566,7 @@ async function assistMusic(task) {
     return showError(error.message);
   }
   const source = promptInput.value.trim();
-  if (source.length < 2) return showError("请先输入歌曲主题、曲风或创作要求");
+  if (source.length < 2) return showError(localized("请先输入歌曲主题、曲风或创作要求", "Enter a song theme, style, or brief first"));
   if (!el("aiEnabled").checked) {
     openGlobalSettings("model");
     return showError(localized("请在右上角设置的模型页签启用 AI 提示词优化", "Enable AI prompt assistance in the Model tab of Settings"));
@@ -4504,10 +4596,10 @@ async function assistMusic(task) {
     });
     await parseSseResponse(response, (type, data) => {
       if (type === "delta") output += data.text || "";
-      if (type === "error") streamError = data.message || "AI 音乐辅助失败";
+      if (type === "error") streamError = data.message || localized("AI 音乐辅助失败", "AI music assistance failed");
     });
     if (streamError) throw new Error(streamError);
-    if (!output.trim()) throw new Error("AI 服务没有返回可用内容");
+    if (!output.trim()) throw new Error(localized("AI 服务没有返回可用内容", "The AI service returned no usable content"));
     if (task === "lyrics") el("lyrics").value = output.trim();
     else promptInput.value = output.trim();
   } catch (error) {
@@ -4526,7 +4618,7 @@ async function optimizePrompt() {
     return showError(error.message);
   }
   const source = promptInput.value.trim();
-  if (source.length < 2) return showError("请先输入需要优化的自然语言描述");
+  if (source.length < 2) return showError(localized("请先输入需要优化的自然语言描述", "Enter a prompt to optimize first"));
   if (!el("aiEnabled").checked) {
     openGlobalSettings("model");
     return showError(localized("请在右上角设置的模型页签启用 AI 提示词优化", "Enable AI prompt assistance in the Model tab of Settings"));
@@ -4560,11 +4652,11 @@ async function optimizePrompt() {
       if (type === "delta") {
         optimizedOutput += data.text || "";
       } else if (type === "error") {
-        streamError = data.message || "优化失败";
+        streamError = data.message || localized("优化失败", "Optimization failed");
       }
     });
     if (streamError) throw new Error(streamError);
-    if (!optimizedOutput.trim()) throw new Error("AI 服务没有返回可用内容");
+    if (!optimizedOutput.trim()) throw new Error(localized("AI 服务没有返回可用内容", "The AI service returned no usable content"));
     promptInput.value = optimizedOutput.trim();
   } catch (error) {
     showError(error.message);

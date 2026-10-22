@@ -29,7 +29,7 @@
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
     <script src="/assets/dropdown.js?v=4" defer></script>
-    <script src="/assets/app.js?v=86&rev=97&upscale=1" defer></script>
+    <script src="/assets/app.js?v=87&rev=98&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -339,7 +339,7 @@
     <div class="modal-overlay workflow-editor-modal" id="workflowEditorModal" hidden>
       <form class="workflow-editor" id="workflowEditor" role="dialog" aria-modal="true" aria-labelledby="workflowEditorTitle">
         <header class="workflow-editor-header">
-          <div><span class="node-dialog-mark"><i data-lucide="workflow"></i></span><div><h2 id="workflowEditorTitle">新增工作流</h2><p>配置 API 图、字段映射和目标节点</p></div></div>
+          <div><span class="node-dialog-mark"><i data-lucide="workflow"></i></span><div><h2 id="workflowEditorTitle">新增工作流</h2><p id="workflowEditorSubtitle">配置 API 图、字段映射和目标节点</p></div></div>
           <button class="icon-button" id="cancelWorkflowEditIcon" type="button" title="关闭编辑" aria-label="关闭工作流编辑"><i data-lucide="x"></i></button>
         </header>
         <div class="workflow-editor-content">
@@ -350,7 +350,7 @@
             <label for="workflowJsonFile">API 工作流 JSON</label>
             <input id="workflowJsonFile" type="file" accept="application/json,.json">
             <small class="workflow-file-status" id="workflowFileStatus">选择 ComfyUI 的 API 格式工作流</small>
-            <small class="workflow-file-status">同步失败时，可下载 JSON 并上传到 ComfyUI 的 workflows 用户目录后执行校验。</small>
+            <small class="workflow-file-status" id="workflowFileHelp">同步失败时，可下载 JSON 并上传到 ComfyUI 的 workflows 用户目录后执行校验。</small>
 
             <section class="workflow-config-section">
               <div class="workflow-config-heading"><h4>通用字段映射</h4><button class="icon-button" id="addWorkflowFieldMapping" type="button" title="添加字段映射" aria-label="添加字段映射"><i data-lucide="plus"></i></button></div>
@@ -393,11 +393,11 @@
     </div>
     <div class="modal-overlay auto-upscale-confirm-modal" id="autoUpscaleConfirmModal" hidden>
       <form class="settings-dialog auto-upscale-confirm-dialog" id="autoUpscaleConfirmForm" role="dialog" aria-modal="true" aria-labelledby="autoUpscaleConfirmTitle">
-        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="wand-sparkles"></i></span><div><h2 id="autoUpscaleConfirmTitle">确认自动超分</h2><p>选择生成后执行的超分方案</p></div></div><button class="icon-button" id="cancelAutoUpscaleConfirm" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
+        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="wand-sparkles"></i></span><div><h2 id="autoUpscaleConfirmTitle">确认自动超分</h2><p id="autoUpscaleConfirmSubtitle">选择生成后执行的超分方案</p></div></div><button class="icon-button" id="cancelAutoUpscaleConfirm" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
         <div class="settings-body">
-          <label>超分类型<select id="autoUpscaleConfirmCategory"><option value="real">真人</option><option value="anime">动画</option><option value="3d">3D</option></select></label>
-          <label>超分倍率<select id="autoUpscaleConfirmScale"><option value="2">2x</option><option value="4">4x</option></select></label>
-          <div class="settings-actions"><button type="button" id="cancelAutoUpscaleConfirmButton">取消</button><button class="primary" type="submit"><i data-lucide="check"></i><span>确认提交</span></button></div>
+          <label id="autoUpscaleCategoryLabel">超分类型<select id="autoUpscaleConfirmCategory"><option value="real">真人</option><option value="anime">动画</option><option value="3d">3D</option></select></label>
+          <label id="autoUpscaleScaleLabel">超分倍率<select id="autoUpscaleConfirmScale"><option value="2">2x</option><option value="4">4x</option></select></label>
+          <div class="settings-actions"><button type="button" id="cancelAutoUpscaleConfirmButton">取消</button><button class="primary" type="submit"><i data-lucide="check"></i><span id="confirmAutoUpscaleLabel">确认提交</span></button></div>
         </div>
       </form>
     </div>
@@ -508,7 +508,7 @@
               <label id="saMortonCurveControl">Morton 曲线<select id="saMortonCurve"><option value="2d_frame">2d_frame</option><option value="3d">3d</option></select></label>
             </div>
             <div class="settings-divider"></div>
-            <label class="switch-row"><span>启用 AI 提示词优化</span><input id="aiEnabled" type="checkbox"><span class="switch"></span></label>
+            <label class="switch-row" id="aiPromptSwitch"><span>启用 AI 提示词优化</span><input id="aiEnabled" type="checkbox"><span class="switch"></span></label>
             <label>OpenAI Base URL<input id="aiBaseUrl" type="url" placeholder="https://api.openai.com/v1"></label>
             <label>模型<input id="aiModel" type="text" placeholder="gpt-4.1-mini"></label>
             <label>API Key<input id="aiApiKey" type="password" autocomplete="new-password" placeholder="sk-…"><small class="secret-field-status" id="aiApiKeyStatus"></small></label>
@@ -542,8 +542,8 @@
             <p class="settings-help" id="runninghubHelp">关闭后无法新增或修改 RunningHub 节点，已有节点仍会保留。</p>
             <label class="switch-row"><span>自动调度时排除 RunningHub 节点</span><input id="excludeRunningHubAuto" type="checkbox"><span class="switch"></span></label>
             <p class="settings-help" id="excludeRunningHubHelp">开启后，选择「自动调度」的任务不会使用 RunningHub API 节点，需要手动选择 RunningHub 节点。</p>
-            <label>互联断开时处理远程记录<select id="remoteDisconnectPolicy"><option value="encrypt">加密</option><option value="delete">删除</option></select></label>
-            <label>远程记录密钥<span class="password-field"><input id="remoteRecordsKey" type="password" minlength="8" maxlength="256" autocomplete="new-password"><button class="password-toggle" id="toggleRemoteRecordsKey" type="button" title="显示密钥" aria-label="显示密钥"><i data-lucide="eye"></i></button></span><small>至少 8 个字符，最多 256 个字符</small></label>
+            <label><span id="remoteDisconnectLabel">互联断开时处理远程记录</span><select id="remoteDisconnectPolicy"><option value="encrypt">加密</option><option value="delete">删除</option></select></label>
+            <label><span id="remoteRecordsKeyLabel">远程记录密钥</span><span class="password-field"><input id="remoteRecordsKey" type="password" minlength="8" maxlength="256" autocomplete="new-password"><button class="password-toggle" id="toggleRemoteRecordsKey" type="button" title="显示密钥" aria-label="显示密钥"><i data-lucide="eye"></i></button></span><small id="remoteRecordsKeyHelp">至少 8 个字符，最多 256 个字符</small></label>
             <div class="settings-actions"><button type="button" id="manageLocalAssets"><i data-lucide="folder-cog"></i><span>管理本地素材</span></button></div>
           </section>
           <section class="settings-tab-panel" id="settingsPanelUpload" role="tabpanel" aria-labelledby="settingsTabUpload" data-settings-panel="upload" hidden>
@@ -558,16 +558,16 @@
 
     <div class="modal-overlay local-assets-modal" id="localAssetsModal" hidden>
       <section class="local-assets-dialog" role="dialog" aria-modal="true" aria-labelledby="localAssetsTitle">
-        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="folder-cog"></i></span><div><h2 id="localAssetsTitle">管理本地素材</h2><p>删除产物文件，保留任务与工作流记录</p></div></div><button class="icon-button" id="closeLocalAssets" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
-        <div class="local-assets-toolbar"><label><input id="localAssetsSelectAll" type="checkbox"><span>全选已加载素材</span></label><span id="localAssetsCount">0 项</span><span id="localAssetsSize">0 B</span><button type="button" id="clearOldVideos" title="清除 30 天前视频素材"><i data-lucide="calendar-minus"></i><span>清除 30 天前视频</span></button></div>
+        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="folder-cog"></i></span><div><h2 id="localAssetsTitle">管理本地素材</h2><p id="localAssetsSubtitle">删除产物文件，保留任务与工作流记录</p></div></div><button class="icon-button" id="closeLocalAssets" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
+        <div class="local-assets-toolbar"><label><input id="localAssetsSelectAll" type="checkbox"><span id="localAssetsSelectAllLabel">全选已加载素材</span></label><span id="localAssetsCount">0 项</span><span id="localAssetsSize">0 B</span><button type="button" id="clearOldVideos" title="清除 30 天前视频素材"><i data-lucide="calendar-minus"></i><span>清除 30 天前视频</span></button></div>
         <div class="local-assets-grid" id="localAssetsList" tabindex="0"></div>
-        <footer class="local-assets-footer"><p id="localAssetsError" role="alert"></p><button class="danger" id="deleteLocalArtifacts" type="button"><i data-lucide="trash-2"></i><span>删除选中产物</span></button></footer>
+        <footer class="local-assets-footer"><p id="localAssetsError" role="alert"></p><button class="danger" id="deleteLocalArtifacts" type="button"><i data-lucide="trash-2"></i><span id="deleteLocalArtifactsLabel">删除选中产物</span></button></footer>
       </section>
     </div>
 
     <div class="modal-overlay old-video-cleanup-modal" id="oldVideoCleanupModal" hidden>
       <section class="old-video-cleanup-dialog" role="dialog" aria-modal="true" aria-labelledby="oldVideoCleanupTitle">
-        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="calendar-minus"></i></span><div><h2 id="oldVideoCleanupTitle">清除 30 天前视频</h2><p>以下项目将在确认后删除，任务记录会保留</p></div></div><button class="icon-button" id="closeOldVideoCleanup" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
+        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="calendar-minus"></i></span><div><h2 id="oldVideoCleanupTitle">清除 30 天前视频</h2><p id="oldVideoCleanupSubtitle">以下项目将在确认后删除，任务记录会保留</p></div></div><button class="icon-button" id="closeOldVideoCleanup" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
         <div class="old-video-cleanup-summary" id="oldVideoCleanupSummary">0 项 · 0 B</div>
         <div class="old-video-cleanup-list" id="oldVideoCleanupList"></div>
         <footer class="old-video-cleanup-footer"><button type="button" id="cancelOldVideoCleanup">取消</button><button class="danger" type="button" id="confirmOldVideoCleanup"><i data-lucide="trash-2"></i><span>确认清除</span></button></footer>
@@ -585,9 +585,9 @@
       <section class="unlock-assets-dialog" role="dialog" aria-modal="true" aria-labelledby="unlockAssetsTitle">
         <header class="settings-header"><div><span class="settings-mark"><i data-lucide="lock-keyhole"></i></span><div><h2 id="unlockAssetsTitle">解锁加密素材</h2><p id="unlockAssetsOwner"></p></div></div><button class="icon-button" id="closeUnlockAssets" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
         <form id="unlockAssetsForm" class="unlock-assets-body">
-          <label>所属设备密钥<span class="password-field"><input id="unlockAssetsKey" type="password" minlength="8" maxlength="256" autocomplete="off" required><button class="password-toggle" id="toggleUnlockAssetsKey" type="button" title="显示密钥" aria-label="显示密钥"><i data-lucide="eye"></i></button></span></label>
+          <label><span id="unlockAssetsKeyLabel">所属设备密钥</span><span class="password-field"><input id="unlockAssetsKey" type="password" minlength="8" maxlength="256" autocomplete="off" required><button class="password-toggle" id="toggleUnlockAssetsKey" type="button" title="显示密钥" aria-label="显示密钥"><i data-lucide="eye"></i></button></span></label>
           <p id="unlockAssetsError" role="alert"></p>
-          <button class="primary" type="submit"><i data-lucide="unlock-keyhole"></i><span>解锁该设备素材</span></button>
+          <button class="primary" type="submit"><i data-lucide="unlock-keyhole"></i><span id="unlockAssetsSubmitLabel">解锁该设备素材</span></button>
         </form>
       </section>
     </div>

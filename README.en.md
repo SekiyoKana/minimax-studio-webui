@@ -124,6 +124,12 @@ Persistent data is stored under `data/`:
 
 ## Update log
 
+### 2026-10-22: Bilingual coverage pass
+
+- Audited both locales and filled missing English copy, placeholders, buttons, confirmations, titles, and aria labels across settings, nodes, workflow editing, asset details, local assets, upscaling, and device sharing.
+- Fixed custom dropdowns that kept the previous Chinese option labels after switching to English; triggers now refresh on locale change.
+- Localized dynamic statuses, counters, queue details, and node/asset action prompts.
+
 ### 2026-10-22: Local/remote node classification
 
 - Node location is now derived from its address: localhost, 127.0.0.1 and the machine's own interface addresses are local; every other host (Tailscale, LAN, public, RunningHub) is remote.
