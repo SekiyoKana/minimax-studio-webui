@@ -1021,3 +1021,14 @@ button { appearance: none; -webkit-appearance: none; }
 }
 .progress-track { background: var(--fill-quaternary); }
 .assistant-message.output-focus { background: var(--accent-soft); }
+
+/* Asset card rename control aligns with the title row */
+.asset-meta.has-rename strong { padding-right: 24px; }
+.asset-meta > [data-job-action="rename"] {
+  top: 8px;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+.asset-meta > [data-job-action="rename"]:hover { background: var(--fill-tertiary); }

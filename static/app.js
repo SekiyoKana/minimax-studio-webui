@@ -585,6 +585,14 @@ function shortTitle(job) {
   return String(value).replaceAll("\n", " ").slice(0, 42);
 }
 
+function assetNodeLabel(job) {
+  const label = nodeLabel(job);
+  const owner = job.assigned_node?.owner_name || job.owner_name;
+  if (!owner) return label;
+  const suffix = ` · ${t("owner")} ${owner}`;
+  return label.endsWith(suffix) ? label.slice(0, -suffix.length) : label;
+}
+
 function nodeLabel(job) {
   const owner = job.assigned_node?.owner_name || job.owner_name;
   if (job.assigned_node?.name) return owner ? `${job.assigned_node.name} · ${t("owner")} ${owner}` : job.assigned_node.name;
@@ -2701,7 +2709,7 @@ function renderAssetCard(job) {
     : "";
   return `<article class="asset-card${editable ? " editable" : ""}${selected ? " selected" : ""}" data-asset-job="${escapeHtml(job.id)}" data-asset-output="${editable ? "false" : draggable}" data-asset-editable="${editable}" draggable="${draggable}" tabindex="0" aria-label="${escapeHtml(executionModeLabel(job))}, ${escapeHtml(modelLabel(job))}, ${escapeHtml(statusLabel(job.status))}">
     <div class="asset-preview${audio || mediaType === "file" ? " music" : ""}">${select}${preview}${assetAction(job)}</div>
-    <div class="asset-meta"><span class="task-status ${job.status}"></span><strong title="${escapeHtml(job.title || modelLabel(job))}">${escapeHtml(shortTitle(job))}</strong><small class="asset-plan ${executionModeClass(job)}">${escapeHtml(executionModeLabel(job))}</small>${owner}<time>${escapeHtml(nodeLabel(job))}</time><time>${t("overallTime")} ${formatElapsed(job.elapsed_seconds)}</time>${renameAction}</div>
+    <div class="asset-meta${renameAction ? " has-rename" : ""}"><span class="task-status ${job.status}"></span><strong title="${escapeHtml(job.title || modelLabel(job))}">${escapeHtml(shortTitle(job))}</strong><small class="asset-plan ${executionModeClass(job)}">${escapeHtml(executionModeLabel(job))}</small>${owner}<time>${escapeHtml(assetNodeLabel(job))}</time><time>${t("overallTime")} ${formatElapsed(job.elapsed_seconds)}</time>${renameAction}</div>
   </article>`;
 }
 
