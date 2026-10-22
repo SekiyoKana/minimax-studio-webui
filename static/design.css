@@ -207,16 +207,23 @@ body {
 }
 
 .message-actions { margin-top: 18px; gap: 4px; }
-.message-actions button {
+.message-actions button,
+.message-actions .message-action-download {
+  display: inline-flex;
   height: 34px;
+  align-items: center;
+  gap: 6px;
   padding: 0 12px;
   border: 0;
   border-radius: 999px;
   background: transparent;
   color: var(--muted);
+  cursor: pointer;
   font-size: var(--text-ui);
+  text-decoration: none;
 }
-.message-actions button:hover:not(.regenerate):not(.cancel):not(.danger) {
+.message-actions button:hover:not(.regenerate):not(.cancel):not(.danger),
+.message-actions .message-action-download:hover {
   background: var(--fill-tertiary);
   color: var(--ink);
   box-shadow: none;

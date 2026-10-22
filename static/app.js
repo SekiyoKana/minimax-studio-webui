@@ -3037,12 +3037,18 @@ function referenceSummary(job) {
   }).join("")}</div>`;
 }
 
+function messageDownloadAction(job) {
+  if (job.status !== "completed" || !job.result_url) return "";
+  const mediaType = jobMediaType(job);
+  return `<a class="message-action-download" href="${escapeHtml(job.result_url)}" download>${icon("download")}<span>${mediaDownloadLabel(mediaType)}</span></a>`;
+}
+
 function messageActions(job) {
   if (job.peer_asset) return job.status === "completed" && job.result_url
-    ? `<div class="message-actions"><button type="button" data-job-action="input" data-job-id="${job.id}">${icon("file-input")}<span>${t("useAsInput")}</span></button>${videoUpscaleMessageAction(job)}</div>`
+    ? `<div class="message-actions">${messageDownloadAction(job)}<button type="button" data-job-action="input" data-job-id="${job.id}">${icon("file-input")}<span>${t("useAsInput")}</span></button>${videoUpscaleMessageAction(job)}</div>`
     : "";
   if (job.request?.remote_proxy) {
-    const buttons = [];
+    const buttons = [messageDownloadAction(job)];
     if (job.status === "completed" && job.result_url) {
       buttons.push(`<button type="button" data-job-action="input" data-job-id="${job.id}">${icon("file-input")}<span>${t("useAsInput")}</span></button>`);
       if (canVideoUpscale(job)) buttons.push(videoUpscaleMessageAction(job));
@@ -3054,7 +3060,7 @@ function messageActions(job) {
     }
     return `<div class="message-actions">${buttons.join("")}</div>`;
   }
-  const buttons = [`<button type="button" data-job-action="reuse" data-job-id="${job.id}">${icon("corner-down-left")}<span>${t("reuse")}</span></button>`];
+  const buttons = [messageDownloadAction(job), `<button type="button" data-job-action="reuse" data-job-id="${job.id}">${icon("corner-down-left")}<span>${t("reuse")}</span></button>`];
   if (job.status === "completed" && job.result_url) {
     buttons.push(`<button type="button" data-job-action="input" data-job-id="${job.id}">${icon("file-input")}<span>${t("useAsInput")}</span></button>`);
     if (canVideoUpscale(job)) buttons.push(videoUpscaleMessageAction(job));
@@ -3095,12 +3101,12 @@ function renderJobExchange(job) {
     assistantBody = `<p class="terminal-state completed">${t("assetDeleted")}</p>`;
   } else if (job.status === "completed") {
     const result = audio
-      ? `<div class="audio-result"><audio controls preload="metadata" src="${job.result_url}"></audio><a href="${job.result_url}" download>${icon("download")}<span>${mediaDownloadLabel(mediaType)}</span></a></div>`
+      ? `<div class="audio-result"><audio controls preload="metadata" src="${job.result_url}"></audio></div>`
       : mediaType === "image"
-        ? `<div class="image-result"><img src="${job.result_url}" alt="${escapeHtml(shortTitle(job))}"><a href="${job.result_url}" download>${icon("download")}<span>${mediaDownloadLabel(mediaType)}</span></a></div>`
+        ? `<div class="image-result"><img src="${job.result_url}" alt="${escapeHtml(shortTitle(job))}"></div>`
         : mediaType === "file"
-          ? `<div class="file-result"><a href="${job.result_url}" download>${icon("download")}<span>${mediaDownloadLabel(mediaType)}</span></a></div>`
-          : `<div class="video-result"><video controls playsinline preload="metadata" src="${job.result_url}"></video><a href="${job.result_url}" download>${icon("download")}<span>${mediaDownloadLabel(mediaType)}</span></a></div>`;
+          ? ""
+          : `<div class="video-result"><video controls playsinline preload="metadata" src="${job.result_url}"></video></div>`;
     assistantBody = `<p class="terminal-state completed">${mediaReadyLabel(mediaType)}</p>${result}`;
   } else {
     assistantBody = `<p class="terminal-state ${job.status}">${escapeHtml(detail || statusLabel(job.status))}</p>`;

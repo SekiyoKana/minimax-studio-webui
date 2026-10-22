@@ -856,8 +856,8 @@ body.sidebar-resizing * { cursor: col-resize !important; }
   .message-avatar { width: 28px; height: 28px; }
   .assistant-message::before { left: -12px; width: 100vw; }
   .message-meta { font-size: var(--text-micro); }
-  .message-actions button { width: 31px; padding: 0; justify-content: center; }
-  .message-actions button span { display: none; }
+  .message-actions button, .message-actions .message-action-download { width: 31px; padding: 0; justify-content: center; }
+  .message-actions button span, .message-actions .message-action-download span { display: none; }
   .composer { width: calc(100% - 14px); margin: 7px auto 8px; }
   .composer textarea { min-height: 66px; max-height: 24dvh; padding: 12px 12px 5px; }
   .composer .lyrics-input { min-height: 92px; }
