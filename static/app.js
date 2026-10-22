@@ -4747,7 +4747,8 @@ function applyOpsPosition() {
 function openOpsWindow() {
   if (el("openOps").hidden) return;
   el("opsModal").hidden = false;
-  document.body.classList.add("modal-open");
+  el("openOps").classList.add("is-active");
+  el("openOps").setAttribute("aria-pressed", "true");
   if (!state.opsPositionInitialized) {
     resetOpsPosition();
     state.opsPositionInitialized = true;
@@ -4759,8 +4760,8 @@ function openOpsWindow() {
 
 function closeOpsWindow() {
   el("opsModal").hidden = true;
-  if (el("nodeModal").hidden && el("assetDetailModal").hidden && el("globalSettingsModal").hidden) document.body.classList.remove("modal-open");
-  el("openOps").focus();
+  el("openOps").classList.remove("is-active");
+  el("openOps").setAttribute("aria-pressed", "false");
 }
 
 function openAssetDrawer() {
@@ -5632,14 +5633,9 @@ el("clearVisibleLogs").addEventListener("click", () => {
   state.logFloor = Date.now();
   renderLogs(state.logs);
 });
-el("openOps").addEventListener("click", openOpsWindow);
-el("opsModal").addEventListener("click", (event) => {
-  if (event.target !== el("opsModal")) return;
-  if (opsDragMoved) {
-    opsDragMoved = false;
-    return;
-  }
-  closeOpsWindow();
+el("openOps").addEventListener("click", () => {
+  if (el("opsModal").hidden) openOpsWindow();
+  else closeOpsWindow();
 });
 el("closeOps").addEventListener("click", closeOpsWindow);
 el("openAssets").addEventListener("click", openAssetDrawer);
@@ -5647,7 +5643,6 @@ el("closeAssets").addEventListener("click", closeAssetDrawer);
 el("mobileScrim").addEventListener("click", closeAssetDrawer);
 
 let dragState = null;
-let opsDragMoved = false;
 function startOpsDrag(clientX, clientY) {
   dragState = {
     startX: clientX,
@@ -5655,12 +5650,10 @@ function startOpsDrag(clientX, clientY) {
     originX: state.opsPosition.x,
     originY: state.opsPosition.y,
   };
-  opsDragMoved = false;
   el("opsWindow").classList.add("dragging");
 }
 function moveOpsDrag(clientX, clientY) {
   if (!dragState) return;
-  if (Math.abs(clientX - dragState.startX) > 3 || Math.abs(clientY - dragState.startY) > 3) opsDragMoved = true;
   state.opsPosition.x = dragState.originX + clientX - dragState.startX;
   state.opsPosition.y = dragState.originY + clientY - dragState.startY;
   applyOpsPosition();
@@ -5669,7 +5662,6 @@ function stopOpsDrag() {
   if (!dragState) return;
   dragState = null;
   el("opsWindow").classList.remove("dragging");
-  if (opsDragMoved) setTimeout(() => { opsDragMoved = false; }, 0);
 }
 el("opsDragHandle").addEventListener("mousedown", (event) => {
   if (event.button !== 0 || event.target.closest("button")) return;

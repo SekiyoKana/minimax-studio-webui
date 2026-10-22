@@ -1260,7 +1260,16 @@ button { appearance: none; -webkit-appearance: none; }
   color: #fff;
   font: 500 9px/1 var(--mono);
 }
-.ops-modal { z-index: 125; }
+.ops-modal {
+  z-index: 95;
+  background: transparent;
+  pointer-events: none;
+}
+.ops-modal .ops-window { pointer-events: auto; }
+.ops-trigger.is-active {
+  background: var(--fill-tertiary);
+  color: var(--blue);
+}
 .ops-modal .ops-window {
   position: relative;
   top: auto;

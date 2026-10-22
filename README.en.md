@@ -127,7 +127,8 @@ Persistent data is stored under `data/`:
 ### 2026-10-22: Runtime log moved to the header
 
 - Removed the draggable floating log launcher; the activity log now lives in the top-right action bar with a queue-count badge.
-- Clicking it opens a log dialog that can still be dragged by its header. Click the backdrop or press Escape to close.
+- Clicking it opens a log dialog without a backdrop; drag it by the header and close it from the header button, the close icon, or Escape.
+- The header entry shows a selected state (blue icon on a light fill) while the log is open.
 - The "Show runtime logs" setting still controls both the entry and the dialog.
 
 ### 2026-10-22: Bilingual API errors
