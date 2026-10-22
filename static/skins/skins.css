@@ -1,0 +1,362 @@
+/*
+ * MiniMax H3 Studio skin pack
+ *
+ * Contract for every skin:
+ *   1. All rules are scoped to html[data-skin="<id>"]. Never edit a base rule
+ *      to make one skin work, and never use a skin selector to change layout
+ *      structure, order, visibility or behavior.
+ *   2. A skin only overrides design tokens from :root and, when a component
+ *      still hardcodes a color, that component's decorative properties
+ *      (background, border-color, color, shadow, radius).
+ *   3. New modules must style themselves with the :root tokens so skins keep
+ *      working without per-module CSS.
+ *   4. Assets live under static/skins/<id>/. Register the skin in the SKINS
+ *      constant in static/app.js and in the settings appearance panel.
+ */
+
+/* ------------------------------------------------------------------ */
+/* Aurora Glass — dark glassmorphism with aurora light                  */
+/* ------------------------------------------------------------------ */
+html[data-skin="aurora"] {
+  color-scheme: dark;
+  --canvas: #070b12;
+  --surface: #0f1622;
+  --surface-soft: #18212f;
+  --surface-warm: #1a2230;
+  --ink: #eaf1f8;
+  --muted: #9fb0c4;
+  --quiet: #7486a0;
+  --line: #1d2a3c;
+  --line-strong: #2c3d55;
+  --accent: #ff8a66;
+  --accent-soft: rgba(255, 138, 102, 0.14);
+  --blue: #6fd3ff;
+  --green: #57e0b0;
+  --warning: #ffc46b;
+  --danger: #ff7d8a;
+  --radius: 12px;
+  --skin-serif: ui-serif, "Songti SC", "Noto Serif SC", Georgia, "Times New Roman", serif;
+}
+
+html[data-skin="aurora"] body {
+  background:
+    radial-gradient(1100px 760px at 88% -12%, rgba(122, 92, 255, 0.2), transparent 62%),
+    radial-gradient(1000px 700px at -8% 18%, rgba(42, 196, 230, 0.16), transparent 58%),
+    radial-gradient(900px 640px at 50% 120%, rgba(255, 138, 102, 0.1), transparent 60%),
+    var(--canvas);
+}
+
+html[data-skin="aurora"] .app-shell { background: transparent; }
+
+html[data-skin="aurora"] .conversation-column {
+  background: transparent;
+}
+
+html[data-skin="aurora"] .conversation-column::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background: url("/assets/skins/aurora/backdrop.jpg") center / cover no-repeat;
+  content: "";
+  opacity: 0.34;
+  pointer-events: none;
+  filter: saturate(1.15) contrast(1.05);
+}
+
+html[data-skin="aurora"] .conversation-column::after {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(7, 11, 18, 0.62), rgba(7, 11, 18, 0.16) 32%, rgba(7, 11, 18, 0.78) 100%);
+  content: "";
+  pointer-events: none;
+}
+
+html[data-skin="aurora"] .conversation-feed {
+  position: relative;
+  z-index: 1;
+}
+
+html[data-skin="aurora"] .conversation-header {
+  background: rgba(8, 13, 21, 0.72);
+  border-bottom-color: rgba(111, 211, 255, 0.16);
+  backdrop-filter: blur(18px);
+}
+
+html[data-skin="aurora"] .conversation-header h1,
+html[data-skin="aurora"] .library-heading h2,
+html[data-skin="aurora"] .settings-header h2,
+html[data-skin="aurora"] .node-dialog-header h2,
+html[data-skin="aurora"] .workflow-editor-header h2 {
+  font-family: var(--skin-serif);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+html[data-skin="aurora"] .engine-state,
+html[data-skin="aurora"] .title-line { color: var(--muted); }
+
+html[data-skin="aurora"] .asset-sidebar {
+  background: linear-gradient(180deg, rgba(14, 21, 33, 0.88), rgba(8, 12, 20, 0.95));
+  border-right-color: rgba(111, 211, 255, 0.14);
+  backdrop-filter: blur(12px);
+}
+
+html[data-skin="aurora"] .brand-mark {
+  background: linear-gradient(135deg, #6fd3ff 0%, #8a7bff 52%, #ff8a66 100%);
+  color: #061018;
+  box-shadow: 0 0 20px rgba(111, 211, 255, 0.32);
+}
+
+html[data-skin="aurora"] .settings-mark,
+html[data-skin="aurora"] .node-dialog-mark {
+  background: linear-gradient(135deg, rgba(111, 211, 255, 0.22), rgba(138, 123, 255, 0.22));
+  border: 1px solid rgba(111, 211, 255, 0.34);
+  color: var(--ink);
+}
+
+html[data-skin="aurora"] .search-wrap input,
+html[data-skin="aurora"] .library-tools select,
+html[data-skin="aurora"] .conversation-filter-panel select,
+html[data-skin="aurora"] .settings-body input:not([type="checkbox"]),
+html[data-skin="aurora"] .settings-body select,
+html[data-skin="aurora"] .settings-body textarea,
+html[data-skin="aurora"] .workflow-editor input:not([type="checkbox"]),
+html[data-skin="aurora"] .workflow-editor select,
+html[data-skin="aurora"] .workflow-editor textarea,
+html[data-skin="aurora"] .runninghub-parameter input:not([type="checkbox"]),
+html[data-skin="aurora"] .runninghub-parameter select,
+html[data-skin="aurora"] .runninghub-parameter textarea {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+html[data-skin="aurora"] .search-wrap input:focus,
+html[data-skin="aurora"] .library-tools select:focus,
+html[data-skin="aurora"] .settings-body input:focus,
+html[data-skin="aurora"] .settings-body select:focus,
+html[data-skin="aurora"] .settings-body textarea:focus {
+  border-color: rgba(111, 211, 255, 0.6);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+html[data-skin="aurora"] .node-manager-trigger,
+html[data-skin="aurora"] .workflow-manager-trigger,
+html[data-skin="aurora"] .conversation-filter-trigger,
+html[data-skin="aurora"] .load-older,
+html[data-skin="aurora"] .reference-chip {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--line-strong);
+}
+
+html[data-skin="aurora"] .reference-chip { box-shadow: inset 0 1px rgba(255, 255, 255, 0.03); }
+
+html[data-skin="aurora"] .composer-box {
+  background: linear-gradient(180deg, rgba(19, 28, 42, 0.92), rgba(11, 17, 27, 0.96));
+  border-color: rgba(111, 211, 255, 0.2);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), inset 0 1px rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(18px);
+}
+
+html[data-skin="aurora"] .composer-box:focus-within,
+html[data-skin="aurora"] .composer-box.dragging {
+  border-color: rgba(111, 211, 255, 0.55);
+  box-shadow: 0 0 0 1px rgba(111, 211, 255, 0.22), 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+html[data-skin="aurora"] .composer .lyrics-input,
+html[data-skin="aurora"] .runninghub-parameters {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+html[data-skin="aurora"] .exchange {
+  border-bottom-color: rgba(255, 255, 255, 0.05);
+}
+
+html[data-skin="aurora"] .assistant-message::before {
+  background: linear-gradient(90deg, rgba(111, 211, 255, 0.07), rgba(138, 123, 255, 0.035) 55%, transparent);
+  border-left: 1px solid rgba(111, 211, 255, 0.14);
+}
+
+html[data-skin="aurora"] .assistant-avatar {
+  background: linear-gradient(135deg, #6fd3ff, #8a7bff);
+  color: #061018;
+}
+
+html[data-skin="aurora"] .user-avatar {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--line-strong);
+}
+
+html[data-skin="aurora"] .ai-avatar {
+  background: linear-gradient(135deg, #ff8a66, #ff5f8a);
+  color: #1c0710;
+}
+
+html[data-skin="aurora"] .asset-folder-preview,
+html[data-skin="aurora"] .asset-preview {
+  background: #0b111b;
+  border-color: var(--line);
+}
+
+html[data-skin="aurora"] .asset-preview.music {
+  background: radial-gradient(circle at 30% 20%, rgba(87, 224, 176, 0.18), transparent 60%), #0b111b;
+}
+
+html[data-skin="aurora"] .asset-card:hover .asset-preview {
+  box-shadow: 0 0 0 1px rgba(111, 211, 255, 0.6), 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+html[data-skin="aurora"] .asset-card.selected .asset-preview {
+  box-shadow: 0 0 0 2px var(--blue), 0 12px 34px rgba(0, 0, 0, 0.5);
+}
+
+html[data-skin="aurora"] .asset-placeholder.failed { background: rgba(255, 125, 138, 0.1); }
+html[data-skin="aurora"] .asset-folder-card.back { background: rgba(111, 211, 255, 0.08); border-color: rgba(111, 211, 255, 0.28); }
+html[data-skin="aurora"] .asset-folder-card.back:hover { background: rgba(111, 211, 255, 0.14); }
+
+html[data-skin="aurora"] .asset-edit-toolbar,
+html[data-skin="aurora"] .edit-banner {
+  background: rgba(255, 196, 107, 0.1);
+  border-color: rgba(255, 196, 107, 0.34);
+  color: #ffd9a0;
+}
+
+html[data-skin="aurora"] .edit-banner button { color: #ffd9a0; }
+
+html[data-skin="aurora"] .control-tooltip {
+  background: #1a2230;
+  border-color: rgba(255, 196, 107, 0.34);
+  color: #f5d9ae;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+}
+
+html[data-skin="aurora"] .duration-control.digital-human {
+  background: rgba(255, 196, 107, 0.12);
+  color: #ffcf8a;
+}
+
+html[data-skin="aurora"] .incognito-status {
+  background: rgba(255, 138, 102, 0.14);
+  border-color: rgba(255, 138, 102, 0.4);
+  color: #ffb9a3;
+}
+
+html[data-skin="aurora"] .modal-overlay {
+  background: rgba(3, 6, 11, 0.68);
+  backdrop-filter: blur(10px);
+}
+
+html[data-skin="aurora"] .settings-dialog,
+html[data-skin="aurora"] .local-assets-dialog,
+html[data-skin="aurora"] .unlock-assets-dialog,
+html[data-skin="aurora"] .node-dialog,
+html[data-skin="aurora"] .workflow-editor,
+html[data-skin="aurora"] .workflow-dialog,
+html[data-skin="aurora"] .asset-detail-dialog,
+html[data-skin="aurora"] .secret-dialog,
+html[data-skin="aurora"] .peering-dialog,
+html[data-skin="aurora"] .asset-folder-dialog,
+html[data-skin="aurora"] .old-video-cleanup-dialog {
+  background: linear-gradient(180deg, rgba(21, 30, 45, 0.98), rgba(10, 16, 25, 0.99));
+  border-color: var(--line-strong);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65);
+}
+
+html[data-skin="aurora"] .node-editor-actions .primary,
+html[data-skin="aurora"] .settings-actions button.primary,
+html[data-skin="aurora"] .asset-folder-dialog-actions .primary,
+html[data-skin="aurora"] .unlock-assets-body button.primary,
+html[data-skin="aurora"] .peering-panel button.primary {
+  background: linear-gradient(135deg, #6fd3ff, #8a7bff);
+  border-color: transparent;
+  color: #061018;
+  box-shadow: 0 8px 24px rgba(111, 211, 255, 0.22);
+}
+
+html[data-skin="aurora"] .node-editor-actions .primary:hover,
+html[data-skin="aurora"] .settings-actions button.primary:hover,
+html[data-skin="aurora"] .asset-folder-dialog-actions .primary:hover,
+html[data-skin="aurora"] .unlock-assets-body button.primary:hover,
+html[data-skin="aurora"] .peering-panel button.primary:hover {
+  background: linear-gradient(135deg, #8de0ff, #a394ff);
+  border-color: transparent;
+}
+
+html[data-skin="aurora"] .toast {
+  background: #131c29;
+  border-color: var(--line-strong);
+  color: var(--ink);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.55);
+}
+
+html[data-skin="aurora"] .toast.error {
+  background: #3a151b;
+  border-color: rgba(255, 125, 138, 0.5);
+}
+
+html[data-skin="aurora"] .ops-window {
+  background: linear-gradient(180deg, #0e1622, #090f18);
+  border-color: rgba(111, 211, 255, 0.2);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.6);
+}
+
+html[data-skin="aurora"] .skip-link { background: var(--blue); color: #061018; }
+
+html[data-skin="aurora"] .incognito-status svg,
+html[data-skin="aurora"] .workflow-manager-trigger svg { color: currentColor; }
+
+html[data-skin="aurora"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+html[data-skin="aurora"] ::-webkit-scrollbar-track { background: transparent; }
+html[data-skin="aurora"] ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 8px;
+  background: rgba(111, 211, 255, 0.24);
+  background-clip: content-box;
+}
+html[data-skin="aurora"] ::-webkit-scrollbar-thumb:hover { background: rgba(111, 211, 255, 0.4); background-clip: content-box; }
+
+html[data-skin="aurora"] .chat-empty span,
+html[data-skin="aurora"] .asset-detail-mark,
+html[data-skin="aurora"] .secret-mark,
+html[data-skin="aurora"] .peering-mark,
+html[data-skin="aurora"] .asset-folder-dialog-mark {
+  background: linear-gradient(135deg, rgba(111, 211, 255, 0.24), rgba(138, 123, 255, 0.24));
+  border: 1px solid rgba(111, 211, 255, 0.34);
+  color: var(--ink);
+}
+
+html[data-skin="aurora"] .video-result a,
+html[data-skin="aurora"] .audio-result a,
+html[data-skin="aurora"] .image-result a,
+html[data-skin="aurora"] .file-result a,
+html[data-skin="aurora"] .asset-detail-footer .detail-reuse,
+html[data-skin="aurora"] .node-manager-toolbar button,
+html[data-skin="aurora"] .secret-submit {
+  border-color: transparent;
+  background: linear-gradient(135deg, #6fd3ff, #8a7bff);
+  color: #061018;
+}
+
+html[data-skin="aurora"] .video-result a:hover,
+html[data-skin="aurora"] .audio-result a:hover,
+html[data-skin="aurora"] .image-result a:hover,
+html[data-skin="aurora"] .file-result a:hover,
+html[data-skin="aurora"] .asset-detail-footer .detail-reuse:hover,
+html[data-skin="aurora"] .node-manager-toolbar button:hover,
+html[data-skin="aurora"] .secret-submit:hover {
+  border-color: transparent;
+  background: linear-gradient(135deg, #8de0ff, #a394ff);
+  color: #061018;
+}
+
+html[data-skin="aurora"] .send-button {
+  background: linear-gradient(135deg, #6fd3ff, #8a7bff);
+  color: #061018;
+  box-shadow: 0 6px 18px rgba(111, 211, 255, 0.28);
+}
+
+html[data-skin="aurora"] .send-button:hover { background: linear-gradient(135deg, #8de0ff, #a394ff); }
+html[data-skin="aurora"] .send-button:disabled { background: var(--line-strong); color: var(--quiet); box-shadow: none; }
+html[data-skin="aurora"] .send-button.editing { background: var(--warning); color: #241703; }

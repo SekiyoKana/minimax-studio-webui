@@ -170,6 +170,53 @@ function setControlTitle(id, value) {
   }
 }
 
+const SKINS = [
+  { id: "default", name: "原野", nameEn: "Meadow", note: "默认 · 明亮编辑风", noteEn: "Default · light editorial" },
+  { id: "aurora", name: "极光玻璃", nameEn: "Aurora Glass", note: "深色 · 玻璃拟态", noteEn: "Dark · glassmorphism" },
+];
+const SKIN_STORAGE_KEY = "h3-skin";
+const SKIN_THEME_COLORS = { default: "#f4f5f2", aurora: "#070b12" };
+
+function normalizeSkin(id) {
+  return SKINS.some((skin) => skin.id === id) ? id : "default";
+}
+
+function currentSkin() {
+  let stored = "";
+  try { stored = localStorage.getItem(SKIN_STORAGE_KEY) || ""; } catch (error) { /* storage disabled */ }
+  return normalizeSkin(document.documentElement.dataset.skin || stored || "default");
+}
+
+function applySkin(id, { persist = true } = {}) {
+  const skin = normalizeSkin(id);
+  if (skin === "default") delete document.documentElement.dataset.skin;
+  else document.documentElement.dataset.skin = skin;
+  if (persist) {
+    try { localStorage.setItem(SKIN_STORAGE_KEY, skin); } catch (error) { /* storage disabled */ }
+  }
+  const themeColor = document.querySelector('meta[name="theme-color"]');
+  if (themeColor) themeColor.content = SKIN_THEME_COLORS[skin] || SKIN_THEME_COLORS.default;
+  document.dispatchEvent(new CustomEvent("h3:skinchange", { detail: { skin } }));
+  renderSkinOptions();
+  return skin;
+}
+
+function renderSkinOptions() {
+  const active = currentSkin();
+  document.querySelectorAll("[data-skin-option]").forEach((card) => {
+    const skin = SKINS.find((item) => item.id === card.dataset.skinOption);
+    if (!skin) return;
+    const isActive = skin.id === active;
+    card.classList.toggle("is-active", isActive);
+    card.setAttribute("aria-checked", String(isActive));
+    card.tabIndex = isActive ? 0 : -1;
+    const name = card.querySelector(".skin-card-copy strong");
+    const note = card.querySelector(".skin-card-copy small");
+    if (name) name.textContent = localized(skin.name, skin.nameEn);
+    if (note) note.textContent = localized(skin.note, skin.noteEn);
+  });
+}
+
 function applyStaticLocale() {
   document.documentElement.lang = state.locale;
   setText(".library-heading h2", t("assetLibrary"));
@@ -200,6 +247,7 @@ function applyStaticLocale() {
   el("apiDocsLink").title = t("apiDocs");
   el("apiDocsLink").setAttribute("aria-label", t("apiDocs"));
   syncNodeProviderFields();
+  renderSkinOptions();
   if (state.locale !== "en") return;
   setText(".skip-link", "Skip to chat");
   setText(".edit-banner span", "Editing queued task");
@@ -221,10 +269,12 @@ function applyStaticLocale() {
   setText("#nodeDialogTitle", "Inference nodes");
   setText(".node-dialog-header p", "ComfyUI and RunningHub configuration");
   setText("#globalSettingsTitle", "Settings");
-  setText("#globalSettingsSubtitle", "Model, system, and upload preferences");
+  setText("#globalSettingsSubtitle", "Model, appearance, system, and upload preferences");
   setText("#settingsTabModel", "Model");
+  setText("#settingsTabAppearance", "Appearance");
   setText("#settingsTabSystem", "System");
   setText("#settingsTabUpload", "Upload");
+  setText("#skinHelp", "Skins change appearance only. Generation, queue, data and APIs stay the same. Selection applies immediately and is stored on this device.");
   document.querySelector(".settings-tabs")?.setAttribute("aria-label", "Settings categories");
   setText("#settingsPanelUpload .switch-row > span:first-child", "Compress large reference images");
   setText("#settingsUploadHelp", "Images over 1 MB are compressed locally before upload.");
@@ -5012,6 +5062,23 @@ el("openGlobalSettings").addEventListener("click", () => openGlobalSettings("sys
 document.querySelectorAll("[data-settings-tab]").forEach((button) => {
   button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab));
 });
+el("skinGrid")?.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-skin-option]");
+  if (!card) return;
+  applySkin(card.dataset.skinOption);
+  card.focus();
+});
+el("skinGrid")?.addEventListener("keydown", (event) => {
+  if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+  const cards = Array.from(document.querySelectorAll("[data-skin-option]"));
+  const index = cards.indexOf(document.activeElement);
+  if (index < 0) return;
+  event.preventDefault();
+  const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
+  const next = cards[(index + step + cards.length) % cards.length];
+  applySkin(next.dataset.skinOption);
+  next.focus();
+});
 el("closeGlobalSettings").addEventListener("click", closeGlobalSettings);
 el("globalSettingsModal").addEventListener("click", (event) => { if (event.target === el("globalSettingsModal")) closeGlobalSettings(); });
 el("globalSettingsForm").addEventListener("submit", saveGeneralSettings);
@@ -5453,6 +5520,7 @@ window.addEventListener("resize", () => {
 });
 
 async function initialize() {
+  applySkin(currentSkin(), { persist: false });
   if (ANDROID_CLIENT) {
     document.body.classList.add("android-client");
     el("androidServerSettings").hidden = false;

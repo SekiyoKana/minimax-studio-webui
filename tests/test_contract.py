@@ -475,6 +475,32 @@ class ContractTests(unittest.TestCase):
         self.assertGreater(settings, toolbar_actions)
         self.assertGreater(toolbar_actions, toolbar_left)
 
+    def test_skins_are_scoped_and_selectable_from_settings(self):
+        project_root = Path(__file__).resolve().parents[1]
+        index = (project_root / "static" / "index.html").read_text(encoding="utf-8")
+        app_js = (project_root / "static" / "app.js").read_text(encoding="utf-8")
+        skins_css = (project_root / "static" / "skins" / "skins.css").read_text(encoding="utf-8")
+
+        self.assertIn('/assets/skins/skins.css', index)
+        self.assertIn('id="settingsPanelAppearance"', index)
+        self.assertIn('data-skin-option="default"', index)
+        self.assertIn('data-skin-option="aurora"', index)
+        self.assertIn("document.documentElement.dataset.skin", index)
+        self.assertIn("const SKINS = [", app_js)
+        self.assertIn("function applySkin(", app_js)
+        self.assertIn('"h3:skinchange"', app_js)
+        self.assertIn('if (skin === "default") delete document.documentElement.dataset.skin;', app_js)
+        self.assertIn('html[data-skin="aurora"]', skins_css)
+
+        selectors = [
+            line.split("{", 1)[0].strip()
+            for line in skins_css.splitlines()
+            if "{" in line and not line.strip().startswith(("/*", "*", "@"))
+        ]
+        self.assertTrue(selectors)
+        for selector in selectors:
+            self.assertTrue(selector.startswith('html[data-skin='), selector)
+
     def test_comfy_nodes_and_health_interval_are_stored_in_sqlite(self):
         with TemporaryDirectory() as temp:
             registry = NodeRegistry(Path(temp) / "config.db")

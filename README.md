@@ -40,6 +40,7 @@ MiniMax H3 Studio 为 MiniMax H3、H3 TTS、数字人、Music3 和通用 Running
 | 详情窗口 | 无背景模糊、窗口阴影、多个窗口同时打开、独立拖拽和详情侧栏收起 |
 | 节点管理 | ComfyUI 与 RunningHub 节点配置、健康检查、启停和并发设置 |
 | 工作流管理 | 内置预设与自定义 ComfyUI 工作流、字段与素材映射、结果节点选择、节点同步和校验 |
+| 皮肤系统 | 设置内切换界面皮肤，默认皮肤保持原样；皮肤仅改变视觉，不影响功能与数据 |
 | 多端互联 | 局域网或 Tailscale 配对、授权撤销、本机代理任务和远端素材只读访问 |
 | Android 客户端 | 手机和平板远程连接 Studio 服务，固定 FL2VA FP8 + 8 步 LoRA，支持远端 ComfyUI、RunningHub、多端互联、任务进度和结果下载；当前为 Beta，尚未完成实机测试 |
 | Agent 接入 | Swagger UI、OpenAPI JSON、公开 `AGENT.md` 和 Skill 创建规范 |
@@ -54,6 +55,33 @@ MiniMax H3 Studio 为 MiniMax H3、H3 TTS、数字人、Music3 和通用 Running
 | 工作台 | 数字人工作流 |
 |---|---|
 | ![工作台](docs/images/h3-studio-overview.jpg) | ![数字人](docs/images/h3-studio-digital-human.jpg) |
+
+## 皮肤系统
+
+界面外观由皮肤控制，默认皮肤与原界面完全一致。在「设置 → 外观」中切换，立即生效，保存在本机 `localStorage` 的 `h3-skin` 键，不写入任务数据，也不改变任何接口。
+
+| 皮肤 | 风格 |
+|---|---|
+| 原野（默认） | 明亮编辑风，暖白画布、砖红强调色与无衬线字体 |
+| 极光玻璃 Aurora Glass | 深色玻璃拟态，极光背景、青色与紫色渐变、衬线标题 |
+
+| 极光玻璃工作台 | 设置 → 外观 |
+|---|---|
+| ![极光玻璃](docs/images/h3-studio-aurora.jpg) | ![皮肤设置](docs/images/h3-studio-skins.jpg) |
+
+皮肤是纯展示层：CSS 只覆盖设计令牌和装饰属性，不改变 DOM 结构、元素顺序、可见性、文案或任何 JavaScript 行为。生成、队列、素材、工作流和 API 在两种皮肤下完全一致。
+
+### 新增皮肤的规则
+
+追加新模块或新皮肤时遵守以下约定，默认皮肤和既有皮肤都不会被破坏：
+
+1. 组件颜色只使用 `:root` 设计令牌（`--canvas`、`--surface`、`--surface-soft`、`--ink`、`--muted`、`--line`、`--accent`、`--blue` 等），不要写死色值。
+2. 皮肤样式写入 [`static/skins/skins.css`](static/skins/skins.css)，且必须限定在 `html[data-skin="<id>"]` 之下；不得为了某个皮肤修改基础规则。
+3. 皮肤只能覆盖颜色、边框、阴影、圆角、字体和背景；不得改变布局结构、尺寸、元素顺序、可见性或交互逻辑。
+4. 皮肤资源放在 `static/skins/<id>/`，预览图固定命名 `preview.jpg`（16:10）。
+5. 在 [`static/app.js`](static/app.js) 的 `SKINS`、`SKIN_THEME_COLORS` 常量和设置外观面板中注册皮肤；默认皮肤不设置 `data-skin` 属性。
+6. 新模块若使用 Canvas、WebGL 或图表等无法被 CSS 换肤的绘制方式，监听 `h3:skinchange` 事件读取 `event.detail.skin` 后重绘。
+7. 合并前运行完整测试；默认皮肤下页面必须与改动前一致，并至少手动检查一次其他皮肤的关键页面。
 
 ## 数据流程
 
@@ -84,6 +112,15 @@ flowchart LR
 任务进入终态后，`elapsed_seconds` 使用 `started_at` 到终态时间的差值。旧任务缺少 `started_at` 时使用创建时间兼容显示。
 
 ## 更新日志
+
+### 2026-10-22：皮肤系统与极光玻璃
+
+- 新增可切换皮肤机制，默认皮肤与原界面完全一致，皮肤只改变视觉、不影响功能。
+- 新增「极光玻璃」深色皮肤：极光背景、玻璃拟态面板、衬线标题和青色/紫色渐变强调。
+- 设置新增「外观」页签，切换后立即生效，并保存在本机 `localStorage` 的 `h3-skin` 键。
+- 皮肤样式集中在 `static/skins/skins.css`，全部限定在 `html[data-skin="<id>"]` 下，不修改基础规则。
+- 新增 `h3:skinchange` 事件，供 Canvas、图表等非 CSS 模块在换肤时重绘。
+- 约定新模块只使用设计令牌（`--canvas`、`--surface`、`--ink` 等），保证后续模块自动兼容所有皮肤。
 
 ### 2026-10-21：自定义工作流管理与参考图压缩
 
@@ -418,6 +455,7 @@ INSTALL_ROOT=/data/minimax-h3-stack bash scripts/verify_install.sh
 ```text
 app/                  FastAPI、任务队列、工作流配置、节点调度和推理客户端
 static/               中英文响应式网页
+static/skins/         皮肤样式、预览图与背景资源
 workflows/            H3、H3 SA、VDN H3 和 Music3 API 工作流
 comfyui_nodes/        固定版本节点源码包和校验清单
 scripts/              安装、下载、验证、桌面打包和生成测试

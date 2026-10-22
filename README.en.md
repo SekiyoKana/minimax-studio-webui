@@ -37,6 +37,7 @@ MiniMax H3 Studio provides a Web interface, HTTP API, and desktop entry point fo
 | Local asset management | Capacity statistics, 30-day video cleanup preview, ownership checks, and artifact deletion |
 | Detail windows | No blurred backdrop, window shadow, multiple open windows, independent dragging, and a collapsible detail rail |
 | Node manager | ComfyUI and RunningHub configuration, health checks, enablement, and concurrency settings |
+| Skin system | Switchable UI skins in Settings; the default skin is unchanged and skins affect appearance only |
 | Device sharing | LAN or Tailscale pairing, authorization revocation, proxy jobs, and read-only remote assets |
 | Agent integration | Swagger UI, OpenAPI JSON, public `AGENT.md`, and Skill creation guidance |
 
@@ -45,6 +46,29 @@ The interface also supports a resizable asset sidebar with `localStorage` persis
 ## Screenshot
 
 ![API documentation](docs/images/h3-api-docs.jpg)
+
+## Skins
+
+The interface appearance is a presentation layer. Switch skins in Settings > Appearance; the choice applies immediately and is stored locally under the `h3-skin` key. Skins never change APIs, data, DOM structure, element order, visibility, copy, or behavior.
+
+| Skin | Style |
+|---|---|
+| Meadow (default) | Light editorial: warm canvas, brick accent, sans-serif |
+| Aurora Glass | Dark glassmorphism: aurora backdrop, cyan/violet accents, serif headings |
+
+| Aurora Glass workbench | Settings > Appearance |
+|---|---|
+| ![Aurora Glass](docs/images/h3-studio-aurora.jpg) | ![Skin settings](docs/images/h3-studio-skins.jpg) |
+
+Rules for new modules and skins:
+
+1. Use the `:root` design tokens (`--canvas`, `--surface`, `--ink`, `--line`, `--accent`, `--blue`, ...); never hardcode colors.
+2. Scope every skin rule under `html[data-skin="<id>"]` in `static/skins/skins.css`; never edit base rules for a skin.
+3. Skins may only override colors, borders, shadows, radius, fonts and backgrounds — no layout, sizing, order, visibility or behavior changes.
+4. Assets go in `static/skins/<id>/` with a `preview.jpg` (16:10).
+5. Register the skin in the `SKINS` and `SKIN_THEME_COLORS` constants in `static/app.js` and add its card to the Settings appearance panel.
+6. Canvas, WebGL and chart modules must listen for the `h3:skinchange` event and repaint using `event.detail.skin`; read `currentSkin()` once at startup.
+7. Verify the default skin is unchanged and manually check the other skin before merging.
 
 ## Data flow
 
@@ -75,6 +99,14 @@ Persistent data is stored under `data/`:
 `elapsed_seconds` is calculated from `started_at` to the terminal timestamp. Legacy jobs without `started_at` use creation time for compatibility.
 
 ## Update log
+
+### 2026-10-22: Skin system and Aurora Glass
+
+- Added a switchable skin system; the default skin keeps the previous interface unchanged.
+- Added the Aurora Glass dark skin: aurora backdrop, glass panels, serif headings, cyan and violet accents.
+- Settings > Appearance applies a skin immediately and stores it in `localStorage` under the `h3-skin` key.
+- Skin CSS lives in `static/skins/skins.css` and is fully scoped to `html[data-skin="<id>"]`.
+- Added the `h3:skinchange` event and a token-only rule so future modules stay compatible with every skin.
 
 ### 2026-09-23: Video super-resolution and automatic processing
 
