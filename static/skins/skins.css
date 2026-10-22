@@ -31,6 +31,8 @@ html[data-skin="aurora"] {
   --quiet: #7486a0;
   --line: #1d2a3c;
   --line-strong: #2c3d55;
+  --field-border: rgba(255, 255, 255, .16);
+  --field-border-strong: rgba(255, 255, 255, .28);
   --accent: #ff8a66;
   --accent-soft: rgba(255, 138, 102, 0.14);
   --blue: #6fd3ff;

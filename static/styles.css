@@ -11,6 +11,8 @@
   --quiet: #86868b;
   --line: rgba(0, 0, 0, .08);
   --line-strong: rgba(0, 0, 0, .14);
+  --field-border: #d2d2d7;
+  --field-border-strong: #b9b9c1;
   --accent: #0071e3;
   --accent-soft: rgba(0, 113, 227, .08);
   --blue: #0071e3;

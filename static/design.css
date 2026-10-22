@@ -871,3 +871,37 @@ button { appearance: none; -webkit-appearance: none; }
   background: var(--fill-tertiary);
   color: var(--muted);
 }
+
+
+/* Inputs keep a visible hairline when idle, independent of the focus ring */
+.search-wrap input,
+.library-tools select,
+.settings-body input:not([type="checkbox"]),
+.settings-body select,
+.settings-body textarea,
+.workflow-editor-content > input:not([type="file"]),
+.workflow-editor-content > textarea,
+.workflow-mapping-row select,
+.workflow-mapping-row input,
+.workflow-result-row select,
+.runninghub-parameter input:not([type="checkbox"]),
+.runninghub-parameter select,
+.runninghub-parameter textarea,
+.asset-folder-name-field input,
+.unlock-assets-body input,
+.secret-dialog input,
+.composer-box {
+  border-color: var(--field-border);
+}
+
+.search-wrap input:hover:not(:focus),
+.library-tools select:hover:not(:focus),
+.settings-body input:not([type="checkbox"]):hover:not(:focus),
+.settings-body select:hover:not(:focus),
+.settings-body textarea:hover:not(:focus),
+.asset-folder-name-field input:hover:not(:focus),
+.unlock-assets-body input:hover:not(:focus),
+.secret-dialog input:hover:not(:focus),
+.composer-box:hover:not(:focus-within) {
+  border-color: var(--field-border-strong);
+}
