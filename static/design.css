@@ -414,8 +414,7 @@ body {
 .node-editor-actions .primary,
 .asset-folder-dialog-actions .primary,
 .unlock-assets-body button.primary,
-.peering-panel button.primary,
-.asset-detail-footer .detail-reuse {
+.peering-panel button.primary {
   height: 44px;
   border: 0;
   border-radius: 999px;
@@ -427,8 +426,7 @@ body {
 .node-editor-actions .primary:hover,
 .asset-folder-dialog-actions .primary:hover,
 .unlock-assets-body button.primary:hover,
-.peering-panel button.primary:hover,
-.asset-detail-footer .detail-reuse:hover { background: #0077ed; border: 0; }
+.peering-panel button.primary:hover { background: #0077ed; border: 0; }
 
 .asset-detail-footer button,
 .asset-detail-footer a { border-radius: 999px; height: 36px; }
@@ -970,16 +968,23 @@ button { appearance: none; -webkit-appearance: none; }
   padding: 0 11px;
   border: 1px solid var(--line-strong);
   background: var(--surface);
-  color: var(--blue);
+  color: var(--ink);
   font-size: var(--text-caption);
 }
 .asset-detail-footer .detail-reuse:hover {
   border-color: var(--line-strong);
   background: var(--surface-soft);
-  color: var(--blue);
+  color: var(--ink);
 }
 .asset-owner {
   border-color: var(--line-strong);
   background: var(--fill-tertiary);
   color: var(--muted);
+}
+
+
+/* Hovered workflow rows should stay on the active surface, never a fixed light color */
+.workflow-row:hover {
+  background: var(--fill-tertiary);
+  border-color: var(--line-strong);
 }

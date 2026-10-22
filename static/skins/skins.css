@@ -335,7 +335,6 @@ html[data-skin="aurora"] .video-result a,
 html[data-skin="aurora"] .audio-result a,
 html[data-skin="aurora"] .image-result a,
 html[data-skin="aurora"] .file-result a,
-html[data-skin="aurora"] .asset-detail-footer .detail-reuse,
 html[data-skin="aurora"] .node-manager-toolbar button,
 html[data-skin="aurora"] .secret-submit {
   border-color: transparent;
@@ -347,7 +346,6 @@ html[data-skin="aurora"] .video-result a:hover,
 html[data-skin="aurora"] .audio-result a:hover,
 html[data-skin="aurora"] .image-result a:hover,
 html[data-skin="aurora"] .file-result a:hover,
-html[data-skin="aurora"] .asset-detail-footer .detail-reuse:hover,
 html[data-skin="aurora"] .node-manager-toolbar button:hover,
 html[data-skin="aurora"] .secret-submit:hover {
   border-color: transparent;
