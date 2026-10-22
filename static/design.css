@@ -1032,3 +1032,19 @@ button { appearance: none; -webkit-appearance: none; }
   border-radius: 50%;
 }
 .asset-meta > [data-job-action="rename"]:hover { background: var(--fill-tertiary); }
+
+/* Folder dialog secondary action matches the primary control size */
+.asset-folder-dialog-actions button {
+  min-width: 88px;
+  height: 44px;
+  padding: 0 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-body);
+}
+.asset-folder-dialog-actions button:hover {
+  border-color: var(--line-strong);
+  background: var(--fill-tertiary);
+}
