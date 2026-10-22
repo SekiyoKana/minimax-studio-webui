@@ -124,6 +124,12 @@ Persistent data is stored under `data/`:
 
 ## Update log
 
+### 2026-10-22: Runtime log moved to the header
+
+- Removed the draggable floating log launcher; the activity log now lives in the top-right action bar with a queue-count badge.
+- Clicking it opens a log dialog that can still be dragged by its header. Click the backdrop or press Escape to close.
+- The "Show runtime logs" setting still controls both the entry and the dialog.
+
 ### 2026-10-22: Bilingual API errors
 
 - Frontend requests now send `Accept-Language`; backend `HTTPException` responses are translated from that header.

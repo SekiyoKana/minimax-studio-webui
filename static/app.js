@@ -85,8 +85,6 @@ const state = {
   brandClicks: [],
   opsPosition: { x: 0, y: 0 },
   opsPositionInitialized: false,
-  launcherPosition: { x: 0, y: 0 },
-  launcherPositionInitialized: false,
   mentionIndex: -1,
   locale: localStorage.getItem("h3-locale") === "en" ? "en" : "zh-CN",
 };
@@ -311,8 +309,6 @@ function applyStaticLocale() {
   setText("#mentionReferenceLabel", "Images");
   setText("#optimizePromptLabel", "Optimize prompt");
   setText("#writeLyrics span", "Optimize lyrics");
-  setText("#launcherTitle", "Activity");
-  setText("#launcherMeta", "Queue empty");
   setText(".ops-header h2", "Runtime status");
   setText("#activeTaskSummary", "No active tasks");
   setText(".queue-section .ops-section-title span", "Running and queued");
@@ -512,7 +508,7 @@ function applyStaticLocale() {
   setTitle("#assetStatusFilter", "Asset status filter");
   setTitle("#assetGrid", "Generated assets");
   setTitle("#openNodeManager", "Manage inference nodes");
-  setTitle("#opsLauncher", "Open activity log");
+  setTitle("#openOps", "Activity log");
   setTitle("#closeOps", "Close activity log");
   setControlTitle("comfyNode", "Inference node");
   setControlTitle("aspectRatio", "Aspect ratio");
@@ -4003,16 +3999,11 @@ function renderQueue(queue) {
   const anonymousRunning = running && isAnonymousQueueJob(running);
   const queuedCount = queue.filter((job) => job.status === "queued").length;
   el("queueCount").textContent = queue.length;
-  el("launcherQueueCount").textContent = queuedCount;
-  el("launcherQueueCount").hidden = queuedCount === 0;
-  el("launcherTitle").textContent = running
-    ? state.locale === "en" ? `Generating ${runningJobs.length}` : `正在生成 ${runningJobs.length}`
-    : state.locale === "en" ? "Activity" : "运行日志";
-  el("launcherMeta").textContent = running
-    ? anonymousRunning
-      ? state.locale === "en" ? "A task is running" : "有任务正在运行中"
-      : `${nodeLabel(running)} · ${executionModeLabel(running)} · ${running.progress || 0}% · ${formatElapsed(running.elapsed_seconds)}`
-    : queuedCount ? state.locale === "en" ? `${queuedCount} queued` : `排队 ${queuedCount}` : state.locale === "en" ? "Queue empty" : "队列为空";
+  el("opsQueueBadge").textContent = queuedCount;
+  el("opsQueueBadge").hidden = queuedCount === 0;
+  el("openOps").title = queuedCount
+    ? localized(`运行日志 · ${queuedCount} 个排队`, `Activity log · ${queuedCount} queued`)
+    : localized("运行日志", "Activity log");
   el("activeTaskSummary").textContent = running
     ? anonymousRunning
       ? state.locale === "en" ? "A task is running" : "有任务正在运行中"
@@ -4190,7 +4181,7 @@ async function loadGeneralSettings() {
   applyRunningHubAvailability();
   el("remoteDisconnectPolicy").value = payload.remote_disconnect_policy || "encrypt";
   el("remoteRecordsKey").value = payload.remote_records_key || "";
-  el("opsLauncher").hidden = payload.show_runtime_logs === false;
+  el("openOps").hidden = payload.show_runtime_logs === false;
   el("openPeering").hidden = payload.show_peering === false;
   if (payload.show_runtime_logs === false) closeOpsWindow();
 }
@@ -4231,7 +4222,7 @@ async function saveGeneralSettings(event) {
       body: JSON.stringify({ health_interval_seconds: seconds }),
     });
     state.generalSettings = payload;
-    el("opsLauncher").hidden = !el("showRuntimeLogs").checked;
+    el("openOps").hidden = !el("showRuntimeLogs").checked;
     el("openPeering").hidden = !el("showPeering").checked;
     state.generalSettings.auto_compress_large_images = el("autoCompressLargeImages").checked;
     state.runninghubEnabled = el("runninghubEnabled").checked;
@@ -4738,25 +4729,25 @@ async function authorizeIncognitoMode(event) {
 }
 
 function resetOpsPosition() {
-  const windowNode = el("opsWindow");
-  const rect = windowNode.getBoundingClientRect();
-  state.opsPosition.x = 16;
-  state.opsPosition.y = Math.max(24, Math.round(window.innerHeight * 0.08));
+  state.opsPosition.x = 0;
+  state.opsPosition.y = 0;
   applyOpsPosition();
 }
 
 function applyOpsPosition() {
   const windowNode = el("opsWindow");
   const rect = windowNode.getBoundingClientRect();
-  const maxX = Math.max(8, window.innerWidth - rect.width - 8);
-  const maxY = Math.max(8, window.innerHeight - rect.height - 8);
-  state.opsPosition.x = Math.min(maxX, Math.max(8, state.opsPosition.x));
-  state.opsPosition.y = Math.min(maxY, Math.max(8, state.opsPosition.y));
+  const maxX = Math.max(0, (window.innerWidth - rect.width) / 2 - 12);
+  const maxY = Math.max(0, (window.innerHeight - rect.height) / 2 - 12);
+  state.opsPosition.x = Math.min(maxX, Math.max(-maxX, state.opsPosition.x));
+  state.opsPosition.y = Math.min(maxY, Math.max(-maxY, state.opsPosition.y));
   windowNode.style.transform = `translate3d(${state.opsPosition.x}px, ${state.opsPosition.y}px, 0)`;
 }
 
 function openOpsWindow() {
-  el("opsWindow").hidden = false;
+  if (el("openOps").hidden) return;
+  el("opsModal").hidden = false;
+  document.body.classList.add("modal-open");
   if (!state.opsPositionInitialized) {
     resetOpsPosition();
     state.opsPositionInitialized = true;
@@ -4767,7 +4758,9 @@ function openOpsWindow() {
 }
 
 function closeOpsWindow() {
-  el("opsWindow").hidden = true;
+  el("opsModal").hidden = true;
+  if (el("nodeModal").hidden && el("assetDetailModal").hidden && el("globalSettingsModal").hidden) document.body.classList.remove("modal-open");
+  el("openOps").focus();
 }
 
 function openAssetDrawer() {
@@ -5617,6 +5610,10 @@ document.addEventListener("keydown", (event) => {
     closeLocalAssetPreview();
     return;
   }
+  if (event.key === "Escape" && !el("opsModal").hidden) {
+    closeOpsWindow();
+    return;
+  }
   if (event.key === "Escape" && !el("videoUpscaleModal").hidden) {
     closeVideoUpscaleDialog();
     return;
@@ -5635,14 +5632,14 @@ el("clearVisibleLogs").addEventListener("click", () => {
   state.logFloor = Date.now();
   renderLogs(state.logs);
 });
-let launcherClickSuppressed = false;
-el("opsLauncher").addEventListener("click", (event) => {
-  if (launcherClickSuppressed) {
-    launcherClickSuppressed = false;
-    event.preventDefault();
+el("openOps").addEventListener("click", openOpsWindow);
+el("opsModal").addEventListener("click", (event) => {
+  if (event.target !== el("opsModal")) return;
+  if (opsDragMoved) {
+    opsDragMoved = false;
     return;
   }
-  openOpsWindow();
+  closeOpsWindow();
 });
 el("closeOps").addEventListener("click", closeOpsWindow);
 el("openAssets").addEventListener("click", openAssetDrawer);
@@ -5650,6 +5647,7 @@ el("closeAssets").addEventListener("click", closeAssetDrawer);
 el("mobileScrim").addEventListener("click", closeAssetDrawer);
 
 let dragState = null;
+let opsDragMoved = false;
 function startOpsDrag(clientX, clientY) {
   dragState = {
     startX: clientX,
@@ -5657,10 +5655,12 @@ function startOpsDrag(clientX, clientY) {
     originX: state.opsPosition.x,
     originY: state.opsPosition.y,
   };
+  opsDragMoved = false;
   el("opsWindow").classList.add("dragging");
 }
 function moveOpsDrag(clientX, clientY) {
   if (!dragState) return;
+  if (Math.abs(clientX - dragState.startX) > 3 || Math.abs(clientY - dragState.startY) > 3) opsDragMoved = true;
   state.opsPosition.x = dragState.originX + clientX - dragState.startX;
   state.opsPosition.y = dragState.originY + clientY - dragState.startY;
   applyOpsPosition();
@@ -5669,6 +5669,7 @@ function stopOpsDrag() {
   if (!dragState) return;
   dragState = null;
   el("opsWindow").classList.remove("dragging");
+  if (opsDragMoved) setTimeout(() => { opsDragMoved = false; }, 0);
 }
 el("opsDragHandle").addEventListener("mousedown", (event) => {
   if (event.button !== 0 || event.target.closest("button")) return;
@@ -5701,83 +5702,6 @@ window.addEventListener("touchmove", (event) => {
 window.addEventListener("touchend", stopOpsDrag);
 window.addEventListener("touchcancel", stopOpsDrag);
 
-let launcherDragState = null;
-function initializeLauncherPosition() {
-  if (state.launcherPositionInitialized) return;
-  const launcher = el("opsLauncher");
-  const rect = launcher.getBoundingClientRect();
-  state.launcherPosition = { x: rect.left, y: rect.top };
-  state.launcherPositionInitialized = true;
-  launcher.style.left = `${rect.left}px`;
-  launcher.style.top = `${rect.top}px`;
-  launcher.style.right = "auto";
-}
-function applyLauncherPosition() {
-  if (!state.launcherPositionInitialized) return;
-  const launcher = el("opsLauncher");
-  const rect = launcher.getBoundingClientRect();
-  const maxX = Math.max(8, window.innerWidth - rect.width - 8);
-  const maxY = Math.max(8, window.innerHeight - rect.height - 8);
-  state.launcherPosition.x = Math.min(maxX, Math.max(8, state.launcherPosition.x));
-  state.launcherPosition.y = Math.min(maxY, Math.max(8, state.launcherPosition.y));
-  launcher.style.left = `${state.launcherPosition.x}px`;
-  launcher.style.top = `${state.launcherPosition.y}px`;
-}
-function startLauncherDrag(clientX, clientY) {
-  initializeLauncherPosition();
-  launcherDragState = {
-    startX: clientX,
-    startY: clientY,
-    originX: state.launcherPosition.x,
-    originY: state.launcherPosition.y,
-    moved: false,
-  };
-  el("opsLauncher").classList.add("dragging");
-}
-function moveLauncherDrag(clientX, clientY) {
-  if (!launcherDragState) return;
-  const deltaX = clientX - launcherDragState.startX;
-  const deltaY = clientY - launcherDragState.startY;
-  if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) launcherDragState.moved = true;
-  state.launcherPosition.x = launcherDragState.originX + deltaX;
-  state.launcherPosition.y = launcherDragState.originY + deltaY;
-  applyLauncherPosition();
-}
-function stopLauncherDrag() {
-  if (!launcherDragState) return;
-  launcherClickSuppressed = launcherDragState.moved;
-  launcherDragState = null;
-  el("opsLauncher").classList.remove("dragging");
-}
-el("opsLauncher").addEventListener("mousedown", (event) => {
-  if (event.button !== 0) return;
-  event.preventDefault();
-  startLauncherDrag(event.clientX, event.clientY);
-});
-window.addEventListener("mousemove", (event) => moveLauncherDrag(event.clientX, event.clientY));
-window.addEventListener("mouseup", stopLauncherDrag);
-el("opsLauncher").addEventListener("pointerdown", (event) => {
-  if (event.button !== 0) return;
-  event.preventDefault();
-  startLauncherDrag(event.clientX, event.clientY);
-});
-window.addEventListener("pointermove", (event) => moveLauncherDrag(event.clientX, event.clientY));
-window.addEventListener("pointerup", stopLauncherDrag);
-window.addEventListener("pointercancel", stopLauncherDrag);
-el("opsLauncher").addEventListener("touchstart", (event) => {
-  const touch = event.touches[0];
-  if (!touch) return;
-  event.preventDefault();
-  startLauncherDrag(touch.clientX, touch.clientY);
-}, { passive: false });
-window.addEventListener("touchmove", (event) => {
-  const touch = event.touches[0];
-  if (!launcherDragState || !touch) return;
-  event.preventDefault();
-  moveLauncherDrag(touch.clientX, touch.clientY);
-}, { passive: false });
-window.addEventListener("touchend", stopLauncherDrag);
-window.addEventListener("touchcancel", stopLauncherDrag);
 el("sidebarResizer").addEventListener("pointerdown", startSidebarResize);
 window.addEventListener("pointermove", moveSidebarResize);
 window.addEventListener("pointerup", stopSidebarResize);
@@ -5798,7 +5722,7 @@ el("sidebarResizer").addEventListener("keydown", (event) => {
   }
 });
 window.addEventListener("resize", () => {
-  if (!el("opsWindow").hidden) applyOpsPosition();
+  if (!el("opsModal").hidden) applyOpsPosition();
   applyLauncherPosition();
   if (window.innerWidth > 860) setSidebarWidth(el("assetSidebar").getBoundingClientRect().width, false);
 });

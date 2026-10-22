@@ -1242,3 +1242,33 @@ button { appearance: none; -webkit-appearance: none; }
 
 
 .node-manager-error:empty { display: none; }
+
+
+/* Runtime log: header entry with a draggable modal */
+.ops-trigger { position: relative; }
+.ops-trigger > b {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  display: grid;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--blue);
+  color: #fff;
+  font: 500 9px/1 var(--mono);
+}
+.ops-modal { z-index: 125; }
+.ops-modal .ops-window {
+  position: relative;
+  top: auto;
+  left: auto;
+  width: min(560px, calc(100vw - 36px));
+  height: min(620px, calc(100dvh - 36px));
+}
+@media (max-width: 620px) {
+  .ops-modal { padding: 8px; }
+  .ops-modal .ops-window { width: calc(100vw - 16px); height: min(680px, calc(100dvh - 16px)); }
+}
