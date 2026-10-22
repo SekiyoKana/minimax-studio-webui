@@ -61,6 +61,11 @@ const state = {
   queue: [],
   nodes: [],
   managedNodes: [],
+  workflows: [],
+  workflowEditingId: null,
+  workflowDraftJson: null,
+  workflowEditorReturnFocus: null,
+  referenceProcessing: false,
   nodeEditingId: null,
   runningHubSchemaKey: "",
   runningHubRenderSignature: "",
@@ -72,7 +77,7 @@ const state = {
   runtimeRevision: "",
   localRuntime: { logs: [], queue: [], nodes: [] },
   peerRuntime: {},
-  generalSettings: { show_runtime_logs: true, show_peering: true, backup_outputs: false, remote_disconnect_policy: "encrypt" },
+  generalSettings: { show_runtime_logs: true, show_peering: true, backup_outputs: false, auto_compress_large_images: true, remote_disconnect_policy: "encrypt" },
   conversationDevices: [],
   stream: null,
   incognito: false,
@@ -178,6 +183,10 @@ function applyStaticLocale() {
   setTitle("#openAssets", t("assets"));
   setTitle("#languageToggle", t("switchLanguage"));
   setTitle("#openPeering", t("peering"));
+  setTitle("#openNodeManager", localized("管理推理节点", "Manage inference nodes"));
+  setTitle("#openWorkflowManager", localized("管理工作流", "Manage workflows"));
+  setTitle("#openGlobalSettings", localized("设置", "Settings"));
+  setText("#openWorkflowManager span", localized("工作流", "Workflows"));
     setTitle("#closeAssetDetail", t("close"));
   setText("#deleteAssetDetail span", t("deleteRecord"));
   setText("#reuseOutputAssetDetail span", t("useAsInput"));
@@ -194,14 +203,6 @@ function applyStaticLocale() {
   setText(".skip-link", "Skip to chat");
   setText(".edit-banner span", "Editing queued task");
   setText("#exitEdit", "Stop editing");
-  setText('#executionMode option[value="native"]', "Native H3");
-  setText('#executionMode option[value="h3-sa"]', "MiniMax H3 SA · Sol-Attn");
-  setText('#executionMode option[value="vdn-h3"]', "VDN-H3 · Video Delta Net");
-  setText('#executionMode option[value="dual-sampling"]', "Dual sampling · Sigma + latent upscale");
-  setText('#executionMode option[value="digital-human"]', "Digital human · audio driven");
-  setText('#executionMode option[value="tts"]', "H3 TTS · character voice");
-  setText('#executionMode option[value="video-upscale"]', "Video super-resolution");
-  setText("#music3ExecutionOption", "Music3 · 30 steps");
   setText("#durationHint", "Video length follows the driving audio");
   setText("#mentionQuickLabel", "Quick actions");
   setText("#mentionReferenceLabel", "Images");
@@ -218,6 +219,46 @@ function applyStaticLocale() {
   setText(".log-section .quiet", "Waiting for events");
   setText("#nodeDialogTitle", "Inference nodes");
   setText(".node-dialog-header p", "ComfyUI and RunningHub configuration");
+  setText("#globalSettingsTitle", "Settings");
+  setText("#globalSettingsSubtitle", "Model, system, and upload preferences");
+  setText("#settingsTabModel", "Model");
+  setText("#settingsTabSystem", "System");
+  setText("#settingsTabUpload", "Upload");
+  document.querySelector(".settings-tabs")?.setAttribute("aria-label", "Settings categories");
+  setText("#settingsPanelUpload .switch-row > span:first-child", "Compress large reference images");
+  setText("#settingsUploadHelp", "Images over 1 MB are compressed locally before upload.");
+  setLeadingText("#globalHealthInterval", "Node health check interval (seconds)");
+  setText("#settingsPanelSystem label:nth-child(2) > span:first-child", "Show runtime logs");
+  setText("#settingsPanelSystem label:nth-child(3) > span:first-child", "Show device sharing entry");
+  setText("#settingsPanelSystem label:nth-child(4) > span:first-child", "Back up generated outputs locally");
+  setLeadingText("#remoteDisconnectPolicy", "Handle remote records when disconnected");
+  setLeadingText("#settingsPanelSystem label:nth-of-type(6)", "Remote records key");
+  setText("#manageLocalAssets span", "Manage local assets");
+  setText("#globalSettingsForm .settings-form-actions button span", "Save settings");
+  setText("#settingsPanelUpload .settings-help", "Images over 1 MB are compressed locally before upload.");
+  setLeadingText("#globalSeedControl", "Random seed");
+  setText("#autoUpscaleControl > span:first-child", "Upscale after generation");
+  setText("#workflowDialogTitle", "Workflows");
+  setText("#workflowModal .node-dialog-header p", "ComfyUI API format · built-in presets and custom workflows");
+  setText("#addWorkflowButton span", "Add workflow");
+  setText("#workflowEditorModal .workflow-editor-header p", "Configure the API graph, field mappings, and target nodes");
+  setText("#workflowEditorTitle", state.workflowEditingId ? "Edit workflow" : "Add workflow");
+  setText('label[for="workflowName"]', "Workflow name");
+  setText('label[for="workflowDescription"]', "Workflow description (optional)");
+  el("workflowDescription").placeholder = "Displayed as entered";
+  setText('label[for="workflowJsonFile"]', "API workflow JSON");
+  setText(".workflow-config-section:first-of-type h4", "Common field mappings");
+  setText(".workflow-config-section:nth-of-type(2) h4", "Reference mappings");
+  setText('label[for="workflowStaticInputs"]', "Static inputs JSON");
+  setText('label[for="workflowResultNode"]', "Result node");
+  setText('label[for="workflowMediaType"]', "Media type");
+  setText("#workflowMediaType option[value=video]", "Video");
+  setText("#workflowMediaType option[value=audio]", "Audio");
+  setText("#workflowMediaType option[value=image]", "Image");
+  setText(".workflow-targets legend", "Target ComfyUI nodes");
+  setText(".workflow-visible-row > span:first-child", "Show in composer");
+  setText("#cancelWorkflowEdit", "Cancel");
+  setText("#workflowEditor button.primary", "Save and sync");
   setText('label[for="nodeHealthInterval"]', "Node status refresh interval");
   setText(".node-settings-row span", "sec");
   setText("#saveNodeSettings", "Save");
@@ -263,10 +304,13 @@ function applyStaticLocale() {
   setLeadingText("#aiBaseUrl", "OpenAI Base URL");
   setLeadingText("#aiModel", "Model");
   setLeadingText("#aiApiKey", "API Key");
-  setText(".popover-panel > .switch-row > span:first-child", "Enable AI prompt assistance");
+  setText("#settingsPanelModel > .switch-row > span:first-child", "Enable AI prompt assistance");
   el("seed").placeholder = "Auto";
   setTitle("#addReference", "Add reference files");
-  setTitle("#advancedSettings summary", "More settings");
+  setText("#settingsTabModel", localized("模型", "Model"));
+  setText("#settingsTabSystem", localized("系统", "System"));
+  setText("#settingsTabUpload", localized("上传", "Upload"));
+  document.querySelector(".settings-tabs")?.setAttribute("aria-label", localized("设置分类", "Settings categories"));
   setTitle("#mentionTrigger", "Insert image or use a quick action");
   setTitle("#optimizePrompt", "Optimize prompt");
   setTitle("#writeLyrics", "Optimize lyrics");
@@ -279,8 +323,6 @@ function applyStaticLocale() {
   setTitle("#openNodeManager", "Manage inference nodes");
   setTitle("#opsLauncher", "Open activity log");
   setTitle("#closeOps", "Close activity log");
-  setControlTitle("modelVariant", "Model");
-  setControlTitle("executionMode", "Workflow");
   setControlTitle("comfyNode", "Inference node");
   setControlTitle("aspectRatio", "Aspect ratio");
   setControlTitle("resolution", "Resolution");
@@ -362,6 +404,7 @@ function modelLabel(job) {
   if (job.request?.provider === "runninghub" || job.assigned_node?.provider === "runninghub") {
     return job.request?.runninghub_workflow_name || job.assigned_node?.workflow_name || job.assigned_node?.name || "RunningHub";
   }
+  if (job.request?.workflow_id?.startsWith("wf-")) return localized("自定义工作流", "Custom workflow");
   if (job.request?.model_variant === "music3-int8") return "Music3 INT8";
   if (job.request?.task_type === "upscale") {
     return `${{ real: "真人", anime: "动画", "3d": "3D" }[job.request?.upscale_category] || "超分"} · ${job.request?.upscale_scale || 2}x`;
@@ -384,6 +427,7 @@ function mediaDownloadLabel(mediaType) {
 
 function executionModeLabel(job) {
   if (job.request?.provider === "runninghub" || job.assigned_node?.provider === "runninghub") return "RunningHub";
+  if (job.request?.workflow_id?.startsWith("wf-") && job.request?.workflow_name) return job.request.workflow_name;
   if (job.request?.task_type === "upscale") return t("videoUpscale");
   if (job.request?.execution_mode === "music3") return t("music3");
   if (job.request?.execution_mode === "digital-human") return t("digitalHuman");
@@ -494,8 +538,15 @@ function renderNodeOptions(nodes = state.nodes) {
   state.nodes = Array.isArray(nodes) ? nodes : [];
   const select = el("comfyNode");
   const current = select.value || "auto";
-  const healthyNodes = state.nodes.filter((node) => node.healthy);
-  const comfyNodes = state.nodes.filter((node) => node.provider !== "runninghub");
+  const selectedWorkflow = selectedWorkflowRecord();
+  const customTargets = selectedWorkflow?.source === "custom"
+    ? new Set((selectedWorkflow.sync || []).filter((item) => item.status === "synced").map((item) => item.node_id))
+    : null;
+  const availableNodes = state.nodes.filter((node) => (
+    !customTargets || (customTargets.has(node.id) && node.provider === "comfyui")
+  ));
+  const healthyNodes = availableNodes.filter((node) => node.healthy);
+  const comfyNodes = availableNodes.filter((node) => node.provider !== "runninghub");
   const healthyComfyNodes = comfyNodes.filter((node) => node.healthy);
   const legacyRunningHubAuto = healthyNodes.length > 0
     && healthyNodes.every((node) => node.provider === "runninghub")
@@ -504,7 +555,7 @@ function renderNodeOptions(nodes = state.nodes) {
   const autoTotal = legacyRunningHubAuto ? state.nodes.length : comfyNodes.length;
   const options = [`<option value="auto">${t("autoSchedule")} · ${autoOnline}/${autoTotal} ${t("available")}</option>`];
   const runningHubGroups = new Map();
-  state.nodes.filter((node) => node.provider === "runninghub" && node.workflow_id && node.runninghub_schema).forEach((node) => {
+  availableNodes.filter((node) => node.provider === "runninghub" && node.workflow_id && node.runninghub_schema).forEach((node) => {
     if (!runningHubGroups.has(node.workflow_id)) runningHubGroups.set(node.workflow_id, []);
     runningHubGroups.get(node.workflow_id).push(node);
   });
@@ -519,7 +570,7 @@ function renderNodeOptions(nodes = state.nodes) {
     const label = `${t("autoSchedule")} · ${representative.workflow_name || representative.name}`;
     options.push(`<option value="${escapeHtml(`${RUNNINGHUB_TARGET_PREFIX}${resourceId}`)}"${available.length ? "" : " disabled"}>${escapeHtml(label)} · ${escapeHtml(stateLabel)}</option>`);
   });
-  state.nodes.forEach((node) => {
+  availableNodes.forEach((node) => {
     const running = Number(node.running_count || 0);
     const capacity = Number(node.capacity || 1);
     const stateLabel = node.provider === "runninghub"
@@ -541,6 +592,51 @@ function renderNodeOptions(nodes = state.nodes) {
   if (select.innerHTML !== markup) select.innerHTML = markup;
   select.value = Array.from(select.options).some((option) => option.value === current) ? current : "auto";
   updateModelUi();
+}
+
+function selectedWorkflowRecord() {
+  const id = el("workflowSelect")?.value;
+  return state.workflows.find((item) => item.id === id) || null;
+}
+
+function workflowReadyNodeIds(workflow) {
+  const synced = new Set((workflow.sync || []).filter((item) => item.status === "synced").map((item) => item.node_id));
+  return (workflow.target_node_ids || []).filter((nodeId) => (
+    synced.has(nodeId) && state.nodes.some((node) => node.id === nodeId && node.provider === "comfyui" && node.healthy)
+  ));
+}
+
+function workflowSelectable(workflow) {
+  if (workflow.incognito_only && !state.incognito) return false;
+  if (workflow.source === "preset") return true;
+  const ready = workflowReadyNodeIds(workflow);
+  return el("comfyNode").value === "auto" ? ready.length > 0 : ready.includes(el("comfyNode").value);
+}
+
+function renderWorkflowOptions() {
+  const select = el("workflowSelect");
+  if (!select) return;
+  const current = select.value;
+  const visibleWorkflows = state.workflows.filter((item) => (
+    item.visible_in_composer && (!item.incognito_only || state.incognito)
+  ));
+  const options = visibleWorkflows.map((workflow) => {
+    const selectable = workflowSelectable(workflow);
+    const label = state.locale === "en" ? (workflow.name_en || workflow.name) : workflow.name;
+    const unavailable = workflow.source === "custom" && !selectable;
+    return `<option value="${escapeHtml(workflow.id)}"${selectable ? "" : " disabled"}>${escapeHtml(label)}${unavailable ? ` · ${localized("未同步或节点离线", "No synced online node")}` : ""}</option>`;
+  });
+  select.innerHTML = options.length ? options.join("") : `<option value="">${localized("没有可显示的工作流", "No visible workflows")}</option>`;
+  const currentWorkflow = visibleWorkflows.find((item) => item.id === current);
+  select.value = currentWorkflow?.id || visibleWorkflows.find(workflowSelectable)?.id || visibleWorkflows[0]?.id || "";
+  const workflow = selectedWorkflowRecord();
+  if (workflow?.source === "preset") {
+    el("modelVariant").value = workflow.model_variant;
+    el("executionMode").value = workflow.task_type === "upscale" ? "video-upscale" : workflow.execution_mode;
+  } else {
+    el("modelVariant").value = "fl2va-fp8";
+    el("executionMode").value = "native";
+  }
 }
 
 function renderHealthState(nodes = state.nodes, queueDepth = state.queue.length) {
@@ -774,7 +870,7 @@ async function saveNode(event) {
       body: JSON.stringify(body),
     });
     closeNodeEditor();
-    await Promise.all([loadManagedNodes(), checkHealth()]);
+    await Promise.all([loadManagedNodes(), checkHealth(), loadWorkflows()]);
   } catch (error) {
     el("nodeManagerError").textContent = error.message;
   } finally {
@@ -789,9 +885,357 @@ async function deleteNode(nodeId) {
   try {
     await api(`/api/v1/comfy/nodes/${encodeURIComponent(nodeId)}`, { method: "DELETE" });
     if (state.nodeEditingId === nodeId) closeNodeEditor();
-    await Promise.all([loadManagedNodes(), checkHealth()]);
+    await Promise.all([loadManagedNodes(), checkHealth(), loadWorkflows()]);
   } catch (error) {
     el("nodeManagerError").textContent = error.message;
+  }
+}
+
+const WORKFLOW_FIELDS = [
+  ["prompt", "提示词"], ["lyrics", "歌词"], ["width", "宽度"], ["height", "高度"],
+  ["duration", "时长"], ["num_frames", "帧数"], ["steps", "步数"], ["seed", "随机种子"],
+];
+
+function workflowNodeSelect(graph, selected = "", className = "workflow-node-select") {
+  const options = Object.entries(graph || {}).map(([nodeId, node]) => (
+    `<option value="${escapeHtml(nodeId)}"${nodeId === selected ? " selected" : ""}>${escapeHtml(`${nodeId} · ${node.class_type || "Node"}`)}</option>`
+  )).join("");
+  return `<select class="${className}" aria-label="工作流节点">${options}</select>`;
+}
+
+function updateWorkflowMappingInputOptions(row) {
+  const graph = state.workflowDraftJson || {};
+  const nodeSelect = row.querySelector("[data-workflow-node]");
+  const inputSelect = row.querySelector("[data-workflow-input]");
+  if (!nodeSelect || !inputSelect) return;
+  const previous = inputSelect.value;
+  const node = graph[nodeSelect.value];
+  const inputs = Object.entries(node?.inputs || {}).filter(([, value]) => !(
+    Array.isArray(value) && value.length === 2 && typeof value[0] === "string" && Number.isInteger(value[1])
+  ));
+  inputSelect.innerHTML = inputs.map(([name]) => `<option value="${escapeHtml(JSON.stringify([nodeSelect.value, name]))}">${escapeHtml(name)}</option>`).join("");
+  if (inputs.some(([name]) => JSON.stringify([nodeSelect.value, name]) === previous)) inputSelect.value = previous;
+}
+
+function renderWorkflowFieldMapping(mapping = {}) {
+  const nodeId = mapping.node_id || Object.keys(state.workflowDraftJson || {})[0] || "";
+  const fieldOptions = WORKFLOW_FIELDS.map(([value, label]) => `<option value="${value}"${mapping.field === value ? " selected" : ""}>${state.locale === "en" ? value : label}</option>`).join("");
+  const row = document.createElement("div");
+  row.className = "workflow-mapping-row";
+  row.innerHTML = `<select data-workflow-field aria-label="生成字段">${fieldOptions}</select>${workflowNodeSelect(state.workflowDraftJson, nodeId, "workflow-node-select")}<select data-workflow-input aria-label="节点输入"></select><button type="button" data-remove-mapping title="移除映射" aria-label="移除映射">${icon("trash-2")}</button>`;
+  row.querySelector(".workflow-node-select").dataset.workflowNode = "";
+  row.querySelector(".workflow-node-select").classList.remove("workflow-node-select");
+  row.querySelector("[data-workflow-node]").addEventListener("change", () => updateWorkflowMappingInputOptions(row));
+  row.querySelector("[data-remove-mapping]").addEventListener("click", () => row.remove());
+  updateWorkflowMappingInputOptions(row);
+  if (mapping.input) row.querySelector("[data-workflow-input]").value = JSON.stringify([nodeId, mapping.input]);
+  return row;
+}
+
+function renderWorkflowReferenceMapping(mapping = {}) {
+  const nodeId = mapping.node_id || Object.keys(state.workflowDraftJson || {})[0] || "";
+  const row = document.createElement("div");
+  row.className = "workflow-mapping-row reference-row";
+  const type = mapping.type || "image";
+  const typeOptions = ["image", "video", "audio"].map((value) => `<option value="${value}"${type === value ? " selected" : ""}>${value}</option>`).join("");
+  row.innerHTML = `<select data-ref-type aria-label="素材类型">${typeOptions}</select><input data-ref-index type="number" min="1" max="15" value="${Number(mapping.index || 1)}" aria-label="同类型序号">${workflowNodeSelect(state.workflowDraftJson, nodeId, "workflow-node-select")}<select data-workflow-input aria-label="节点输入"></select><label class="workflow-required-option"><input data-ref-required type="checkbox"${mapping.required === false ? "" : " checked"}><span>${localized("必需", "Required")}</span></label><button type="button" data-remove-mapping title="移除映射" aria-label="移除映射">${icon("trash-2")}</button>`;
+  row.querySelector(".workflow-node-select").dataset.workflowNode = "";
+  row.querySelector(".workflow-node-select").classList.remove("workflow-node-select");
+  row.querySelector("[data-workflow-node]").addEventListener("change", () => updateWorkflowMappingInputOptions(row));
+  row.querySelector("[data-remove-mapping]").addEventListener("click", () => row.remove());
+  updateWorkflowMappingInputOptions(row);
+  if (mapping.input) row.querySelector("[data-workflow-input]").value = JSON.stringify([nodeId, mapping.input]);
+  return row;
+}
+
+function renderWorkflowMappingRows(workflow = null) {
+  const fields = workflow?.field_mappings || {};
+  el("workflowFieldMappings").replaceChildren(...Object.entries(fields).map(([field, binding]) => renderWorkflowFieldMapping({ field, ...binding })));
+  el("workflowReferenceMappings").replaceChildren(...(workflow?.reference_mappings || []).map(renderWorkflowReferenceMapping));
+  refreshIcons();
+}
+
+function renderWorkflowTargets(targetIds = []) {
+  const nodes = state.managedNodes.filter((node) => node.provider === "comfyui" && node.enabled);
+  el("workflowTargetNodes").innerHTML = nodes.length
+    ? nodes.map((node) => `<label class="workflow-target-option"><input type="checkbox" value="${escapeHtml(node.id)}"${targetIds.includes(node.id) ? " checked" : ""}><span>${escapeHtml(node.name)}</span></label>`).join("")
+    : `<span class="quiet">${localized("请先添加 ComfyUI 节点", "Add a ComfyUI node first")}</span>`;
+}
+
+function renderWorkflowResultNodes(selectedId = "") {
+  const graph = state.workflowDraftJson || {};
+  const nodes = Object.entries(graph).filter(([, node]) => Object.hasOwn(node?.inputs || {}, "filename_prefix"));
+  el("workflowResultNode").innerHTML = nodes.map(([nodeId, node]) => (
+    `<option value="${escapeHtml(nodeId)}"${String(nodeId) === String(selectedId) ? " selected" : ""}>${escapeHtml(`${nodeId} · ${node.class_type || "Save"}`)}</option>`
+  )).join("");
+}
+
+function workflowSyncLabel(workflow) {
+  if (workflow.source === "preset") return localized("内置预设", "Built-in preset");
+  const sync = workflow.sync || [];
+  if (!sync.length) return localized("未配置节点", "No target nodes");
+  return sync.map((item) => {
+    const node = state.managedNodes.find((entry) => entry.id === item.node_id);
+    const label = node?.name || item.node_id;
+    if (item.status === "synced") return `${label}: ${localized("已同步", "synced")}`;
+    if (item.status === "failed") return `${label}: ${localized("同步失败", "sync failed")}${item.error ? ` · ${item.error}` : ""}`;
+    return `${label}: ${localized("待同步", "pending")}`;
+  }).join("\n");
+}
+
+function renderWorkflowList() {
+  const list = el("workflowList");
+  el("workflowManagerSummary").textContent = state.locale === "en" ? `${state.workflows.length} workflows` : `${state.workflows.length} 个工作流`;
+  list.innerHTML = state.workflows.map((workflow) => {
+    const custom = workflow.source === "custom";
+    const syncText = workflowSyncLabel(workflow);
+    const syncClass = custom && (workflow.sync || []).some((item) => item.status === "failed") ? "workflow-sync-failed" : custom && workflowReadyNodeIds(workflow).length ? "workflow-sync-ready" : "";
+    const title = state.locale === "en" ? workflow.name_en || workflow.name : workflow.name;
+    const description = custom
+      ? String(workflow.description || "")
+      : String(state.locale === "en" ? workflow.description_en || workflow.description : workflow.description || "");
+    const scope = workflow.incognito_only
+      ? `<span class="workflow-scope">${localized("私密", "Private")}</span>`
+      : "";
+    const toggle = `<label title="${localized("显示在生成区", "Show in composer")}"><input type="checkbox" data-workflow-action="visibility"${workflow.visible_in_composer ? " checked" : ""} aria-label="${localized("显示工作流", "Show workflow")}"></label>`;
+    const actions = custom
+      ? `<button type="button" data-workflow-action="edit" title="${localized("编辑工作流", "Edit workflow")}" aria-label="${localized("编辑工作流", "Edit workflow")}">${icon("pencil")}</button><button type="button" data-workflow-action="download" title="${localized("下载 API JSON", "Download API JSON")}" aria-label="${localized("下载 API JSON", "Download API JSON")}">${icon("download")}</button><button type="button" data-workflow-action="sync" title="${localized("重试同步", "Retry sync")}" aria-label="${localized("重试同步", "Retry sync")}">${icon("refresh-cw")}</button><button type="button" data-workflow-action="verify" title="${localized("验证手动上传副本", "Verify manual upload")}" aria-label="${localized("验证手动上传副本", "Verify manual upload")}">${icon("badge-check")}</button><button type="button" data-workflow-action="delete" title="${t("delete")}" aria-label="${t("delete")}">${icon("trash-2")}</button>`
+      : "";
+    const status = custom ? `<small class="workflow-status ${syncClass}" title="${escapeHtml(syncText)}">${escapeHtml(syncText.replaceAll("\n", " · "))}</small>` : "";
+    return `<article class="workflow-row" data-workflow-id="${escapeHtml(workflow.id)}"><div class="workflow-row-copy"><div class="workflow-row-title"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong>${scope}</div>${description ? `<small class="workflow-description" title="${escapeHtml(description)}">${escapeHtml(description)}</small>` : ""}${status}</div><div class="workflow-row-actions">${toggle}${actions}</div></article>`;
+  }).join("") || `<p class="quiet">${localized("暂无工作流", "No workflows")}</p>`;
+  refreshIcons();
+}
+
+async function loadWorkflows() {
+  const payload = await api("/api/v1/workflows");
+  state.workflows = payload.data || [];
+  renderWorkflowOptions();
+  renderWorkflowList();
+  updateModelUi();
+}
+
+function closeWorkflowEditor({ restoreFocus = true } = {}) {
+  const returnFocus = state.workflowEditorReturnFocus;
+  state.workflowEditingId = null;
+  state.workflowDraftJson = null;
+  state.workflowEditorReturnFocus = null;
+  el("workflowEditor").reset();
+  el("workflowEditorModal").hidden = true;
+  el("workflowModal").setAttribute("aria-modal", "true");
+  el("workflowEditorError").textContent = "";
+  el("workflowFieldMappings").replaceChildren();
+  el("workflowReferenceMappings").replaceChildren();
+  el("workflowFileStatus").textContent = localized("选择 ComfyUI 的 API 格式工作流", "Choose a ComfyUI API-format workflow");
+  if (restoreFocus && returnFocus?.isConnected) returnFocus.focus();
+}
+
+function openNewWorkflowEditor() {
+  const returnFocus = document.activeElement;
+  closeWorkflowEditor({ restoreFocus: false });
+  state.workflowEditorReturnFocus = returnFocus;
+  el("workflowEditor").reset();
+  state.workflowDraftJson = null;
+  el("workflowEditorTitle").textContent = localized("新增工作流", "Add workflow");
+  el("workflowStaticInputs").value = "{}";
+  renderWorkflowTargets([]);
+  renderWorkflowResultNodes();
+  el("workflowEditorModal").hidden = false;
+  el("workflowModal").setAttribute("aria-modal", "false");
+  document.body.classList.add("modal-open");
+  requestAnimationFrame(() => el("workflowName").focus());
+}
+
+async function openWorkflowEditor(workflowId) {
+  const returnFocus = document.activeElement;
+  closeWorkflowEditor({ restoreFocus: false });
+  state.workflowEditorReturnFocus = returnFocus;
+  el("workflowEditorError").textContent = "";
+  try {
+    const workflow = await api(`/api/v1/workflows/${encodeURIComponent(workflowId)}`);
+    if (workflow.source !== "custom") return;
+    state.workflowEditingId = workflow.id;
+    state.workflowDraftJson = workflow.workflow_json;
+    el("workflowName").value = workflow.name;
+    el("workflowDescription").value = workflow.description || "";
+    el("workflowStaticInputs").value = JSON.stringify(workflow.static_inputs || {}, null, 2);
+    el("workflowMediaType").value = workflow.media_type || "video";
+    el("workflowVisible").checked = Boolean(workflow.visible_in_composer);
+    el("workflowFileStatus").textContent = localized("已载入数据库中的工作流图", "Loaded workflow graph from the database");
+    renderWorkflowMappingRows(workflow);
+    renderWorkflowResultNodes(workflow.result_node_id);
+    renderWorkflowTargets(workflow.target_node_ids || []);
+    el("workflowEditorTitle").textContent = localized("编辑工作流", "Edit workflow");
+    el("workflowEditorModal").hidden = false;
+    el("workflowModal").setAttribute("aria-modal", "false");
+    document.body.classList.add("modal-open");
+    requestAnimationFrame(() => el("workflowName").focus());
+  } catch (error) {
+    el("workflowManagerError").textContent = error.message;
+  }
+}
+
+function workflowPayloadFromEditor() {
+  if (!state.workflowDraftJson) throw new Error(localized("请先选择有效的 API 工作流 JSON", "Choose a valid API workflow JSON first"));
+  let staticInputs;
+  try {
+    staticInputs = JSON.parse(el("workflowStaticInputs").value || "{}");
+  } catch {
+    throw new Error(localized("静态输入 JSON 格式无效", "Static inputs JSON is invalid"));
+  }
+  if (!staticInputs || typeof staticInputs !== "object" || Array.isArray(staticInputs)) throw new Error(localized("静态输入必须是 JSON 对象", "Static inputs must be a JSON object"));
+  const fieldMappings = {};
+  el("workflowFieldMappings").querySelectorAll(".workflow-mapping-row").forEach((row) => {
+    const field = row.querySelector("[data-workflow-field]").value;
+    const selectedTarget = row.querySelector("[data-workflow-input]").value;
+    if (!selectedTarget) return;
+    const [node_id, input] = JSON.parse(selectedTarget);
+    fieldMappings[field] = { node_id, input };
+  });
+  const referenceMappings = Array.from(el("workflowReferenceMappings").querySelectorAll(".workflow-mapping-row")).map((row) => {
+    const selectedTarget = row.querySelector("[data-workflow-input]").value;
+    const [node_id, input] = JSON.parse(selectedTarget);
+    return {
+      type: row.querySelector("[data-ref-type]").value,
+      index: Number(row.querySelector("[data-ref-index]").value),
+      node_id,
+      input,
+      required: row.querySelector("[data-ref-required]").checked,
+    };
+  });
+  const target_node_ids = Array.from(el("workflowTargetNodes").querySelectorAll("input:checked")).map((input) => input.value);
+  return {
+    name: el("workflowName").value.trim(),
+    description: el("workflowDescription").value,
+    workflow_json: state.workflowDraftJson,
+    field_mappings: fieldMappings,
+    reference_mappings: referenceMappings,
+    static_inputs: staticInputs,
+    result_node_id: el("workflowResultNode").value,
+    media_type: el("workflowMediaType").value,
+    target_node_ids,
+    visible_in_composer: el("workflowVisible").checked,
+  };
+}
+
+async function saveWorkflow(event) {
+  event.preventDefault();
+  const submit = el("workflowEditor").querySelector('button[type="submit"]');
+  submit.disabled = true;
+  el("workflowEditorError").textContent = "";
+  try {
+    const payload = workflowPayloadFromEditor();
+    const editing = state.workflowEditingId;
+    await api(editing ? `/api/v1/workflows/${encodeURIComponent(editing)}` : "/api/v1/workflows", {
+      method: editing ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    closeWorkflowEditor();
+    await loadWorkflows();
+    await checkHealth();
+  } catch (error) {
+    el("workflowEditorError").textContent = error.message;
+  } finally {
+    submit.disabled = false;
+  }
+}
+
+async function setWorkflowVisibility(workflow, visible) {
+  try {
+    await api(`/api/v1/workflows/${encodeURIComponent(workflow.id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visible_in_composer: visible }),
+    });
+    await loadWorkflows();
+  } catch (error) {
+    el("workflowManagerError").textContent = error.message;
+    renderWorkflowList();
+  }
+}
+
+async function syncWorkflow(workflowId, manualConfirm = false) {
+  try {
+    const result = await api(`/api/v1/workflows/${encodeURIComponent(workflowId)}/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ manual_confirm: manualConfirm }),
+    });
+    const failures = (result.data || []).filter((item) => item.status === "failed");
+    el("workflowManagerError").textContent = failures.length
+      ? failures.map((item) => `${item.node_id}: ${item.error}`).join(" · ")
+      : manualConfirm ? localized("远端副本已校验", "Remote copies verified") : "";
+    await loadWorkflows();
+  } catch (error) {
+    el("workflowManagerError").textContent = error.message;
+  }
+}
+
+async function downloadWorkflow(workflowId) {
+  try {
+    const workflow = await api(`/api/v1/workflows/${encodeURIComponent(workflowId)}`);
+    const blob = new Blob([JSON.stringify(workflow.workflow_json, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `h3studio-${workflow.id}.json`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    el("workflowManagerError").textContent = error.message;
+  }
+}
+
+async function deleteWorkflow(workflowId) {
+  const workflow = state.workflows.find((item) => item.id === workflowId);
+  if (!workflow || !window.confirm(localized(`确认删除工作流“${workflow.name}”？`, `Delete workflow "${workflow.name}"?`))) return;
+  try {
+    const result = await api(`/api/v1/workflows/${encodeURIComponent(workflowId)}`, { method: "DELETE" });
+    if (result.remote_cleanup_errors?.length) el("workflowManagerError").textContent = result.remote_cleanup_errors.map((item) => `${item.node_id}: ${item.error}`).join(" · ");
+    await loadWorkflows();
+  } catch (error) {
+    el("workflowManagerError").textContent = error.message;
+  }
+}
+
+async function openWorkflowManager() {
+  el("workflowModal").hidden = false;
+  document.body.classList.add("modal-open");
+  el("workflowManagerError").textContent = "";
+  refreshIcons();
+  try {
+    await Promise.all([loadWorkflows(), loadManagedNodes()]);
+    renderWorkflowList();
+  } catch (error) {
+    el("workflowManagerError").textContent = error.message;
+  }
+}
+
+function closeWorkflowManager() {
+  closeWorkflowEditor({ restoreFocus: false });
+  el("workflowModal").hidden = true;
+  if (el("nodeModal").hidden && el("peeringModal").hidden && el("assetDetailModal").hidden) document.body.classList.remove("modal-open");
+  el("openWorkflowManager").focus();
+}
+
+async function handleWorkflowJsonFile(file) {
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    el("workflowEditorError").textContent = localized("工作流 JSON 不能超过 5 MB", "Workflow JSON cannot exceed 5 MB");
+    return;
+  }
+  try {
+    const graph = JSON.parse(await file.text());
+    if (!graph || typeof graph !== "object" || Array.isArray(graph) || !Object.keys(graph).length) throw new Error("JSON 顶层必须是非空节点对象");
+    state.workflowDraftJson = graph;
+    renderWorkflowMappingRows();
+    renderWorkflowResultNodes();
+    renderWorkflowTargets(Array.from(el("workflowTargetNodes").querySelectorAll("input:checked")).map((input) => input.value));
+    el("workflowFileStatus").textContent = `${file.name} · ${(file.size / 1024).toFixed(1)} KB`;
+    el("workflowEditorError").textContent = "";
+  } catch (error) {
+    el("workflowEditorError").textContent = localized(`无法读取工作流 JSON：${error.message}`, `Cannot read workflow JSON: ${error.message}`);
   }
 }
 
@@ -812,7 +1256,12 @@ function selectedExecutionMode() {
 }
 
 function isUpscale(executionMode = selectedExecutionMode()) {
-  return executionMode === "video-upscale";
+  return executionMode === "video-upscale" || Boolean(selectedWorkflowRecord()?.id?.startsWith("preset-upscale-"));
+}
+
+function upscaleMediaType() {
+  const id = selectedWorkflowRecord()?.id;
+  return id === "preset-upscale-image" ? "image" : id === "preset-upscale-video" ? "video" : "";
 }
 
 function selectedUpscaleScale() {
@@ -1098,6 +1547,14 @@ function referenceLimits(variant = selectedVariant()) {
     runningHubMediaFields("", schema).forEach((field) => { limits[field.media_kind] += 1; });
     return limits;
   }
+  const workflow = selectedWorkflowRecord();
+  if (workflow?.source === "custom") {
+    const limits = { image: 0, video: 0, audio: 0 };
+    (workflow.reference_mappings || []).forEach((mapping) => {
+      limits[mapping.type] = Math.max(limits[mapping.type] || 0, Number(mapping.index) || 0);
+    });
+    return limits;
+  }
   if (isMusic3(variant)) return { image: 0, video: 0, audio: 0 };
   if (isUpscale()) return { image: 1, video: 1, audio: 0 };
   if (isDigitalHuman()) return { image: 1, video: 0, audio: 1 };
@@ -1132,6 +1589,7 @@ function referenceLabels(
     counts[kind] += 1;
     const runningHubField = runningHubReferenceField(item, schema);
     if (runningHubField) return runningHubFieldLabel(runningHubField);
+    if (selectedWorkflowRecord()?.source === "custom") return localized(`${kind} ${counts[kind]}`, `${kind} ${counts[kind]}`);
     if (isUpscale(executionMode)) return kind === "video" ? localized("输入视频", "Input video") : localized("输入图片", "Input image");
     if (isDigitalHuman(executionMode)) return kind === "image" ? localized("人物图像", "Portrait") : localized("驱动音频", "Driving audio");
     if (!isRef2VA(variant)) return counts.image === 1 ? localized("首帧", "First frame") : localized("尾帧", "Last frame");
@@ -1154,9 +1612,27 @@ function validateReferenceSet(references = state.references, variant = selectedV
     const missing = runningHubMediaFields("", schema).find((field) => field.required && !used.has(field.key));
     return missing ? localized(`请填写 ${runningHubFieldLabel(missing)}`, `Provide ${runningHubFieldLabel(missing)}`) : "";
   }
+  const workflow = selectedWorkflowRecord();
+  if (workflow?.source === "custom") {
+    const counts = { image: 0, video: 0, audio: 0 };
+    references.forEach((item) => { counts[item.kind || item.type] = (counts[item.kind || item.type] || 0) + 1; });
+    const mappings = new Map((workflow.reference_mappings || []).map((item) => [`${item.type}:${item.index}`, item]));
+    for (const [key, mapping] of mappings) {
+      if (mapping.required && counts[mapping.type] < mapping.index) {
+        return localized(`请添加第 ${mapping.index} 个 ${mapping.type} 参考素材`, `Add reference ${mapping.index} for ${mapping.type}`);
+      }
+    }
+    for (const [kind, count] of Object.entries(counts)) {
+      for (let index = 1; index <= count; index += 1) {
+        if (!mappings.has(`${kind}:${index}`)) return localized(`${kind} ${index} 没有配置到工作流输入`, `${kind} reference ${index} is not mapped`);
+      }
+    }
+    return "";
+  }
   if (isMusic3(variant)) return references.length ? localized("Music3 不使用参考素材", "Music3 does not use reference files") : "";
   if (isUpscale()) {
-    if (references.length !== 1 || !["image", "video"].includes(references[0]?.kind || references[0]?.type)) {
+    const expectedType = upscaleMediaType();
+    if (references.length !== 1 || !["image", "video"].includes(references[0]?.kind || references[0]?.type) || (expectedType && (references[0]?.kind || references[0]?.type) !== expectedType)) {
       return localized("超分任务需要添加 1 张图片或 1 段视频", "Super-resolution requires one image or one video");
     }
     return "";
@@ -1201,7 +1677,9 @@ function positionDurationTooltip() {
 }
 
 async function api(url, options = {}) {
-  const response = await fetch(url, { cache: "no-store", ...options });
+  const headers = new Headers(options.headers || {});
+  if (state.incognito && !headers.has("X-H3-Incognito-Code")) headers.set("X-H3-Incognito-Code", state.incognitoCode);
+  const response = await fetch(url, { cache: "no-store", ...options, headers });
   let payload = null;
   try {
     payload = await response.json();
@@ -1223,14 +1701,55 @@ async function api(url, options = {}) {
 }
 
 function updateModelUi() {
+  renderWorkflowOptions();
   const runningHubNode = selectedRunningHubNode();
   const runningHub = Boolean(runningHubNode?.runninghub_schema);
+  const selectedWorkflow = selectedWorkflowRecord();
+  const customWorkflow = selectedWorkflow?.source === "custom" && !runningHubNode;
   const upscale = !runningHub && isUpscale();
   syncRunningHubSchema();
-  el("modelControl").hidden = Boolean(runningHubNode);
-  el("modelControl").hidden = Boolean(runningHubNode) || upscale;
-  el("executionControl").hidden = Boolean(runningHubNode);
+  el("workflowControl").hidden = Boolean(runningHubNode);
+  el("workflowSelect").required = !runningHubNode;
   el("runningHubWorkflowControl").hidden = !runningHubNode;
+  promptInput.hidden = false;
+  if (customWorkflow) {
+    const mappings = selectedWorkflow.field_mappings || {};
+    const fields = new Set(Object.keys(mappings));
+    const references = selectedWorkflow.reference_mappings || [];
+    const kinds = [...new Set(references.map((item) => item.type))];
+    promptInput.hidden = !fields.has("prompt");
+    el("lyrics").hidden = !fields.has("lyrics");
+    el("addReference").hidden = references.length === 0;
+    referenceInput.accept = kinds.map((kind) => `${kind}/*`).join(",");
+    el("addReference").title = state.locale === "en" ? `Add ${kinds.join(", ") || ""} references` : `添加${kinds.join("、") || ""}参考素材`;
+    el("addReference").setAttribute("aria-label", el("addReference").title);
+    const showDimensions = fields.has("width") || fields.has("height");
+    el("aspectControl").hidden = !showDimensions;
+    el("resolutionControl").hidden = !showDimensions;
+    el("duration").closest(".duration-control").hidden = !(fields.has("duration") || fields.has("num_frames"));
+    el("duration").disabled = false;
+    el("duration").min = "1";
+    el("duration").max = "300";
+    el("stepsControl").hidden = !fields.has("steps");
+    el("steps").disabled = false;
+    el("steps").min = "1";
+    el("steps").max = "1000";
+    el("globalSeedControl").hidden = !fields.has("seed");
+    el("autoUpscaleControl").hidden = true;
+    el("autoUpscale").checked = false;
+    el("autoUpscale").disabled = true;
+    el("upscaleCategoryControl").hidden = true;
+    el("upscaleScaleControl").hidden = true;
+    el("saSettings").hidden = true;
+    el("optimizePrompt").hidden = !fields.has("prompt");
+    el("writeLyrics").hidden = !fields.has("lyrics");
+    el("prompt").placeholder = state.locale === "en" ? "Enter a prompt for this workflow..." : "输入工作流提示词…";
+    el("dropZone").title = "";
+    renderReferences();
+    showError(state.references.length ? validateReferenceSet(state.references) : "");
+    return;
+  }
+  el("lyrics").hidden = !isMusic3();
   el("upscaleCategoryControl").hidden = !upscale;
   el("upscaleScaleControl").hidden = !upscale;
   el("runningHubWorkflowName").textContent = runningHubNode
@@ -1301,7 +1820,7 @@ function updateModelUi() {
   const runningHubKinds = new Set(runningHubMediaFields().map((field) => field.media_kind));
   referenceInput.accept = runningHub
     ? [...runningHubKinds].map((kind) => kind === "file" ? "*/*" : `${kind}/*`).join(",")
-    : music3 ? "" : upscale ? "image/*,video/*" : tts ? "audio/*" : digitalHuman ? "image/*,audio/*" : dualSampling ? "image/*" : ref2va ? "image/*,video/*,audio/*" : "image/*";
+    : music3 ? "" : upscale ? upscaleMediaType() === "image" ? "image/*" : upscaleMediaType() === "video" ? "video/*" : "image/*,video/*" : tts ? "audio/*" : digitalHuman ? "image/*,audio/*" : dualSampling ? "image/*" : ref2va ? "image/*,video/*,audio/*" : "image/*";
   el("addReference").title = state.locale === "en"
     ? runningHub ? "Add a workflow input file" : upscale ? "Add one image or video" : tts ? "Add up to three character voice references" : digitalHuman ? "Add portrait and driving audio" : dualSampling ? "Add image references for dual sampling" : ref2va ? "Add image, video, or audio references" : "Add first or last frame"
     : runningHub ? "添加工作流输入文件" : upscale ? "添加一张图片或一段视频" : tts ? "添加最多 3 段人物音频参考" : digitalHuman ? "添加人物图片和驱动音频" : dualSampling ? "添加双采图片参考" : ref2va ? "添加图片、视频或音频参考" : "添加首帧或尾帧";
@@ -1339,7 +1858,140 @@ function updateModelUi() {
   showError(state.references.length ? error : "");
 }
 
-function addFiles(files, forcedFieldKey = "") {
+const REFERENCE_IMAGE_LIMIT = 1024 * 1024;
+const REFERENCE_IMAGE_MAX_EDGE = 2560;
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+}
+
+function fileNameWithExtension(fileName, extension) {
+  const base = String(fileName || "reference").replace(/\.[^.]+$/, "") || "reference";
+  return `${base}.${extension}`;
+}
+
+function updateReferenceProcessingUi() {
+  const status = el("referenceProcessingStatus");
+  status.hidden = !state.referenceProcessing;
+  status.textContent = state.referenceProcessing
+    ? localized("正在压缩大尺寸图片…", "Compressing large reference images…")
+    : "";
+  el("addReference").disabled = state.referenceProcessing || Boolean(state.editingJobId);
+  renderReferences();
+}
+
+async function compressLargeReferenceImage(file) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  const inputType = file.type || ({ jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", bmp: "image/bmp" }[extension] || "");
+  if (
+    !state.generalSettings.auto_compress_large_images
+    || file.size <= REFERENCE_IMAGE_LIMIT
+    || !["image/jpeg", "image/png", "image/webp", "image/bmp"].includes(inputType)
+    || typeof createImageBitmap !== "function"
+  ) return { file, compressed: false };
+
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+    let scale = Math.min(1, REFERENCE_IMAGE_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    let quality = 0.9;
+    let bestBlob = null;
+    const outputType = inputType === "image/jpeg" ? "image/jpeg" : "image/webp";
+    for (let attempt = 0; attempt < 14; attempt += 1) {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext("2d", { alpha: outputType !== "image/jpeg" });
+      if (!context) break;
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await canvasToBlob(canvas, outputType, quality);
+      if (blob && (!bestBlob || blob.size < bestBlob.size)) bestBlob = blob;
+      if (blob && blob.size <= REFERENCE_IMAGE_LIMIT) {
+        const resultType = blob.type || outputType;
+        const outputExtension = resultType === "image/jpeg" ? "jpg" : resultType === "image/png" ? "png" : "webp";
+        return {
+          file: new File([blob], fileNameWithExtension(file.name, outputExtension), {
+            type: resultType,
+            lastModified: file.lastModified,
+          }),
+          compressed: true,
+          originalSize: file.size,
+        };
+      }
+      if (quality > 0.7) quality = Math.max(0.7, quality - 0.08);
+      else {
+        scale *= 0.82;
+        quality = 0.88;
+      }
+      if (scale < 0.18) break;
+    }
+    if (bestBlob && bestBlob.size < file.size && bestBlob.size <= REFERENCE_IMAGE_LIMIT) {
+      const resultType = bestBlob.type || outputType;
+      const outputExtension = resultType === "image/jpeg" ? "jpg" : resultType === "image/png" ? "png" : "webp";
+      return {
+        file: new File([bestBlob], fileNameWithExtension(file.name, outputExtension), {
+          type: resultType,
+          lastModified: file.lastModified,
+        }),
+        compressed: true,
+        originalSize: file.size,
+      };
+    }
+    return { file, compressed: false, warning: true };
+  } catch {
+    return { file, compressed: false, warning: true };
+  } finally {
+    bitmap?.close();
+  }
+}
+
+async function addFiles(files, forcedFieldKey = "") {
+  const selectedFiles = Array.from(files || []);
+  if (state.editingJobId) {
+    showError(localized("修改排队任务时不能更换参考素材", "Reference files cannot be changed while editing a queued task"));
+    return false;
+  }
+  if (state.referenceProcessing) return false;
+  const largeImages = selectedFiles.some((file) => (
+    kindFor(file) === "image" && file.size > REFERENCE_IMAGE_LIMIT
+    && state.generalSettings.auto_compress_large_images
+  ));
+  if (!largeImages) return addPreparedFiles(selectedFiles, forcedFieldKey);
+
+  const generateWasDisabled = el("generateButton").disabled;
+  el("generateButton").disabled = true;
+  state.referenceProcessing = true;
+  updateReferenceProcessingUi();
+  const prepared = [];
+  const compressed = [];
+  let compressionWarning = false;
+  try {
+    for (const file of selectedFiles) {
+      const result = await compressLargeReferenceImage(file);
+      prepared.push(result.file);
+      if (result.compressed) compressed.push(result);
+      compressionWarning ||= Boolean(result.warning);
+    }
+  } finally {
+    state.referenceProcessing = false;
+    updateReferenceProcessingUi();
+    el("generateButton").disabled = generateWasDisabled;
+  }
+  const added = addPreparedFiles(prepared, forcedFieldKey);
+  if (added && compressed.length) {
+    const details = compressed.map((item) => `${formatBytes(item.originalSize)} → ${formatBytes(item.file.size)}`);
+    showToast(localized(
+      `已压缩 ${compressed.length} 张参考图片：${details.join("，")}`,
+      `Compressed ${compressed.length} reference image${compressed.length === 1 ? "" : "s"}: ${details.join(", ")}`,
+    ));
+  }
+  if (compressionWarning) {
+    showToast(localized("部分图片未能压缩，已保留原文件", "Some images could not be compressed; original files were kept"));
+  }
+  return added;
+}
+
+function addPreparedFiles(files, forcedFieldKey = "") {
   if (state.editingJobId) {
     showError(localized("修改排队任务时不能更换参考素材", "Reference files cannot be changed while editing a queued task"));
     return false;
@@ -1392,7 +2044,9 @@ function addFiles(files, forcedFieldKey = "") {
     const limits = referenceLimits();
     const current = state.references.filter((item) => (item.kind || item.type) === kind).length;
     if (!limits[kind]) {
-      error = isTTS()
+      error = selectedWorkflowRecord()?.source === "custom"
+        ? localized(`工作流没有配置 ${kind} 参考素材`, `This workflow has no ${kind} reference mapping`)
+        : isTTS()
         ? localized(`H3 TTS 仅支持音频参考：${file.name}`, `H3 TTS accepts audio references only: ${file.name}`)
         : isDigitalHuman()
         ? localized(`数字人模式仅支持人物图片和驱动音频：${file.name}`, `Digital human mode only accepts a portrait and driving audio: ${file.name}`)
@@ -1400,7 +2054,9 @@ function addFiles(files, forcedFieldKey = "") {
       return;
     }
     if (current >= limits[kind]) {
-      error = isTTS()
+      error = selectedWorkflowRecord()?.source === "custom"
+        ? localized(`${kind} 参考素材最多添加 ${limits[kind]} 份`, `This workflow accepts up to ${limits[kind]} ${kind} references`)
+        : isTTS()
         ? localized("H3 TTS 最多添加 3 段人物音频参考", "H3 TTS accepts up to three character voice references")
         : isRef2VA()
         ? localized(`${{ image: "图片", video: "视频", audio: "音频" }[kind]}最多添加 ${limits[kind]} 份`, `Up to ${limits[kind]} ${kind} files are allowed`)
@@ -1435,6 +2091,13 @@ function clipboardImageFile(event) {
 }
 
 function renderReferences() {
+  const processingStatus = el("referenceProcessingStatus");
+  if (processingStatus) {
+    processingStatus.hidden = !state.referenceProcessing;
+    processingStatus.textContent = state.referenceProcessing
+      ? localized("正在压缩大尺寸图片…", "Compressing large reference images…")
+      : "";
+  }
   const labels = referenceLabels();
   el("referenceList").innerHTML = state.references.map((item, index) => {
     const kind = item.kind || item.type;
@@ -2664,7 +3327,7 @@ async function useGeneratedOutputAsInput(jobId) {
   const file = new File([blob], `${basename}.${extension}`, {
     type: blob.type || ({ audio: "audio/flac", video: "video/mp4", image: "image/png" }[mediaType] || "application/octet-stream"),
   });
-  if (!addFiles([file])) {
+  if (!(await addFiles([file]))) {
     throw new Error(el("formError").textContent || t("outputUnavailable"));
   }
   updateModelUi();
@@ -2690,7 +3353,7 @@ async function startVideoUpscaleFromJob(jobId) {
     el("upscaleCategory").value = "real";
     el("upscaleScale").value = "2";
     updateModelUi();
-    if (!addFiles([file])) throw new Error(el("formError").textContent || t("outputUnavailable"));
+    if (!(await addFiles([file]))) throw new Error(el("formError").textContent || t("outputUnavailable"));
     updateModelUi();
     target.textContent = "";
     if (detailOpen) closeAssetDetail(detailRecord.id);
@@ -2714,6 +3377,17 @@ function composerNodeForJob(job) {
   return "auto";
 }
 
+function workflowIdForJob(job) {
+  if (job.request?.workflow_id) return job.request.workflow_id;
+  if (job.request?.task_type === "upscale") return job.request?.media_type === "video" ? "preset-upscale-video" : "preset-upscale-image";
+  return state.workflows.find((workflow) => (
+    workflow.source === "preset"
+    && workflow.model_variant === (job.request?.model_variant || "fl2va-fp8")
+    && workflow.execution_mode === (job.request?.execution_mode || "native")
+    && workflow.task_type === "generation"
+  ))?.id || "";
+}
+
 async function backfillJob(jobId) {
   const detailRecord = activeAssetDetailRecord();
   const detailOpen = Boolean(detailRecord);
@@ -2731,6 +3405,8 @@ async function backfillJob(jobId) {
     el("executionMode").value = job.request?.task_type === "upscale"
       ? "video-upscale"
       : job.request?.execution_mode || "native";
+    el("workflowSelect").value = workflowIdForJob(job);
+    renderWorkflowOptions();
     el("upscaleCategory").value = job.request?.upscale_category || "real";
     el("upscaleScale").value = String(job.request?.upscale_scale === 4 ? 4 : 2);
     el("autoUpscale").checked = Boolean(job.request?.auto_upscale);
@@ -2796,6 +3472,8 @@ async function startEdit(jobId) {
     el("executionMode").value = job.request?.task_type === "upscale"
       ? "video-upscale"
       : job.request.execution_mode || "native";
+    el("workflowSelect").value = workflowIdForJob(job);
+    renderWorkflowOptions();
     el("upscaleCategory").value = job.request?.upscale_category || "real";
     el("upscaleScale").value = String(job.request?.upscale_scale === 4 ? 4 : 2);
     el("autoUpscale").checked = Boolean(job.request?.auto_upscale);
@@ -2920,6 +3598,10 @@ async function handleJobAction(action, jobId) {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (state.referenceProcessing) {
+    showError(localized("请等待参考图片压缩完成", "Wait for reference image compression to finish"));
+    return;
+  }
   showError("");
   if (!confirmAutoUpscale()) return;
   if (!(await requestAutoUpscaleConfirmation())) return;
@@ -2948,7 +3630,7 @@ form.addEventListener("submit", async (event) => {
       if (runningHub) {
         requestBody.runninghub_parameters = collectRunningHubParameters();
       } else {
-        requestBody.lyrics = isMusic3() ? el("lyrics").value.trim() : "";
+        requestBody.lyrics = isMusic3() || selectedWorkflowRecord()?.source === "custom" ? el("lyrics").value.trim() : "";
         requestBody.width = width;
         requestBody.height = height;
         requestBody.duration = Number(el("duration").value);
@@ -2976,7 +3658,7 @@ form.addEventListener("submit", async (event) => {
       if (referenceError) throw new Error(referenceError);
       const data = new FormData();
       data.append("prompt", prompt);
-      data.append("lyrics", isMusic3() ? el("lyrics").value.trim() : "");
+      data.append("lyrics", isMusic3() || selectedWorkflowRecord()?.source === "custom" ? el("lyrics").value.trim() : "");
       data.append("width", String(width));
       data.append("height", String(height));
       data.append("duration", el("duration").value);
@@ -2987,6 +3669,8 @@ form.addEventListener("submit", async (event) => {
       } else {
         data.append("model_variant", selectedVariant());
         data.append("execution_mode", backendExecutionMode());
+        const selectedWorkflow = selectedWorkflowRecord();
+        if (selectedWorkflow?.id) data.append("workflow_id", selectedWorkflow.id);
         const autoUpscale = autoUpscaleParameters();
         data.append("auto_upscale", autoUpscale.auto_upscale ? "true" : "false");
         data.append("auto_upscale_category", autoUpscale.auto_upscale_category);
@@ -3201,6 +3885,7 @@ async function loadGeneralSettings() {
   el("showRuntimeLogs").checked = payload.show_runtime_logs !== false;
   el("showPeering").checked = payload.show_peering !== false;
   el("backupOutputs").checked = Boolean(payload.backup_outputs);
+  el("autoCompressLargeImages").checked = payload.auto_compress_large_images !== false;
   el("remoteDisconnectPolicy").value = payload.remote_disconnect_policy || "encrypt";
   el("remoteRecordsKey").value = payload.remote_records_key || "";
   el("opsLauncher").hidden = payload.show_runtime_logs === false;
@@ -3231,6 +3916,7 @@ async function saveGeneralSettings(event) {
         show_runtime_logs: el("showRuntimeLogs").checked,
         show_peering: el("showPeering").checked,
         backup_outputs: el("backupOutputs").checked,
+        auto_compress_large_images: el("autoCompressLargeImages").checked,
         remote_disconnect_policy: el("remoteDisconnectPolicy").value,
         remote_records_key: key,
       }),
@@ -3243,6 +3929,7 @@ async function saveGeneralSettings(event) {
     state.generalSettings = payload;
     el("opsLauncher").hidden = !el("showRuntimeLogs").checked;
     el("openPeering").hidden = !el("showPeering").checked;
+    state.generalSettings.auto_compress_large_images = el("autoCompressLargeImages").checked;
     if (!el("showRuntimeLogs").checked) closeOpsWindow();
     el("globalSettingsModal").hidden = true;
     document.body.classList.remove("modal-open");
@@ -3252,9 +3939,22 @@ async function saveGeneralSettings(event) {
   }
 }
 
-function openGlobalSettings() {
+function setSettingsTab(name) {
+  document.querySelectorAll("[data-settings-tab]").forEach((button) => {
+    const active = button.dataset.settingsTab === name;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
+  document.querySelectorAll("[data-settings-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.settingsPanel !== name;
+  });
+}
+
+function openGlobalSettings(tab = "system") {
   el("globalSettingsModal").hidden = false;
   document.body.classList.add("modal-open");
+  setSettingsTab(tab);
   loadGeneralSettings().catch((error) => { el("globalSettingsError").textContent = error.message; });
   refreshIcons();
 }
@@ -3553,14 +4253,14 @@ async function assistMusic(task) {
   const source = promptInput.value.trim();
   if (source.length < 2) return showError("请先输入歌曲主题、曲风或创作要求");
   if (!el("aiEnabled").checked) {
-    el("advancedSettings").open = true;
-    return showError("请在更多设置中启用 AI 提示词优化");
+    openGlobalSettings("model");
+    return showError(localized("请在右上角设置的模型页签启用 AI 提示词优化", "Enable AI prompt assistance in the Model tab of Settings"));
   }
   const baseUrl = el("aiBaseUrl").value.trim();
   const model = el("aiModel").value.trim();
   if (!baseUrl || !model) {
-    el("advancedSettings").open = true;
-    return showError("请填写 OpenAI Base URL 和模型名称");
+    openGlobalSettings("model");
+    return showError(localized("请在模型页签填写 OpenAI Base URL 和模型名称", "Enter an OpenAI Base URL and model in the Model tab of Settings"));
   }
   const button = task === "lyrics" ? el("writeLyrics") : el("optimizePrompt");
   let output = "";
@@ -3605,14 +4305,14 @@ async function optimizePrompt() {
   const source = promptInput.value.trim();
   if (source.length < 2) return showError("请先输入需要优化的自然语言描述");
   if (!el("aiEnabled").checked) {
-    el("advancedSettings").open = true;
-    return showError("请在更多设置中启用 AI 提示词优化");
+    openGlobalSettings("model");
+    return showError(localized("请在右上角设置的模型页签启用 AI 提示词优化", "Enable AI prompt assistance in the Model tab of Settings"));
   }
   const baseUrl = el("aiBaseUrl").value.trim();
   const model = el("aiModel").value.trim();
   if (!baseUrl || !model) {
-    el("advancedSettings").open = true;
-    return showError("请填写 OpenAI Base URL 和模型名称");
+    openGlobalSettings("model");
+    return showError(localized("请在模型页签填写 OpenAI Base URL 和模型名称", "Enter an OpenAI Base URL and model in the Model tab of Settings"));
   }
 
   const button = el("optimizePrompt");
@@ -3680,7 +4380,7 @@ async function reloadModeData() {
   renderAssets(0);
   renderAssetFolders();
   renderConversationFeed("bottom");
-  await Promise.all([loadAssetFolders(), loadAssets({ reset: true }), refreshConversation(true)]);
+  await Promise.all([loadAssetFolders(), loadAssets({ reset: true }), refreshConversation(true), loadWorkflows()]);
 }
 
 async function requestIncognitoMode() {
@@ -3986,17 +4686,17 @@ el("addReference").addEventListener("click", () => {
   referenceInput.click();
 });
 
-document.addEventListener("paste", (event) => {
+document.addEventListener("paste", async (event) => {
   const file = clipboardImageFile(event);
   if (!file) return;
   event.preventDefault();
-  const added = addFiles([file], state.pendingRunningHubMediaField);
+  const added = await addFiles([file], state.pendingRunningHubMediaField);
   if (added) showToast(localized("已从剪贴板添加图片", "Image pasted from clipboard"));
   updateModelUi();
 });
 
-referenceInput.addEventListener("change", () => {
-  addFiles(referenceInput.files, state.pendingRunningHubMediaField);
+referenceInput.addEventListener("change", async () => {
+  await addFiles(referenceInput.files, state.pendingRunningHubMediaField);
   referenceInput.value = "";
   updateModelUi();
 });
@@ -4025,7 +4725,7 @@ const composerBox = el("dropZone");
 }));
 composerBox.addEventListener("drop", async (event) => {
   const jobId = event.dataTransfer.getData("application/x-h3-asset-job");
-  if (!jobId) return addFiles(event.dataTransfer.files);
+  if (!jobId) return await addFiles(event.dataTransfer.files);
   try {
     await useGeneratedOutputAsInput(jobId);
   } catch (error) {
@@ -4307,7 +5007,10 @@ el("peeringModal").addEventListener("click", (event) => {
 });
 el("peeringEnabled").addEventListener("change", () => updatePeeringSettings({ enabled: el("peeringEnabled").checked }));
 el("machineName").addEventListener("change", () => updatePeeringSettings({ machine_name: el("machineName").value.trim() }));
-el("openGlobalSettings").addEventListener("click", openGlobalSettings);
+el("openGlobalSettings").addEventListener("click", () => openGlobalSettings("system"));
+document.querySelectorAll("[data-settings-tab]").forEach((button) => {
+  button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab));
+});
 el("closeGlobalSettings").addEventListener("click", closeGlobalSettings);
 el("globalSettingsModal").addEventListener("click", (event) => { if (event.target === el("globalSettingsModal")) closeGlobalSettings(); });
 el("globalSettingsForm").addEventListener("submit", saveGeneralSettings);
@@ -4459,6 +5162,7 @@ el("writeLyrics").addEventListener("click", () => {
 });
 el("modelVariant").addEventListener("change", updateModelUi);
 el("executionMode").addEventListener("change", updateModelUi);
+el("workflowSelect").addEventListener("change", () => renderNodeOptions(state.nodes));
 el("upscaleCategory").addEventListener("change", updateModelUi);
 el("upscaleScale").addEventListener("change", updateModelUi);
 el("comfyNode").addEventListener("change", updateModelUi);
@@ -4494,6 +5198,47 @@ el("nodeList").addEventListener("click", (event) => {
 el("nodeModal").addEventListener("click", (event) => {
   if (event.target === el("nodeModal")) closeNodeManager();
 });
+el("openWorkflowManager").addEventListener("click", openWorkflowManager);
+el("closeWorkflowManager").addEventListener("click", closeWorkflowManager);
+el("addWorkflowButton").addEventListener("click", openNewWorkflowEditor);
+el("cancelWorkflowEdit").addEventListener("click", closeWorkflowEditor);
+el("cancelWorkflowEditIcon").addEventListener("click", closeWorkflowEditor);
+el("workflowEditor").addEventListener("submit", saveWorkflow);
+el("workflowJsonFile").addEventListener("change", (event) => handleWorkflowJsonFile(event.target.files?.[0]));
+el("addWorkflowFieldMapping").addEventListener("click", () => {
+  el("workflowFieldMappings").append(renderWorkflowFieldMapping());
+  refreshIcons();
+});
+el("addWorkflowReferenceMapping").addEventListener("click", () => {
+  el("workflowReferenceMappings").append(renderWorkflowReferenceMapping());
+  refreshIcons();
+});
+el("workflowList").addEventListener("change", (event) => {
+  const input = event.target.closest('[data-workflow-action="visibility"]');
+  if (!input) return;
+  const workflow = state.workflows.find((item) => item.id === input.closest("[data-workflow-id]")?.dataset.workflowId);
+  if (workflow) setWorkflowVisibility(workflow, input.checked);
+});
+el("workflowList").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-workflow-action]");
+  const workflowId = button?.closest("[data-workflow-id]")?.dataset.workflowId;
+  if (!button || !workflowId || button.matches('input[type="checkbox"]')) return;
+  const action = button.dataset.workflowAction;
+  if (action === "edit") openWorkflowEditor(workflowId);
+  if (action === "download") downloadWorkflow(workflowId);
+  if (action === "sync") syncWorkflow(workflowId, false);
+  if (action === "verify") {
+    el("workflowManagerError").textContent = localized("上传同名 JSON 到目标 ComfyUI 的 workflows 用户目录后执行校验", "Upload the JSON with the same filename to the target ComfyUI workflows user directory, then verify");
+    syncWorkflow(workflowId, true);
+  }
+  if (action === "delete") deleteWorkflow(workflowId);
+});
+el("workflowModal").addEventListener("click", (event) => {
+  if (event.target === el("workflowModal")) closeWorkflowManager();
+});
+el("workflowEditorModal").addEventListener("click", (event) => {
+  if (event.target === el("workflowEditorModal")) closeWorkflowEditor();
+});
 
 el("brandTrigger").addEventListener("click", () => {
   const now = Date.now();
@@ -4516,6 +5261,14 @@ el("secretOverlay").addEventListener("click", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeMentionMenu();
+  if (event.key === "Escape" && !el("workflowEditorModal").hidden) {
+    closeWorkflowEditor();
+    return;
+  }
+  if (event.key === "Escape" && !el("workflowModal").hidden) {
+    closeWorkflowManager();
+    return;
+  }
   if (event.key === "Escape" && !el("localAssetPreviewModal").hidden) {
     closeLocalAssetPreview();
     return;
@@ -4710,6 +5463,7 @@ async function initialize() {
   await Promise.allSettled([
     loadAiConfig().catch((error) => showError(error.message)),
     loadGeneralSettings().catch((error) => showError(error.message)),
+    loadWorkflows().catch((error) => showError(error.message)),
     refreshPeeringStatus({ notifyEvents: false }),
     checkHealth(),
     refreshSharedData(),

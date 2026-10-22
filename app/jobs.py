@@ -329,6 +329,7 @@ class JobStore:
             return None
         job.pop("input_paths", None)
         job.pop("remote_checkpoint", None)
+        job.pop("workflow_snapshot", None)
         if not include_logs:
             job.pop("logs", None)
         self._decorate_public_job(job)
@@ -1398,6 +1399,9 @@ class JobManager:
                             ):
                                 continue
                         elif target not in {"auto", node_id}:
+                            continue
+                        workflow_node_ids = job.get("request", {}).get("workflow_node_ids")
+                        if workflow_node_ids is not None and node_id not in workflow_node_ids:
                             continue
                         if target == "auto":
                             request = job.get("request", {})

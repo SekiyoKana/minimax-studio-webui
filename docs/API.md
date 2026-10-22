@@ -20,7 +20,7 @@ curl http://127.0.0.1:8193/health
 
 响应中的 `nodes` 包含各推理节点的类型、在线状态、容量、当前任务和手动队列深度。`parallel_capacity` 为所有在线节点的容量总和。服务默认每 60 秒检查并保活一次节点。
 
-创建 ComfyUI 任务时使用 `comfy_node=auto` 自动调度，或填写 `nodes[].id` 手动指定节点。RunningHub 工作流可以填写 `rh:<runninghub_resource_id>`，在绑定同一资源 ID 的可用节点之间自动调度。未填写时默认为 `auto`。
+创建 ComfyUI 任务时使用 `comfy_node=auto` 自动调度，或填写 `nodes[].id` 手动指定节点。网页请求可传入 `workflow_id` 选择内置预设或自定义工作流；省略时仍按 `model_variant` 和 `execution_mode` 选择原有预设。自定义工作流的 `comfy_node` 只能指向该工作流中已同步的目标节点。RunningHub 工作流可以填写 `rh:<runninghub_resource_id>`，在绑定同一资源 ID 的可用节点之间自动调度。未填写时默认为 `auto`。
 
 ## 推理节点管理
 
@@ -81,6 +81,27 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
 字段键取自 `GET /api/v1/comfy/nodes` 返回的 `runninghub_schema`。RunningHub 任务不使用本服务的 H3 模型、执行方案、分辨率、时长和步数固定控件。使用 `rh:<runninghub_resource_id>` 时，绑定同一资源 ID 的可用 RunningHub 节点共享并发槽位；使用具体节点 ID 时定向执行。
 
 删除节点使用 `DELETE /api/v1/comfy/nodes/{node_id}`。正在执行任务、存在定向排队任务或属于最后一个启用节点时，服务拒绝停用或删除。
+
+## 工作流配置
+
+工作流配置保存在 `data/config.db`。内置预设由 `workflows/` 中的 JSON 文件补录，包含随界面语言切换的 `description` 和 `description_en`，预设只能修改 `visible_in_composer`；自定义工作流支持完整 CRUD，并可选填写最多 500 字符的 `description`。
+
+在私密模式中创建的自定义工作流会标记为私密工作流。列表、详情、修改、删除和同步接口只有在请求头包含有效的 `X-H3-Incognito-Code` 时才返回或操作私密工作流；普通工作流接口不会返回该记录。提交私密工作流任务还必须设置 `incognito=true` 并提供有效授权码。H3 NSFW · NaughtyTimes LoRA 内置预设同样仅在私密模式中显示和运行。
+
+```text
+GET    /api/v1/workflows
+POST   /api/v1/workflows
+GET    /api/v1/workflows/{workflow_id}
+PATCH  /api/v1/workflows/{workflow_id}
+DELETE /api/v1/workflows/{workflow_id}
+POST   /api/v1/workflows/{workflow_id}/sync
+```
+
+自定义工作流的 `workflow_json` 必须是 ComfyUI API 格式。`field_mappings` 使用 `{字段: {"node_id": "节点 ID", "input": "输入名"}}`，支持 `prompt`、`lyrics`、`width`、`height`、`duration`、`num_frames`、`steps` 和 `seed`。`reference_mappings` 使用 `type`、`index`、`node_id`、`input` 和 `required` 绑定参考素材，`index` 是按媒体类型从 1 开始的序号。`result_node_id` 必须指向包含 `filename_prefix` 输入的结果节点。
+
+创建任务时提交 `workflow_id`。服务保存工作流图、映射、版本和目标节点快照，任务执行使用该快照。自定义工作流只能调度到已同步且在线的目标 ComfyUI 节点；RunningHub 和互联代理继续使用原有接口。
+
+保存工作流时服务调用 ComfyUI `/userdata/{file}` 上传 `workflows/h3studio-{workflow_id}.json`，随后读取并校验 SHA-256。同步状态按节点返回 `synced`、`pending` 或 `failed`。用户也可以将下载的 JSON 手动上传到 ComfyUI 的 `workflows` 用户目录，再调用同步接口进行校验。
 
 ## 创建超分任务
 

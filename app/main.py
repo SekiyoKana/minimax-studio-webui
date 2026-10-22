@@ -35,6 +35,7 @@ from .ref2va_prompts import REF2VA_SYSTEM_PROMPT
 from .tts_prompts import TTS_SYSTEM_PROMPT
 from .runninghub import assign_media_fields, normalize_parameters, output_media_type
 from .settings import settings
+from .workflows import WorkflowRegistry, eligible_node_ids, validate_workflow_config
 
 
 ExecutionMode = Literal["native", "turbo-lora", "dual-sampling", "h3-sa", "vdn-h3", "h3-nsfw", "digital-human", "tts", "music3"]
@@ -48,6 +49,10 @@ settings.ensure_directories()
 store = JobStore(settings.jobs_dir)
 node_registry = NodeRegistry(settings.data_dir / "config.db")
 local_state = LocalStateStore(settings.data_dir / "config.db")
+workflow_registry = WorkflowRegistry(
+    settings.data_dir / "config.db",
+    Path(__file__).resolve().parents[1] / "workflows",
+)
 manager = JobManager(
     store,
     lambda node: create_engine(settings, node),
@@ -205,6 +210,37 @@ class ComfySettingsUpdate(BaseModel):
     health_interval_seconds: float = Field(ge=5, le=3600)
 
 
+class WorkflowConfigCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=500)
+    workflow_json: dict[str, Any]
+    field_mappings: dict[str, dict[str, str]] = Field(default_factory=dict)
+    reference_mappings: list[dict[str, Any]] = Field(default_factory=list, max_length=45)
+    static_inputs: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    result_node_id: str = Field(min_length=1, max_length=100)
+    media_type: Literal["image", "video", "audio"]
+    target_node_ids: list[str] = Field(min_length=1, max_length=32)
+    visible_in_composer: bool = True
+
+
+class WorkflowConfigUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    workflow_json: dict[str, Any] | None = None
+    field_mappings: dict[str, dict[str, str]] | None = None
+    reference_mappings: list[dict[str, Any]] | None = Field(default=None, max_length=45)
+    static_inputs: dict[str, dict[str, Any]] | None = None
+    result_node_id: str | None = Field(default=None, min_length=1, max_length=100)
+    media_type: Literal["image", "video", "audio"] | None = None
+    target_node_ids: list[str] | None = Field(default=None, max_length=32)
+    visible_in_composer: bool | None = None
+
+
+class WorkflowSyncRequest(BaseModel):
+    node_ids: list[str] | None = Field(default=None, max_length=32)
+    manual_confirm: bool = False
+
+
 class AISettingsUpdate(BaseModel):
     enabled: bool = False
     base_url: str = Field(default="", max_length=500)
@@ -222,6 +258,7 @@ class GeneralSettingsUpdate(BaseModel):
     show_runtime_logs: bool | None = None
     show_peering: bool | None = None
     backup_outputs: bool | None = None
+    auto_compress_large_images: bool | None = None
     remote_disconnect_policy: Literal["encrypt", "delete"] | None = None
     remote_records_key: str | None = Field(default=None, min_length=8, max_length=256)
 
@@ -799,6 +836,12 @@ async def update_comfy_node(node_id: str, payload: ComfyNodeUpdate):
     if runtime_values:
         node_registry.update_runtime(node_id, runtime_values)
         node = node_registry.get(node_id) or node
+    if (
+        existing["url"] != node_url.rstrip("/")
+        or existing["provider"] != provider
+        or bool((payload.api_key or "").strip())
+    ):
+        workflow_registry.invalidate_node_sync(node_id)
     reload_comfy_nodes()
     return node
 
@@ -810,6 +853,7 @@ async def delete_comfy_node(node_id: str):
         raise HTTPException(status_code=404, detail="推理节点不存在")
     if manager.node_in_use(node_id):
         raise HTTPException(status_code=409, detail="节点正在执行任务或存在定向排队任务")
+    workflow_registry.invalidate_node_sync(node_id)
     node_registry.delete(node_id)
     reload_comfy_nodes()
     return {"deleted": True}
@@ -820,6 +864,235 @@ async def update_comfy_settings(payload: ComfySettingsUpdate):
     seconds = node_registry.set_health_interval(payload.health_interval_seconds)
     reload_comfy_nodes()
     return {"health_interval_seconds": seconds}
+
+
+def workflow_response(workflow_id: str, *, include_graph: bool = True) -> dict[str, Any] | None:
+    workflow = workflow_registry.get(workflow_id)
+    if not workflow:
+        return None
+    sync_rows = workflow_registry.sync_rows(workflow_id)
+    nodes = manager.nodes_public()
+    workflow["sync"] = sync_rows
+    workflow["available_node_ids"] = eligible_node_ids(workflow, nodes, sync_rows)
+    if not include_graph:
+        workflow.pop("workflow_json", None)
+    return workflow
+
+
+def incognito_code_is_valid(code: str | None) -> bool:
+    return bool(settings.incognito_code and code) and secrets.compare_digest(code, settings.incognito_code)
+
+
+def require_workflow_access(workflow: dict[str, Any], incognito_code: str | None) -> None:
+    if workflow.get("incognito_only") and not incognito_code_is_valid(incognito_code):
+        raise HTTPException(status_code=404, detail="工作流不存在")
+
+
+def validate_workflow_targets(node_ids: list[str]) -> list[str]:
+    if not isinstance(node_ids, list):
+        raise ValueError("目标节点必须为数组")
+    normalized = [str(node_id).strip() for node_id in node_ids]
+    if not normalized or len(normalized) > 32:
+        raise ValueError("至少选择一个 ComfyUI 节点，最多选择 32 个")
+    if len(set(normalized)) != len(normalized):
+        raise ValueError("ComfyUI 节点不能重复")
+    for node_id in normalized:
+        config = node_registry.config(node_id)
+        public_node = node_registry.get(node_id)
+        if not config or not public_node or not public_node.get("enabled") or config.provider != "comfyui":
+            raise ValueError(f"目标节点不存在、已停用或不是 ComfyUI 节点：{node_id}")
+    return normalized
+
+
+async def synchronize_workflow(workflow_id: str, node_ids: list[str], *, confirm: bool = False) -> list[dict[str, Any]]:
+    async def synchronize_one(node_id: str) -> dict[str, Any]:
+        config = node_registry.config(node_id)
+        if not config or config.provider != "comfyui":
+            return workflow_registry.set_sync(
+                workflow_id,
+                node_id,
+                status="failed",
+                error="目标 ComfyUI 节点不存在或已删除",
+            )
+        return await asyncio.to_thread(
+            workflow_registry.synchronize,
+            workflow_id,
+            config,
+            confirm=confirm,
+        )
+    return list(await asyncio.gather(*(synchronize_one(node_id) for node_id in node_ids)))
+
+
+@app.get("/api/v1/workflows", dependencies=[Depends(authorize)])
+async def list_workflows(
+    incognito_code: Annotated[str | None, Header(alias="X-H3-Incognito-Code")] = None,
+):
+    incognito = incognito_code_is_valid(incognito_code)
+    data = []
+    for workflow in workflow_registry.list():
+        if workflow.get("incognito_only") and not incognito:
+            continue
+        response = workflow_response(workflow["id"], include_graph=False)
+        if response:
+            data.append(response)
+    return {"data": data}
+
+
+@app.post("/api/v1/workflows", status_code=201, dependencies=[Depends(authorize)])
+async def create_workflow(
+    payload: WorkflowConfigCreate,
+    incognito_code: Annotated[str | None, Header(alias="X-H3-Incognito-Code")] = None,
+):
+    if incognito_code and not incognito_code_is_valid(incognito_code):
+        raise HTTPException(status_code=403, detail="无痕模式授权已失效")
+    incognito_only = incognito_code_is_valid(incognito_code)
+    try:
+        config = validate_workflow_config(
+            name=payload.name,
+            workflow_json=payload.workflow_json,
+            field_mappings=payload.field_mappings,
+            reference_mappings=payload.reference_mappings,
+            static_inputs=payload.static_inputs,
+            result_node_id=payload.result_node_id,
+            media_type=payload.media_type,
+            description=payload.description,
+        )
+        target_node_ids = validate_workflow_targets(payload.target_node_ids)
+        created = workflow_registry.create(
+            config,
+            target_node_ids,
+            payload.visible_in_composer,
+            incognito_only=incognito_only,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await synchronize_workflow(created["id"], target_node_ids)
+    return workflow_response(created["id"])
+
+
+@app.get("/api/v1/workflows/{workflow_id}", dependencies=[Depends(authorize)])
+async def get_workflow(
+    workflow_id: str,
+    incognito_code: Annotated[str | None, Header(alias="X-H3-Incognito-Code")] = None,
+):
+    workflow = workflow_registry.get(workflow_id)
+    if not workflow:
+        raise HTTPException(status_code=404, detail="工作流不存在")
+    require_workflow_access(workflow, incognito_code)
+    result = workflow_response(workflow_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="工作流不存在")
+    return result
+
+
+@app.patch("/api/v1/workflows/{workflow_id}", dependencies=[Depends(authorize)])
+async def update_workflow(
+    workflow_id: str,
+    payload: WorkflowConfigUpdate,
+    incognito_code: Annotated[str | None, Header(alias="X-H3-Incognito-Code")] = None,
+):
+    existing = workflow_registry.get(workflow_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="工作流不存在")
+    require_workflow_access(existing, incognito_code)
+    changes = payload.model_dump(exclude_unset=True, exclude_none=True)
+    if existing["source"] == "preset":
+        if set(changes) != {"visible_in_composer"}:
+            raise HTTPException(status_code=409, detail="内置预设仅允许修改生成区显示状态")
+        result = workflow_registry.set_preset_visibility(workflow_id, bool(changes["visible_in_composer"]))
+        if not result:
+            raise HTTPException(status_code=404, detail="内置预设不存在")
+        return workflow_response(workflow_id)
+
+    values = {
+        "name": existing["name"],
+        "description": existing.get("description", ""),
+        "workflow_json": existing["workflow_json"],
+        "field_mappings": existing["field_mappings"],
+        "reference_mappings": existing["reference_mappings"],
+        "static_inputs": existing["static_inputs"],
+        "result_node_id": existing["result_node_id"],
+        "media_type": existing["media_type"],
+    }
+    values.update({key: value for key, value in changes.items() if key in values})
+    visible = bool(changes.get("visible_in_composer", existing["visible_in_composer"]))
+    target_ids_raw = changes.get("target_node_ids", existing["target_node_ids"])
+    try:
+        config = validate_workflow_config(**values)
+        target_node_ids = validate_workflow_targets(target_ids_raw)
+        old_target_ids = list(existing["target_node_ids"])
+        updated = workflow_registry.update(workflow_id, config, target_node_ids, visible)
+        if not updated:
+            raise HTTPException(status_code=404, detail="工作流不存在")
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    await synchronize_workflow(workflow_id, target_node_ids)
+    cleanup_errors = []
+    for node_id in sorted(set(old_target_ids) - set(target_node_ids)):
+        config = node_registry.config(node_id)
+        if not config:
+            cleanup_errors.append({"node_id": node_id, "error": "节点已删除，远端副本未清理"})
+            continue
+        error = await asyncio.to_thread(workflow_registry.remove_remote_copy, workflow_id, config)
+        if error:
+            cleanup_errors.append({"node_id": node_id, "error": error})
+    result = workflow_response(workflow_id)
+    if result is not None:
+        result["remote_cleanup_errors"] = cleanup_errors
+    return result
+
+
+@app.delete("/api/v1/workflows/{workflow_id}", dependencies=[Depends(authorize)])
+async def delete_workflow(
+    workflow_id: str,
+    incognito_code: Annotated[str | None, Header(alias="X-H3-Incognito-Code")] = None,
+):
+    existing = workflow_registry.get(workflow_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="工作流不存在")
+    require_workflow_access(existing, incognito_code)
+    if existing["source"] != "custom":
+        raise HTTPException(status_code=409, detail="内置预设不能删除")
+    cleanup_errors = []
+    for node_id in existing["target_node_ids"]:
+        config = node_registry.config(node_id)
+        if not config:
+            cleanup_errors.append({"node_id": node_id, "error": "节点已删除，远端副本未清理"})
+            continue
+        error = await asyncio.to_thread(workflow_registry.remove_remote_copy, workflow_id, config)
+        if error:
+            cleanup_errors.append({"node_id": node_id, "error": error})
+    try:
+        workflow_registry.delete(workflow_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"deleted": True, "remote_cleanup_errors": cleanup_errors}
+
+
+@app.post("/api/v1/workflows/{workflow_id}/sync", dependencies=[Depends(authorize)])
+async def sync_workflow(
+    workflow_id: str,
+    payload: WorkflowSyncRequest = WorkflowSyncRequest(),
+    incognito_code: Annotated[str | None, Header(alias="X-H3-Incognito-Code")] = None,
+):
+    workflow = workflow_registry.get(workflow_id)
+    if not workflow:
+        raise HTTPException(status_code=404, detail="工作流不存在")
+    require_workflow_access(workflow, incognito_code)
+    if workflow["source"] != "custom":
+        raise HTTPException(status_code=409, detail="内置预设无需同步")
+    selected = payload.node_ids if payload.node_ids is not None else workflow["target_node_ids"]
+    if not selected:
+        raise HTTPException(status_code=422, detail="工作流没有配置目标 ComfyUI 节点")
+    if len(set(selected)) != len(selected):
+        raise HTTPException(status_code=422, detail="目标 ComfyUI 节点不能重复")
+    if not set(selected).issubset(set(workflow["target_node_ids"])):
+        raise HTTPException(status_code=422, detail="只能同步到工作流已配置的目标节点")
+    results = await synchronize_workflow(workflow_id, selected, confirm=payload.manual_confirm)
+    return {"data": results, "workflow": workflow_response(workflow_id, include_graph=False)}
 
 
 @app.get("/api/v1/settings/general", dependencies=[Depends(authorize)])
@@ -2196,7 +2469,7 @@ async def get_shared_asset_reference(peer_id: str, job_id: str, index: int):
 
 @app.post("/api/v1/incognito/authorize", dependencies=[Depends(authorize)])
 async def authorize_incognito(payload: IncognitoAuthRequest):
-    if not secrets.compare_digest(payload.code, settings.incognito_code):
+    if not incognito_code_is_valid(payload.code):
         raise HTTPException(status_code=403, detail="授权码不正确")
     return {"authorized": True}
 
@@ -2240,6 +2513,26 @@ async def list_generations(
     }
 
 
+def validate_custom_reference_mappings(workflow: dict[str, Any], kinds: list[str]) -> None:
+    counts: dict[str, int] = {}
+    for kind in kinds:
+        counts[kind] = counts.get(kind, 0) + 1
+    mappings = {
+        (str(item["type"]), int(item["index"])): item
+        for item in workflow.get("reference_mappings") or []
+    }
+    for kind, index in mappings:
+        if index <= counts.get(kind, 0):
+            continue
+        binding = mappings[(kind, index)]
+        if binding.get("required", True):
+            raise HTTPException(status_code=422, detail=f"请上传第 {index} 个 {kind} 参考素材")
+    for kind, count in counts.items():
+        for index in range(1, count + 1):
+            if (kind, index) not in mappings:
+                raise HTTPException(status_code=422, detail=f"工作流没有配置第 {index} 个 {kind} 参考素材映射")
+
+
 @app.post("/api/v1/generations", status_code=202, dependencies=[Depends(authorize)])
 async def create_generation(
     prompt: Annotated[str, Form(description="Generation prompt or primary workflow text input.")] = "",
@@ -2275,6 +2568,7 @@ async def create_generation(
     seed: Annotated[str | None, Form()] = None,
     lyrics: Annotated[str, Form(max_length=12000)] = "",
     title: Annotated[str | None, Form(max_length=120)] = None,
+    workflow_id: Annotated[str | None, Form(max_length=100)] = None,
     comfy_node: Annotated[str, Form(max_length=200)] = "auto",
     runninghub_parameters: Annotated[
         str, Form(description="JSON object keyed by RunningHub schema field keys.")
@@ -2285,16 +2579,80 @@ async def create_generation(
     proxy_source_device_id: Annotated[str | None, Form()] = None,
 ):
     prompt = prompt.strip()
+    selected_workflow = workflow_registry.get(workflow_id) if workflow_id else None
+    if workflow_id and not selected_workflow:
+        raise HTTPException(status_code=404, detail="工作流不存在")
+    if selected_workflow and selected_workflow.get("incognito_only") and (
+        not incognito or not incognito_code_is_valid(incognito_code)
+    ):
+        raise HTTPException(status_code=403, detail="该工作流仅在私密模式中可用")
+    is_custom_workflow = bool(selected_workflow and selected_workflow["source"] == "custom")
+    workflow_snapshot: dict[str, Any] | None = None
+    workflow_node_ids: list[str] | None = None
+    if selected_workflow and selected_workflow["source"] == "preset":
+        model_variant = selected_workflow["model_variant"]
+        execution_mode = selected_workflow["execution_mode"]
+        task_type = selected_workflow["task_type"]
+    elif is_custom_workflow:
+        if task_type == "upscale":
+            raise HTTPException(status_code=422, detail="自定义工作流不能用于超分任务")
+        if auto_upscale:
+            raise HTTPException(status_code=422, detail="自定义工作流暂不支持自动超分")
+        if not selected_workflow["target_node_ids"]:
+            raise HTTPException(status_code=422, detail="自定义工作流没有配置目标 ComfyUI 节点")
+        sync_ready_ids = {
+            item["node_id"]
+            for item in workflow_registry.sync_rows(workflow_id or "")
+            if item["status"] == "synced"
+        }
+        configured_node_ids = set(selected_workflow["target_node_ids"])
+        workflow_node_ids = sorted(configured_node_ids & sync_ready_ids)
+        if comfy_node == "auto":
+            healthy_ids = set(
+                eligible_node_ids(
+                    selected_workflow,
+                    manager.nodes_public(),
+                    workflow_registry.sync_rows(workflow_id or ""),
+                )
+            )
+            workflow_node_ids = sorted(healthy_ids)
+            if not workflow_node_ids:
+                raise HTTPException(status_code=422, detail="工作流没有已同步且在线的 ComfyUI 节点")
+        elif comfy_node not in workflow_node_ids:
+            raise HTTPException(status_code=422, detail="所选节点尚未确认该工作流副本")
+        workflow_snapshot = {
+            "id": selected_workflow["id"],
+            "name": selected_workflow["name"],
+            "source": "custom",
+            "incognito_only": bool(selected_workflow.get("incognito_only")),
+            "version": selected_workflow["version"],
+            "workflow_json": deepcopy(selected_workflow["workflow_json"]),
+            "field_mappings": deepcopy(selected_workflow["field_mappings"]),
+            "reference_mappings": deepcopy(selected_workflow["reference_mappings"]),
+            "static_inputs": deepcopy(selected_workflow["static_inputs"]),
+            "result_node_id": selected_workflow["result_node_id"],
+            "media_type": selected_workflow["media_type"],
+        }
+        execution_mode = "native"
+        model_variant = "fl2va-fp8"
+        task_type = "generation"
+    elif not selected_workflow:
+        selected_workflow = workflow_registry.preset_for(model_variant, execution_mode, task_type)
+        if selected_workflow:
+            workflow_id = selected_workflow["id"]
+
     normalized_folder_id = normalize_folder_id(folder_id)
     if incognito and normalized_folder_id:
         raise HTTPException(status_code=422, detail="无痕任务不支持文件夹")
     if len(prompt) > 12000:
         raise HTTPException(status_code=422, detail="提示词不能超过 12000 个字符")
     validate_upscale_parameters(task_type, upscale_category, upscale_scale)
-    if incognito and not secrets.compare_digest(incognito_code or "", settings.incognito_code):
+    if incognito and not incognito_code_is_valid(incognito_code):
         raise HTTPException(status_code=403, detail="无痕模式授权已失效")
     remote_target = parse_remote_node_id(comfy_node)
     if remote_target:
+        if is_custom_workflow:
+            raise HTTPException(status_code=422, detail="自定义 ComfyUI 工作流不能提交到互联代理节点")
         return await submit_proxy_generation(
             prompt=prompt,
             reference_manifest=reference_manifest,
@@ -2356,6 +2714,10 @@ async def create_generation(
     is_runninghub = bool(
         workflow_profile and workflow_profile.get("provider") == "runninghub"
     )
+    if is_custom_workflow and is_runninghub:
+        raise HTTPException(status_code=422, detail="自定义 ComfyUI 工作流需要 ComfyUI 节点")
+    if is_custom_workflow and comfy_node != "auto" and comfy_node not in (workflow_node_ids or []):
+        raise HTTPException(status_code=422, detail="指定节点尚未同步该自定义工作流")
     if is_runninghub and task_type == "upscale":
         raise HTTPException(status_code=422, detail="超分任务需要使用 ComfyUI 节点")
     validate_auto_upscale_parameters(
@@ -2367,7 +2729,7 @@ async def create_generation(
         auto_upscale_scale,
         "runninghub" if is_runninghub else "comfyui",
     )
-    if not is_runninghub:
+    if not is_runninghub and not is_custom_workflow:
         minimum_prompt_length = 0 if task_type == "upscale" else 2 if execution_mode == "music3" else 8
         if len(prompt) < minimum_prompt_length:
             raise HTTPException(
@@ -2388,6 +2750,18 @@ async def create_generation(
                 min_tokens=sa_min_tokens,
                 stage2_denoise=sa_stage2_denoise,
             )
+    elif is_custom_workflow:
+        field_mappings = workflow_snapshot.get("field_mappings") or {}
+        if "prompt" in field_mappings and len(prompt) < 8:
+            raise HTTPException(status_code=422, detail="提示词至少需要 8 个字符")
+        if "lyrics" in field_mappings and len(lyrics) > 12000:
+            raise HTTPException(status_code=422, detail="歌词不能超过 12000 个字符")
+        if any(field in field_mappings for field in ("width", "height")) and (width <= 0 or height <= 0):
+            raise HTTPException(status_code=422, detail="宽度和高度必须大于 0")
+        if {"duration", "num_frames"} & set(field_mappings) and duration <= 0:
+            raise HTTPException(status_code=422, detail="时长必须大于 0")
+        if "steps" in field_mappings and steps < 1:
+            raise HTTPException(status_code=422, detail="步数必须大于 0")
 
     try:
         seed_raw = (seed or "").strip()
@@ -2416,6 +2790,10 @@ async def create_generation(
     ]
     if kinds != manifest_kinds:
         raise HTTPException(status_code=422, detail="素材顺序或类型与 reference_manifest 不一致")
+    if selected_workflow and selected_workflow["id"] == "preset-upscale-image" and kinds != ["image"]:
+        raise HTTPException(status_code=422, detail="图片超分预设需要一张图片")
+    if selected_workflow and selected_workflow["id"] == "preset-upscale-video" and kinds != ["video"]:
+        raise HTTPException(status_code=422, detail="视频超分预设需要一段视频")
     if is_runninghub:
         if not isinstance(dynamic_parameters, dict):
             raise HTTPException(status_code=422, detail="runninghub_parameters 必须是对象")
@@ -2423,11 +2801,14 @@ async def create_generation(
             workflow_profile or {}, prompt, dynamic_parameters, manifest
         )
     else:
-        validate_references(
-            model_variant,
-            kinds,
-            "upscale" if task_type == "upscale" else execution_mode,
-        )
+        if is_custom_workflow:
+            validate_custom_reference_mappings(workflow_snapshot or {}, kinds)
+        else:
+            validate_references(
+                model_variant,
+                kinds,
+                "upscale" if task_type == "upscale" else execution_mode,
+            )
 
     job_id = secrets.token_hex(8)
     upload_dir = settings.uploads_dir / job_id
@@ -2447,12 +2828,12 @@ async def create_generation(
             field_key = str(manifest[index - 1].get("field_key") or "")
             if field_key:
                 item["field_key"] = field_key
-            if not is_runninghub and task_type != "upscale" and model_variant == "fl2va-fp8":
+            if not is_runninghub and not is_custom_workflow and task_type != "upscale" and model_variant == "fl2va-fp8":
                 item["role"] = "first_frame" if index == 1 else "last_frame"
             if kind in {"video", "audio"}:
                 media_duration, has_audio = probe_media(
                     destination,
-                    None if is_runninghub or task_type == "upscale" else 15.1,
+                    None if is_runninghub or is_custom_workflow or task_type == "upscale" else 15.1,
                 )
                 item["duration"] = round(media_duration, 3)
                 if kind == "video":
@@ -2479,6 +2860,8 @@ async def create_generation(
     media_type = (
         output_media_type(schema)
         if isinstance(schema, dict)
+        else selected_workflow["media_type"]
+        if is_custom_workflow and selected_workflow
         else "audio"
         if execution_mode in {"music3", "tts"}
         else str(public_manifest[0]["type"])
@@ -2488,7 +2871,7 @@ async def create_generation(
     workflow_name = str(
         workflow_profile.get("workflow_name") or "RunningHub"
         if is_runninghub and workflow_profile
-        else ""
+        else selected_workflow["name"] if selected_workflow else ""
     )
     upscale_title = (
         f"{ {'real': '真人', 'anime': '动画', '3d': '3D'}.get(upscale_category, '超分') } · {upscale_scale}x 超分"
@@ -2505,9 +2888,12 @@ async def create_generation(
         "created_at": created_at,
         "updated_at": created_at,
         "cancel_requested": False,
+        **({"workflow_snapshot": workflow_snapshot} if workflow_snapshot else {}),
         "request": {
             "prompt": prompt,
-            "lyrics": lyrics.strip() if execution_mode == "music3" else "",
+            "lyrics": lyrics.strip() if execution_mode == "music3" or is_custom_workflow else "",
+            **({"workflow_id": workflow_id, "workflow_name": workflow_name} if workflow_id else {}),
+            **({"workflow_node_ids": workflow_node_ids} if workflow_node_ids is not None else {}),
             "model_variant": model_variant,
             "execution_mode": execution_mode,
             "task_type": task_type,
@@ -2846,6 +3232,8 @@ async def update_generation(
     title = values.pop("title", None)
     request_data = dict(job["request"])
     request_data.update(values)
+    workflow_snapshot = job.get("workflow_snapshot") or {}
+    is_custom_workflow = workflow_snapshot.get("source") == "custom"
     request_data.setdefault("model_variant", "fl2va-fp8")
     request_data.setdefault("execution_mode", "native")
     request_data.setdefault("comfy_node", "auto")
@@ -2860,6 +3248,10 @@ async def update_generation(
     is_runninghub = bool(
         workflow_profile and workflow_profile.get("provider") == "runninghub"
     )
+    if is_custom_workflow and is_runninghub:
+        raise HTTPException(status_code=422, detail="自定义 ComfyUI 工作流需要 ComfyUI 节点")
+    if is_custom_workflow and request_data["comfy_node"] != "auto" and request_data["comfy_node"] not in request_data.get("workflow_node_ids", []):
+        raise HTTPException(status_code=422, detail="指定节点未包含在原工作流快照的目标节点中")
     if request_data.get("execution_mode") == "tts":
         request_data["width"] = 32
         request_data["height"] = 32
@@ -2892,6 +3284,14 @@ async def update_generation(
             runninghub_parameters=parameters,
             media_type=output_media_type(schema),
         )
+    elif is_custom_workflow:
+        references = request_data.get("references", [])
+        validate_custom_reference_mappings(workflow_snapshot, [item.get("type") for item in references])
+        field_mappings = workflow_snapshot.get("field_mappings") or {}
+        if "prompt" in field_mappings and len(str(request_data.get("prompt") or "").strip()) < 8:
+            raise HTTPException(status_code=422, detail="提示词至少需要 8 个字符")
+        if {"duration", "num_frames"} & set(field_mappings):
+            request_data["num_frames"] = align_frames(float(request_data.get("duration") or 5))
     else:
         request_data.pop("provider", None)
         task_type = request_data.get("task_type", "generation")
@@ -3024,11 +3424,19 @@ async def regenerate_generation(
     folder_id = normalize_folder_id(payload.folder_id)
 
     request_data = deepcopy(source_job.get("request", {}))
+    workflow_snapshot = deepcopy(source_job.get("workflow_snapshot") or {})
+    is_custom_workflow = workflow_snapshot.get("source") == "custom"
     model_variant = request_data.get("model_variant", "fl2va-fp8")
     execution_mode = request_data.get("execution_mode", "native")
     comfy_node = request_data.get("comfy_node", "auto")
     incognito = bool(request_data.get("incognito"))
-    if incognito and not secrets.compare_digest(incognito_code or "", settings.incognito_code):
+    private_workflow = bool(
+        workflow_snapshot.get("incognito_only")
+        or request_data.get("workflow_id") == "preset-ref2va-nsfw"
+    )
+    if private_workflow and not incognito:
+        raise HTTPException(status_code=403, detail="该工作流仅能在私密模式中重新生成")
+    if incognito and not incognito_code_is_valid(incognito_code):
         raise HTTPException(status_code=403, detail="无痕模式授权已失效")
     if incognito and folder_id:
         raise HTTPException(status_code=422, detail="无痕任务不支持文件夹")
@@ -3065,6 +3473,15 @@ async def regenerate_generation(
             runninghub_schema=schema,
             runninghub_parameters=parameters,
             media_type=output_media_type(schema),
+        )
+    elif is_custom_workflow:
+        if manager.node_provider(comfy_node) == "runninghub":
+            raise HTTPException(status_code=422, detail="原任务指定节点的类型已变更")
+        if comfy_node != "auto" and comfy_node not in request_data.get("workflow_node_ids", []):
+            raise HTTPException(status_code=422, detail="原任务目标节点不在工作流快照中")
+        validate_custom_reference_mappings(
+            workflow_snapshot,
+            [str(item.get("type") or "") for item in references],
         )
     else:
         if manager.node_provider(comfy_node) == "runninghub":
@@ -3156,6 +3573,7 @@ async def regenerate_generation(
         "created_at": created_at,
         "updated_at": created_at,
         "cancel_requested": False,
+        **({"workflow_snapshot": workflow_snapshot} if is_custom_workflow else {}),
         "request": request_data,
         "input_paths": cloned_paths,
     }

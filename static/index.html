@@ -6,9 +6,9 @@
     <meta name="description" content="基于 ComfyUI 与 RunningHub API 的 MiniMax H3 视频与 Music3 音乐生成工作台">
     <meta name="theme-color" content="#f4f5f2">
     <title>MiniMax Studio</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=44&rev=54">
+    <link rel="stylesheet" href="/assets/styles.css?v=49&rev=59">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
-    <script src="/assets/app.js?v=60&rev=71&upscale=1" defer></script>
+    <script src="/assets/app.js?v=67&rev=78&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -69,6 +69,7 @@
                 <span class="status-dot" id="healthDot"></span>
                 <span id="healthText">连接推理节点</span>
                 <button class="icon-button node-manager-trigger" id="openNodeManager" type="button" title="管理推理节点" aria-label="管理推理节点"><i data-lucide="server-cog"></i></button>
+                <button class="icon-button workflow-manager-trigger" id="openWorkflowManager" type="button" title="管理工作流" aria-label="管理工作流"><i data-lucide="workflow"></i><span>工作流</span></button>
               </div>
             </div>
           </div>
@@ -99,6 +100,7 @@
           </div>
 
           <div class="reference-strip" id="referenceList" aria-live="polite"></div>
+          <p class="reference-processing" id="referenceProcessingStatus" hidden aria-live="polite"></p>
           <input id="referenceInput" type="file" accept="image/*" multiple hidden>
 
           <div class="composer-box" id="dropZone">
@@ -111,29 +113,9 @@
                 <div class="toolbar-row toolbar-row-primary">
                   <button class="icon-button attach-button" id="addReference" type="button" title="添加参考素材" aria-label="添加参考素材"><i data-lucide="paperclip"></i></button>
 
-                  <label class="compact-control" id="modelControl" title="生成模型">
-                    <i data-lucide="sparkles"></i>
-                    <select id="modelVariant" aria-label="生成模型">
-                      <option value="fl2va-fp8">H3 FL2VA FP8</option>
-                      <option value="ref2va-fp8">H3 Ref2VA FP8</option>
-                      <option value="music3-int8">Music3 INT8</option>
-                    </select>
-                  </label>
-
-                  <label class="compact-control execution-control" id="executionControl" title="执行方案">
+                  <label class="compact-control workflow-control" id="workflowControl" title="工作流">
                     <i data-lucide="workflow"></i>
-                    <select id="executionMode" aria-label="执行方案">
-                      <option value="native">普通流 · 原生 H3</option>
-                      <option value="turbo-lora">8-step LoRA · 1.0</option>
-                      <option value="dual-sampling">双采 · Sigma + 潜空间放大</option>
-                      <option value="h3-sa">MiniMax H3 SA · Sol-Attn</option>
-                      <option value="vdn-h3">VDN-H3 · Video Delta Net</option>
-                      <option value="digital-human">数字人 · 音频驱动</option>
-                      <option value="tts">H3 TTS · 人物语音</option>
-                      <option value="video-upscale">视频超分</option>
-                      <option value="music3" id="music3ExecutionOption" hidden>Music3 · 30 步</option>
-                      <option value="h3-nsfw" id="nsfwExecutionOption" hidden disabled>H3 NSFW · NaughtyTimes LoRA</option>
-                    </select>
+                    <select id="workflowSelect" aria-label="工作流" required><option value="">加载工作流</option></select>
                   </label>
 
                   <label class="compact-control node-control" id="nodeControl" title="推理节点">
@@ -215,33 +197,6 @@
                 <div class="mention-control" id="mentionControl">
                   <button class="icon-button mention-trigger" id="mentionTrigger" type="button" title="插入素材或使用快捷功能" aria-label="插入素材或使用快捷功能" aria-haspopup="menu" aria-controls="mentionMenu" aria-expanded="false">@</button>
                 </div>
-                <details class="settings-popover" id="advancedSettings">
-                  <summary class="icon-button" title="更多设置" aria-label="更多设置"><i data-lucide="sliders-horizontal"></i></summary>
-                  <div class="popover-panel">
-                    <label id="globalSeedControl">随机种子<input id="seed" name="seed" type="number" min="0" max="2147483647" placeholder="自动"></label>
-                    <label class="switch-row auto-upscale-setting" id="autoUpscaleControl"><span>生成后自动超分</span><input id="autoUpscale" type="checkbox" aria-label="生成后自动超分"><span class="switch"></span></label>
-                    <div id="saSettings" hidden>
-                      <div class="popover-divider"></div>
-                      <strong id="saSettingsTitle">MiniMax H3 SA 参数</strong>
-                      <label id="saTauControl">Sol-Attn tau<input id="saTau" type="number" min="0" max="4" step="0.05" value="1.3"></label>
-                      <label id="saStartControl">加速开始比例<input id="saStartPercent" type="number" min="0" max="1" step="0.01" value="0.2"></label>
-                      <label id="saEndControl">加速结束比例<input id="saEndPercent" type="number" min="0" max="1" step="0.01" value="0.9"></label>
-                      <label id="saMinTokensControl">最小 token 数<input id="saMinTokens" type="number" min="0" max="1048576" step="512" value="4096"></label>
-                      <label id="saDenoiseControl">二阶段 denoise<input id="saStage2Denoise" type="number" min="0" max="1" step="0.05" value="0.35"></label>
-                      <label id="saSinkControl">条件保留<select id="saSinkConditioning"><option value="exact_kv_and_rows">exact_kv_and_rows</option><option value="exact_kv">exact_kv</option><option value="off">off</option></select></label>
-                      <label id="saDenseControl">保持稠密的层<input id="saDenseBlocks" type="text" maxlength="256" value="0" placeholder="例如：0,-1"></label>
-                      <label class="switch-row" id="saInt8QkControl"><span>INT8 QK</span><input id="saInt8Qk" type="checkbox" checked><span class="switch"></span></label>
-                      <label class="switch-row" id="saInt8PvControl"><span>INT8 PV</span><input id="saInt8Pv" type="checkbox" checked><span class="switch"></span></label>
-                      <label class="switch-row" id="saMortonControl"><span>Morton token 排序</span><input id="saMorton" type="checkbox"><span class="switch"></span></label>
-                      <label id="saMortonCurveControl">Morton 曲线<select id="saMortonCurve"><option value="2d_frame">2d_frame</option><option value="3d">3d</option></select></label>
-                    </div>
-                    <div class="popover-divider"></div>
-                    <label class="switch-row"><span>启用 AI 提示词优化</span><input id="aiEnabled" type="checkbox"><span class="switch"></span></label>
-                    <label>OpenAI Base URL<input id="aiBaseUrl" type="url" placeholder="https://api.openai.com/v1"></label>
-                    <label>模型<input id="aiModel" type="text" placeholder="gpt-4.1-mini"></label>
-                    <label>API Key<input id="aiApiKey" type="password" autocomplete="new-password" placeholder="sk-…"><small class="secret-field-status" id="aiApiKeyStatus"></small></label>
-                  </div>
-                </details>
                 <button class="send-button" id="generateButton" type="submit" title="开始生成" aria-label="开始生成"><i data-lucide="arrow-up"></i></button>
               </div>
             </div>
@@ -334,6 +289,66 @@
       </section>
     </div>
 
+    <div class="modal-overlay workflow-modal" id="workflowModal" hidden>
+      <section class="node-dialog workflow-dialog" role="dialog" aria-modal="true" aria-labelledby="workflowDialogTitle">
+        <header class="node-dialog-header">
+          <div><span class="node-dialog-mark"><i data-lucide="workflow"></i></span><div><h2 id="workflowDialogTitle">工作流</h2><p>ComfyUI API 格式 · 内置预设与自定义工作流</p></div></div>
+          <button class="icon-button" id="closeWorkflowManager" type="button" title="关闭" aria-label="关闭工作流管理"><i data-lucide="x"></i></button>
+        </header>
+        <div class="node-manager-toolbar">
+          <span id="workflowManagerSummary">0 个工作流</span>
+          <button id="addWorkflowButton" type="button"><i data-lucide="plus"></i><span>新增工作流</span></button>
+        </div>
+        <p class="node-manager-error" id="workflowManagerError" role="alert"></p>
+        <div class="workflow-manager-body">
+          <div class="workflow-list" id="workflowList" aria-live="polite"></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-overlay workflow-editor-modal" id="workflowEditorModal" hidden>
+      <form class="workflow-editor" id="workflowEditor" role="dialog" aria-modal="true" aria-labelledby="workflowEditorTitle">
+        <header class="workflow-editor-header">
+          <div><span class="node-dialog-mark"><i data-lucide="workflow"></i></span><div><h2 id="workflowEditorTitle">新增工作流</h2><p>配置 API 图、字段映射和目标节点</p></div></div>
+          <button class="icon-button" id="cancelWorkflowEditIcon" type="button" title="关闭编辑" aria-label="关闭工作流编辑"><i data-lucide="x"></i></button>
+        </header>
+        <div class="workflow-editor-content">
+            <label for="workflowName">工作流名称</label>
+            <input id="workflowName" type="text" maxlength="120" autocomplete="off" required>
+            <label for="workflowDescription">工作流简介（可选）</label>
+            <textarea id="workflowDescription" rows="2" maxlength="500" placeholder="填写后会原样展示"></textarea>
+            <label for="workflowJsonFile">API 工作流 JSON</label>
+            <input id="workflowJsonFile" type="file" accept="application/json,.json">
+            <small class="workflow-file-status" id="workflowFileStatus">选择 ComfyUI 的 API 格式工作流</small>
+            <small class="workflow-file-status">同步失败时，可下载 JSON 并上传到 ComfyUI 的 workflows 用户目录后执行校验。</small>
+
+            <section class="workflow-config-section">
+              <div class="workflow-config-heading"><h4>通用字段映射</h4><button class="icon-button" id="addWorkflowFieldMapping" type="button" title="添加字段映射" aria-label="添加字段映射"><i data-lucide="plus"></i></button></div>
+              <div class="workflow-mapping-list" id="workflowFieldMappings"></div>
+            </section>
+            <section class="workflow-config-section">
+              <div class="workflow-config-heading"><h4>参考素材映射</h4><button class="icon-button" id="addWorkflowReferenceMapping" type="button" title="添加参考素材映射" aria-label="添加参考素材映射"><i data-lucide="plus"></i></button></div>
+              <div class="workflow-mapping-list" id="workflowReferenceMappings"></div>
+            </section>
+            <label for="workflowStaticInputs">静态输入 JSON</label>
+            <textarea id="workflowStaticInputs" rows="4" spellcheck="false" placeholder='{"129":{"control_after_generate":"randomize"}}'></textarea>
+            <div class="workflow-result-row">
+              <label for="workflowResultNode">结果节点</label>
+              <select id="workflowResultNode" required></select>
+              <label for="workflowMediaType">媒体类型</label>
+              <select id="workflowMediaType"><option value="video">视频</option><option value="audio">音频</option><option value="image">图片</option></select>
+            </div>
+            <fieldset class="workflow-targets">
+              <legend>目标 ComfyUI 节点</legend>
+              <div id="workflowTargetNodes"></div>
+            </fieldset>
+            <label class="switch-row workflow-visible-row"><span>显示在生成区</span><input id="workflowVisible" type="checkbox" checked><span class="switch"></span></label>
+            <p class="workflow-editor-error" id="workflowEditorError" role="alert"></p>
+        </div>
+        <div class="node-editor-actions"><button id="cancelWorkflowEdit" type="button">取消</button><button class="primary" type="submit">保存并同步</button></div>
+      </form>
+    </div>
+
     <div class="asset-detail-layer asset-detail-modal" id="assetDetailModal" hidden aria-live="polite"></div>
     <div class="modal-overlay auto-upscale-confirm-modal" id="autoUpscaleConfirmModal" hidden>
       <form class="settings-dialog auto-upscale-confirm-dialog" id="autoUpscaleConfirmForm" role="dialog" aria-modal="true" aria-labelledby="autoUpscaleConfirmTitle">
@@ -422,15 +437,54 @@
 
     <div class="modal-overlay settings-modal" id="globalSettingsModal" hidden>
       <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="globalSettingsTitle">
-        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="settings-2"></i></span><div><h2 id="globalSettingsTitle">设置</h2><p>本地应用与互联数据设置</p></div></div><button class="icon-button" id="closeGlobalSettings" type="button" title="关闭" aria-label="关闭设置"><i data-lucide="x"></i></button></header>
-        <form id="globalSettingsForm" class="settings-body">
-          <label>节点状态查询周期（秒）<input id="globalHealthInterval" type="number" min="5" max="3600" step="1" required></label>
-          <label class="switch-row"><span>显示运行日志</span><input id="showRuntimeLogs" type="checkbox"><span class="switch"></span></label>
-          <label class="switch-row"><span>显示连接互联入口</span><input id="showPeering" type="checkbox"><span class="switch"></span></label>
-          <label class="switch-row"><span>本地备份生成产物</span><input id="backupOutputs" type="checkbox"><span class="switch"></span></label>
-          <label>互联断开时处理远程记录<select id="remoteDisconnectPolicy"><option value="encrypt">加密</option><option value="delete">删除</option></select></label>
-          <label>远程记录密钥<span class="password-field"><input id="remoteRecordsKey" type="password" minlength="8" maxlength="256" autocomplete="new-password"><button class="password-toggle" id="toggleRemoteRecordsKey" type="button" title="显示密钥" aria-label="显示密钥"><i data-lucide="eye"></i></button></span><small>至少 8 个字符，最多 256 个字符</small></label>
-          <div class="settings-actions"><button type="button" id="manageLocalAssets"><i data-lucide="folder-cog"></i><span>管理本地素材</span></button><button class="primary" type="submit"><i data-lucide="save"></i><span>保存设置</span></button></div>
+        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="settings-2"></i></span><div><h2 id="globalSettingsTitle">设置</h2><p id="globalSettingsSubtitle">本地应用与互联数据设置</p></div></div><button class="icon-button" id="closeGlobalSettings" type="button" title="关闭" aria-label="关闭设置"><i data-lucide="x"></i></button></header>
+        <nav class="settings-tabs" role="tablist" aria-label="设置分类">
+          <button class="settings-tab is-active" id="settingsTabModel" type="button" role="tab" aria-selected="true" aria-controls="settingsPanelModel" data-settings-tab="model">模型</button>
+          <button class="settings-tab" id="settingsTabSystem" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelSystem" data-settings-tab="system">系统</button>
+          <button class="settings-tab" id="settingsTabUpload" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelUpload" data-settings-tab="upload">上传</button>
+        </nav>
+        <form id="globalSettingsForm" class="settings-body settings-tab-panels">
+          <div hidden aria-hidden="true">
+            <select id="modelVariant" aria-label="生成模型"><option value="fl2va-fp8">H3 FL2VA FP8</option><option value="ref2va-fp8">H3 Ref2VA FP8</option><option value="music3-int8">Music3 INT8</option></select>
+            <select id="executionMode" aria-label="执行方案"><option value="native">普通流 · 原生 H3</option><option value="turbo-lora">8-step LoRA · 1.0</option><option value="dual-sampling">双采 · Sigma + 潜空间放大</option><option value="h3-sa">MiniMax H3 SA · Sol-Attn</option><option value="vdn-h3">VDN-H3 · Video Delta Net</option><option value="digital-human">数字人 · 音频驱动</option><option value="tts">H3 TTS · 人物语音</option><option value="video-upscale">视频超分</option><option value="music3" id="music3ExecutionOption" hidden>Music3 · 30 步</option><option value="h3-nsfw" id="nsfwExecutionOption" hidden disabled>H3 NSFW · NaughtyTimes LoRA</option></select>
+          </div>
+          <section class="settings-tab-panel" id="settingsPanelModel" role="tabpanel" aria-labelledby="settingsTabModel" data-settings-panel="model">
+            <label id="globalSeedControl">随机种子<input id="seed" name="seed" type="number" min="0" max="2147483647" placeholder="自动"></label>
+            <label class="switch-row auto-upscale-setting" id="autoUpscaleControl"><span>生成后自动超分</span><input id="autoUpscale" type="checkbox" aria-label="生成后自动超分"><span class="switch"></span></label>
+            <div id="saSettings" class="settings-subsection" hidden>
+              <strong id="saSettingsTitle">MiniMax H3 SA 参数</strong>
+              <label id="saTauControl">Sol-Attn tau<input id="saTau" type="number" min="0" max="4" step="0.05" value="1.3"></label>
+              <label id="saStartControl">加速开始比例<input id="saStartPercent" type="number" min="0" max="1" step="0.01" value="0.2"></label>
+              <label id="saEndControl">加速结束比例<input id="saEndPercent" type="number" min="0" max="1" step="0.01" value="0.9"></label>
+              <label id="saMinTokensControl">最小 token 数<input id="saMinTokens" type="number" min="0" max="1048576" step="512" value="4096"></label>
+              <label id="saDenoiseControl">二阶段 denoise<input id="saStage2Denoise" type="number" min="0" max="1" step="0.05" value="0.35"></label>
+              <label id="saSinkControl">条件保留<select id="saSinkConditioning"><option value="exact_kv_and_rows">exact_kv_and_rows</option><option value="exact_kv">exact_kv</option><option value="off">off</option></select></label>
+              <label id="saDenseControl">保持稠密的层<input id="saDenseBlocks" type="text" maxlength="256" value="0" placeholder="例如：0,-1"></label>
+              <label class="switch-row" id="saInt8QkControl"><span>INT8 QK</span><input id="saInt8Qk" type="checkbox" checked><span class="switch"></span></label>
+              <label class="switch-row" id="saInt8PvControl"><span>INT8 PV</span><input id="saInt8Pv" type="checkbox" checked><span class="switch"></span></label>
+              <label class="switch-row" id="saMortonControl"><span>Morton token 排序</span><input id="saMorton" type="checkbox"><span class="switch"></span></label>
+              <label id="saMortonCurveControl">Morton 曲线<select id="saMortonCurve"><option value="2d_frame">2d_frame</option><option value="3d">3d</option></select></label>
+            </div>
+            <div class="settings-divider"></div>
+            <label class="switch-row"><span>启用 AI 提示词优化</span><input id="aiEnabled" type="checkbox"><span class="switch"></span></label>
+            <label>OpenAI Base URL<input id="aiBaseUrl" type="url" placeholder="https://api.openai.com/v1"></label>
+            <label>模型<input id="aiModel" type="text" placeholder="gpt-4.1-mini"></label>
+            <label>API Key<input id="aiApiKey" type="password" autocomplete="new-password" placeholder="sk-…"><small class="secret-field-status" id="aiApiKeyStatus"></small></label>
+          </section>
+          <section class="settings-tab-panel" id="settingsPanelSystem" role="tabpanel" aria-labelledby="settingsTabSystem" data-settings-panel="system" hidden>
+            <label>节点状态查询周期（秒）<input id="globalHealthInterval" type="number" min="5" max="3600" step="1"></label>
+            <label class="switch-row"><span>显示运行日志</span><input id="showRuntimeLogs" type="checkbox"><span class="switch"></span></label>
+            <label class="switch-row"><span>显示连接互联入口</span><input id="showPeering" type="checkbox"><span class="switch"></span></label>
+            <label class="switch-row"><span>本地备份生成产物</span><input id="backupOutputs" type="checkbox"><span class="switch"></span></label>
+            <label>互联断开时处理远程记录<select id="remoteDisconnectPolicy"><option value="encrypt">加密</option><option value="delete">删除</option></select></label>
+            <label>远程记录密钥<span class="password-field"><input id="remoteRecordsKey" type="password" minlength="8" maxlength="256" autocomplete="new-password"><button class="password-toggle" id="toggleRemoteRecordsKey" type="button" title="显示密钥" aria-label="显示密钥"><i data-lucide="eye"></i></button></span><small>至少 8 个字符，最多 256 个字符</small></label>
+            <div class="settings-actions"><button type="button" id="manageLocalAssets"><i data-lucide="folder-cog"></i><span>管理本地素材</span></button></div>
+          </section>
+          <section class="settings-tab-panel" id="settingsPanelUpload" role="tabpanel" aria-labelledby="settingsTabUpload" data-settings-panel="upload" hidden>
+            <label class="switch-row"><span>大尺寸图片自动压缩</span><input id="autoCompressLargeImages" type="checkbox"><span class="switch"></span></label>
+            <p class="settings-help">参考图片超过 1 MB 时在浏览器本地压缩后再上传。</p>
+          </section>
+          <div class="settings-actions settings-form-actions"><button class="primary" type="submit"><i data-lucide="save"></i><span>保存设置</span></button></div>
           <p class="settings-error" id="globalSettingsError" role="alert"></p>
         </form>
       </section>

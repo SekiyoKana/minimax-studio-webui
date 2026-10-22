@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import time
 import uuid
+from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -497,8 +498,43 @@ class ComfyUIH3Engine:
     ) -> dict[str, Any]:
         variant = self._variant(job)
         execution_mode = self._execution_mode(job)
-        workflow = self._load_workflow(variant, execution_mode)
         request = job["request"]
+        workflow_snapshot = job.get("workflow_snapshot") or request.get("workflow_snapshot") or {}
+        if workflow_snapshot.get("source") == "custom":
+            workflow = deepcopy(workflow_snapshot.get("workflow_json") or {})
+            for node_id, inputs in (workflow_snapshot.get("static_inputs") or {}).items():
+                workflow[str(node_id)]["inputs"].update(inputs)
+            field_values = {
+                "prompt": request.get("prompt"),
+                "lyrics": request.get("lyrics"),
+                "width": request.get("width"),
+                "height": request.get("height"),
+                "duration": request.get("duration"),
+                "num_frames": request.get("num_frames"),
+                "steps": request.get("steps"),
+                "seed": request.get("seed"),
+            }
+            for field_name, binding in (workflow_snapshot.get("field_mappings") or {}).items():
+                value = field_values.get(field_name)
+                if value is not None:
+                    workflow[str(binding["node_id"])]["inputs"][str(binding["input"])] = value
+            reference_indexes: dict[str, int] = {}
+            reference_bindings = {
+                (str(item["type"]), int(item["index"])): item
+                for item in workflow_snapshot.get("reference_mappings") or []
+            }
+            for index, reference in enumerate(request.get("references") or []):
+                kind = str(reference.get("type") or "")
+                reference_indexes[kind] = reference_indexes.get(kind, 0) + 1
+                binding = reference_bindings.get((kind, reference_indexes[kind]))
+                if not binding:
+                    raise ValueError(f"缺少参考素材映射：{kind} {reference_indexes[kind]}")
+                workflow[str(binding["node_id"])]["inputs"][str(binding["input"])] = input_names[index]
+            result_node_id = str(workflow_snapshot["result_node_id"])
+            workflow[result_node_id]["inputs"]["filename_prefix"] = f"minimax-studio-webui/{job['id']}"
+            return workflow
+
+        workflow = self._load_workflow(variant, execution_mode)
         workflow["92"]["inputs"]["filename_prefix"] = f"minimax-studio-webui/{job['id']}"
         if variant == "music3-int8":
             if music3_device:
@@ -1021,10 +1057,12 @@ class ComfyUIH3Engine:
         )
         try:
             music3 = self._variant(job) == "music3-int8"
-            tts = self._execution_mode(job) == "tts"
+            workflow_snapshot = job.get("workflow_snapshot") or job.get("request", {}).get("workflow_snapshot") or {}
+            custom = workflow_snapshot.get("source") == "custom"
+            tts = not custom and self._execution_mode(job) == "tts"
             sa = self._execution_mode(job) == "h3-sa"
             vdn = self._execution_mode(job) == "vdn-h3"
-            progress(2, "准备 ComfyUI Music3 工作流" if music3 else "准备 ComfyUI H3 TTS 工作流" if tts else "准备 ComfyUI H3 SA 工作流" if sa else "准备 ComfyUI VDN-H3 工作流" if vdn else "准备 ComfyUI FP8 工作流")
+            progress(2, "准备 ComfyUI 自定义工作流" if custom else "准备 ComfyUI Music3 工作流" if music3 else "准备 ComfyUI H3 TTS 工作流" if tts else "准备 ComfyUI H3 SA 工作流" if sa else "准备 ComfyUI VDN-H3 工作流" if vdn else "准备 ComfyUI FP8 工作流")
             timeout = httpx.Timeout(30, connect=10)
             with httpx.Client(
                 base_url=self.comfy_url,
@@ -1328,25 +1366,36 @@ class ComfyUIH3Engine:
         if status.get("completed") is not True or status.get("status_str") != "success":
             messages = status.get("messages") or []
             raise RuntimeError(f"ComfyUI 未成功完成工作流：{messages[-1:]}")
-        output_items = (history.get("outputs") or {}).get("92") or {}
+        workflow_snapshot = job.get("workflow_snapshot") or job.get("request", {}).get("workflow_snapshot") or {}
+        custom = workflow_snapshot.get("source") == "custom"
+        output_node_id = str(workflow_snapshot.get("result_node_id") or "92") if custom else "92"
+        output_items = (history.get("outputs") or {}).get(output_node_id) or {}
         candidates = []
         for items in output_items.values():
             if isinstance(items, list):
                 candidates.extend(item for item in items if isinstance(item, dict))
-        audio_only = self._variant(job) == "music3-int8" or self._execution_mode(job) == "tts"
+        request = job.get("request", {})
+        default_media_type = "audio" if self._variant(job) == "music3-int8" or self._execution_mode(job) == "tts" else "video"
+        media_type = str(workflow_snapshot.get("media_type") or request.get("media_type") or default_media_type)
+        allowed_suffixes = {
+            "video": {".mp4", ".webm", ".mov", ".mkv"},
+            "audio": {".flac", ".wav", ".mp3", ".m4a", ".ogg", ".aac"},
+            "image": {".png", ".jpg", ".jpeg", ".webp", ".gif"},
+        }
+        audio_only = media_type == "audio" if custom else self._variant(job) == "music3-int8" or self._execution_mode(job) == "tts"
         expected_suffix = ".flac" if audio_only else ".mp4"
         result_item = next(
             (
                 item
                 for item in candidates
-                if str(item.get("filename", "")).lower().endswith(expected_suffix)
+                if Path(str(item.get("filename") or "")).suffix.lower() in allowed_suffixes.get(media_type, {expected_suffix})
             ),
             None,
         )
         if not result_item:
-            media_name = "FLAC" if audio_only else "MP4"
-            raise RuntimeError(f"ComfyUI 历史记录中没有找到节点 92 的 {media_name} 产物")
-        output = self.settings.outputs_dir / output_file_name(job, expected_suffix)
+            raise RuntimeError(f"ComfyUI 历史记录中没有找到结果节点 {output_node_id} 的 {media_type} 产物")
+        result_suffix = Path(str(result_item.get("filename") or "")).suffix.lower() or expected_suffix
+        output = self.settings.outputs_dir / output_file_name(job, result_suffix)
         if client is None:
             output_root = self.settings.comfy_output_dir.resolve()
             source = (

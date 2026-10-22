@@ -172,6 +172,14 @@ curl -X POST "$BASE_URL/api/v1/comfy/nodes" \
 - 节点 `id`：定向提交到指定节点。
 - `rh:RESOURCE_ID`：在绑定同一 RunningHub 资源 ID 的节点中自动调度。
 
+### ComfyUI 工作流配置
+
+工作流列表接口为 `GET /api/v1/workflows`。内置预设使用数据库中的稳定 ID，并包含 `description`、`description_en` 双语简介；自定义工作流支持 `POST`、`GET`、`PATCH`、`DELETE /api/v1/workflows/{workflow_id}`，可选填写 `description`。同步与校验使用 `POST /api/v1/workflows/{workflow_id}/sync`。
+
+在私密模式中创建的自定义工作流及 H3 NSFW · NaughtyTimes LoRA 预设仅对携带有效 `X-H3-Incognito-Code` 请求头的工作流接口可见或可操作。提交私密工作流任务还必须设置 `incognito=true`；普通模式不能提交或重新生成私密工作流任务。
+
+自定义工作流执行必须提交 `workflow_id`，并将 `comfy_node` 指定为已同步的目标 ComfyUI 节点，或使用 `auto` 让调度器从已同步且在线的目标节点中选择。运行任务使用创建时保存的工作流快照。省略 `workflow_id` 时继续使用 `model_variant` 与 `execution_mode` 的原有请求方式。
+
 ## 5. 创建生成任务
 
 接口：
@@ -221,6 +229,7 @@ curl -X POST "$BASE_URL/api/v1/generations" \
 | `references` | file[] | 与 manifest 数量和顺序一致的上传文件 |
 | `model_variant` | enum | `fl2va-fp8`、`ref2va-fp8`、`music3-int8` |
 | `execution_mode` | enum | `native`、`turbo-lora`、`dual-sampling`、`h3-sa`、`vdn-h3`、`h3-nsfw`、`digital-human`、`tts`、`music3` |
+| `workflow_id` | string | 可选的内置预设或自定义工作流 ID；指定后按该工作流配置执行 |
 | `width`、`height` | integer | 视频分辨率；TTS 会固定为 `32 × 32` |
 | `duration` | number | 视频或音频时长；数字人模式使用驱动音频实际时长 |
 | `steps` | integer | 采样步数，具体范围由执行方案决定 |

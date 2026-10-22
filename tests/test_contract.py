@@ -463,7 +463,7 @@ class ContractTests(unittest.TestCase):
             styles,
             r"\.conversation-column \{[^}]*height: 100%;[^}]*overflow: hidden;",
         )
-        self.assertIn('/assets/styles.css?v=44', index)
+        self.assertRegex(index, r'/assets/styles\.css\?v=\d+')
 
     def test_settings_popover_is_outside_horizontal_scroll_container(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -471,7 +471,7 @@ class ContractTests(unittest.TestCase):
 
         toolbar_left = index.index('<div class="toolbar-left">')
         toolbar_actions = index.index('<div class="toolbar-actions">')
-        settings = index.index('<details class="settings-popover"')
+        settings = index.index('id="globalSettingsModal"')
         self.assertGreater(settings, toolbar_actions)
         self.assertGreater(toolbar_actions, toolbar_left)
 
@@ -937,7 +937,7 @@ class ContractTests(unittest.TestCase):
         self.assertIn('function selectedRunningHubNode()', app_js)
         self.assertIn('const RUNNINGHUB_TARGET_PREFIX = "rh:";', app_js)
         self.assertIn("runningHubGroups", app_js)
-        self.assertIn('el("modelControl").hidden = Boolean(runningHubNode);', app_js)
+        self.assertIn('el("workflowControl").hidden = Boolean(runningHubNode);', app_js)
         self.assertIn('function renderRunningHubParameters()', app_js)
         self.assertIn('runninghub_parameters', app_js)
         self.assertIn('function runningHubBalanceLabel(node)', app_js)
@@ -1490,8 +1490,8 @@ class ContractTests(unittest.TestCase):
         environment = (project_root / ".env.example").read_text(encoding="utf-8")
 
         self.assertIn('option value="digital-human">数字人 · 音频驱动', index)
-        self.assertIn('/assets/app.js?v=60', index)
-        self.assertIn('/assets/app.js?v=60&rev=71', index)
+        self.assertRegex(index, r'/assets/app\.js\?v=\d+')
+        self.assertRegex(index, r'/assets/app\.js\?v=\d+&rev=\d+')
         self.assertIn('return { image: 1, video: 0, audio: 1 };', app_js)
         self.assertIn('el("duration").disabled = digitalHuman;', app_js)
         self.assertIn('durationControl.classList.toggle("digital-human", digitalHuman);', app_js)
@@ -1506,7 +1506,7 @@ class ContractTests(unittest.TestCase):
         index = (project_root / "static" / "index.html").read_text(encoding="utf-8")
         app_js = (project_root / "static" / "app.js").read_text(encoding="utf-8")
         self.assertIn('option value="tts">H3 TTS · 人物语音', index)
-        self.assertIn('setText(\'#executionMode option[value="tts"]\', "H3 TTS · character voice")', app_js)
+        self.assertIn('tts: "H3 TTS · Character voice"', app_js)
         self.assertIn('const [width, height] = isTTS() ? [32, 32] : getDimensions();', app_js)
         self.assertIn('return { image: 0, video: 0, audio: 3 };', app_js)
         self.assertIn('data-asset-input', app_js)
@@ -1766,8 +1766,8 @@ class ContractTests(unittest.TestCase):
         self.assertIn("function isAnonymousQueueJob(job)", app_js)
         self.assertIn('"有任务正在运行中"', app_js)
         self.assertIn('const progress = item.progress == null ? ""', app_js)
-        self.assertIn('/assets/app.js?v=60', index)
-        self.assertIn('/assets/styles.css?v=44', index)
+        self.assertRegex(index, r'/assets/app\.js\?v=\d+')
+        self.assertRegex(index, r'/assets/styles\.css\?v=\d+')
         self.assertIn('id="steps" name="steps" type="number"', index)
         self.assertIn('min="4" max="50" step="1" value="10"', index)
         self.assertNotIn('<select id="steps"', index)

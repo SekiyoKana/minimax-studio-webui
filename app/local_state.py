@@ -113,6 +113,7 @@ class LocalStateStore:
                 "show_runtime_logs": "1",
                 "show_peering": "1",
                 "backup_outputs": "0",
+                "auto_compress_large_images": "1",
                 "remote_disconnect_policy": "encrypt",
                 "remote_records_key": secrets.token_urlsafe(32),
             }
@@ -238,6 +239,7 @@ class LocalStateStore:
             "show_runtime_logs": self.get_setting("show_runtime_logs", "1") == "1",
             "show_peering": self.get_setting("show_peering", "1") == "1",
             "backup_outputs": self.get_setting("backup_outputs", "0") == "1",
+            "auto_compress_large_images": self.get_setting("auto_compress_large_images", "1") == "1",
             "remote_disconnect_policy": self.get_setting(
                 "remote_disconnect_policy", "encrypt"
             ),
@@ -252,6 +254,7 @@ class LocalStateStore:
         show_runtime_logs: bool | None = None,
         show_peering: bool | None = None,
         backup_outputs: bool | None = None,
+        auto_compress_large_images: bool | None = None,
         remote_disconnect_policy: str | None = None,
         remote_records_key: str | None = None,
     ) -> dict[str, Any]:
@@ -259,6 +262,7 @@ class LocalStateStore:
             "show_runtime_logs": show_runtime_logs,
             "show_peering": show_peering,
             "backup_outputs": backup_outputs,
+            "auto_compress_large_images": auto_compress_large_images,
         }
         for key, value in bool_values.items():
             if value is not None:
