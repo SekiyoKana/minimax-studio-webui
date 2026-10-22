@@ -1,0 +1,106 @@
+name: desktop-build
+
+# 推送到 main / beta、打 v* 标签，或手动触发时，自动编译 Windows 与 macOS 桌面包。
+on:
+  push:
+    branches: [main, beta]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: "3.11"
+  APP_NAME: MiniMaxH3Studio
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    continue-on-error: ${{ matrix.optional || false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows x64
+            artifact: MiniMaxH3Studio-windows-x64
+            package: dist/MiniMaxH3Studio-windows-x64.zip
+          - os: macos-14
+            label: macOS arm64
+            artifact: MiniMaxH3Studio-macos-arm64
+            package: dist/MiniMaxH3Studio-macos-arm64.dmg
+          # Intel Mac 构建使用 Intel runner；若 GitHub 移除了该标签，
+          # 改成 macos-13 （旧 Intel 镜像）即可。
+          - os: macos-15-intel
+            label: macOS x64
+            artifact: MiniMaxH3Studio-macos-x64
+            package: dist/MiniMaxH3Studio-macos-x64.dmg
+            optional: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-desktop.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-desktop.txt
+
+      - name: Build desktop app
+        run: python scripts/build_desktop.py
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Get-Command 7z -ErrorAction SilentlyContinue) {
+            Push-Location dist
+            7z a -tzip -mx=5 "$env:APP_NAME-windows-x64.zip" "$env:APP_NAME" | Out-Null
+            Pop-Location
+          } else {
+            Compress-Archive -Path "dist/$env:APP_NAME" -DestinationPath "dist/$env:APP_NAME-windows-x64.zip" -Force
+          }
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # build_desktop.py 已用 hdiutil 生成 dmg；这里按矩阵重命名，避免两个架构的同名文件互相覆盖。
+          cp "dist/${APP_NAME}.dmg" "dist/${{ matrix.artifact }}.dmg"
+          ls -lh dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.package }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Attach packages to release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: packages/*
+          draft: false
+          generate_release_notes: true
