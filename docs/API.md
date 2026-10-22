@@ -116,7 +116,7 @@ POST   /api/v1/workflows/{workflow_id}/sync
 
 创建任务时提交 `workflow_id`。服务保存工作流图、映射、版本和目标节点快照，任务执行使用该快照。自定义工作流只能调度到已同步且在线的目标 ComfyUI 节点；RunningHub 和互联代理继续使用原有接口。
 
-保存工作流时服务调用 ComfyUI `/userdata/{file}` 上传 `workflows/h3studio-{workflow_id}.json`，随后读取并校验 SHA-256。同步状态按节点返回 `synced`、`pending` 或 `failed`。用户也可以将下载的 JSON 手动上传到 ComfyUI 的 `workflows` 用户目录，再调用同步接口进行校验。
+保存工作流时服务调用 ComfyUI `/userdata/{file}` 上传 `workflows/h3studio-{workflow_id}.json`，随后读取并校验 SHA-256。该路由只匹配单段路径，因此上传与校验都把目录分隔符编码为 `%2F`（`/userdata/workflows%2Fh3studio-...json`），否则 ComfyUI 会返回 405。同步状态按节点返回 `synced`、`pending` 或 `failed`。用户也可以将下载的 JSON 手动上传到 ComfyUI 的 `workflows` 用户目录，再调用同步接口进行校验。
 
 ## 创建超分任务
 

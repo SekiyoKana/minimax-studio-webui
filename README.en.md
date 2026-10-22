@@ -186,6 +186,7 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 - Custom workflows accept a variable number of images, videos and audio clips: reference mappings can bind `ref_images` / `ref_videos` / `ref_audios` slots, the engine creates loader nodes by index, and the editor detects available slots after selecting a workflow.
 - Workflow import, validation and sync errors now appear in the run log dialog with the original upstream error, so the workflow grid is no longer pushed down by hint text.
 - Local ComfyUI badges in the node list now show state: a yellow "Manageable" while the service is stopped, and a green "Managed" once the supervised service is running.
+- Fixed workflow sync failing with HTTP 405: ComfyUI's `/userdata/{file}` route matches a single path segment, so the sync call now percent-encodes the directory separator (`%2F`) when writing into `workflows/`.
 
 ### 2026-10-22
 

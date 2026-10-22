@@ -104,6 +104,40 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(result["status"], "synced")
             self.assertEqual(registry.sync_rows(created["id"])[0]["status"], "synced")
 
+    def test_sync_url_percent_encodes_directory_separator(self):
+        with tempfile.TemporaryDirectory() as temp:
+            registry = WorkflowRegistry(Path(temp) / "config.db", Path(__file__).parents[1] / "workflows")
+            created = registry.create(
+                validate_workflow_config(
+                    name="编码路径工作流",
+                    workflow_json=sample_workflow(),
+                    field_mappings={},
+                    reference_mappings=[],
+                    static_inputs={},
+                    result_node_id="2",
+                    media_type="video",
+                ),
+                ["node-1"],
+                True,
+            )
+            payload = registry.workflow_bytes(created)
+            response = MagicMock(status_code=200, content=payload)
+            response.raise_for_status.return_value = None
+            client = MagicMock()
+            client.__enter__.return_value = client
+            client.post.return_value = response
+            client.get.return_value = response
+            client.delete.return_value = MagicMock(status_code=204)
+            node = ComfyNodeConfig("node-1", "Node", "http://comfy.test:8188")
+            filename = registry.remote_filename(created["id"])
+            with patch("app.workflows.httpx.Client", return_value=client):
+                registry.synchronize(created["id"], node)
+                registry.remove_remote_copy(created["id"], node)
+            expected = f"http://comfy.test:8188/userdata/workflows%2F{filename}"
+            self.assertEqual(client.post.call_args[0][0], f"{expected}?overwrite=true")
+            self.assertEqual(client.get.call_args[0][0], expected)
+            self.assertEqual(client.delete.call_args[0][0], expected)
+
     def test_manual_sync_verification_records_hash_mismatch(self):
         with tempfile.TemporaryDirectory() as temp:
             registry = WorkflowRegistry(Path(temp) / "config.db", Path(__file__).parents[1] / "workflows")

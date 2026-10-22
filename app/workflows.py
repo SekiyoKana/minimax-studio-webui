@@ -509,7 +509,9 @@ class WorkflowRegistry:
             raise ValueError("自定义 ComfyUI 工作流不能同步到 RunningHub 节点")
         remote_filename = self.remote_filename(workflow_id)
         relative_path = f"workflows/{remote_filename}"
-        url = f"{node.url.rstrip('/')}/userdata/{quote(relative_path, safe='/')}"
+        # ComfyUI 的 /userdata/{file} 只匹配单个路径段，目录分隔符必须编码成 %2F 才能写到
+        # user/.../workflows/ 下；直接带斜杠会得到 405（POST）或 404（GET）。
+        url = f"{node.url.rstrip('/')}/userdata/{quote(relative_path, safe='')}"
         expected = self.workflow_bytes(workflow)
         digest = workflow_digest(expected)
         headers = {"Authorization": f"Bearer {node.api_key}"} if node.api_key else {}
@@ -531,7 +533,7 @@ class WorkflowRegistry:
     def remove_remote_copy(self, workflow_id: str, node: ComfyNodeConfig) -> str | None:
         filename = self.remote_filename(workflow_id)
         relative_path = f"workflows/{filename}"
-        url = f"{node.url.rstrip('/')}/userdata/{quote(relative_path, safe='/')}"
+        url = f"{node.url.rstrip('/')}/userdata/{quote(relative_path, safe='')}"
         headers = {"Authorization": f"Bearer {node.api_key}"} if node.api_key else {}
         try:
             with httpx.Client(headers=headers, timeout=httpx.Timeout(20, connect=8), trust_env=False, follow_redirects=False) as client:
