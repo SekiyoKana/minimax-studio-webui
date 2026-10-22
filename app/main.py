@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 from email.message import Message
 from pathlib import Path
 from typing import Annotated, Any, AsyncIterator, Literal
+import socket
 from urllib.parse import quote, urlparse
 
 import httpx
@@ -709,13 +710,60 @@ def prepare_runninghub_request(
     return normalized, assigned_manifest
 
 
+
+
+def _local_node_hosts() -> set[str]:
+    hosts = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+    try:
+        hostname = socket.gethostname().strip().lower()
+        if hostname:
+            hosts.add(hostname)
+        for info in socket.getaddrinfo(hostname, None):
+            hosts.add(str(info[4][0]).lower())
+    except OSError:
+        pass
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("8.8.8.8", 80))
+            hosts.add(probe.getsockname()[0].lower())
+    except OSError:
+        pass
+    try:
+        import psutil
+
+        for addresses in psutil.net_if_addrs().values():
+            for address in addresses:
+                if address.family.name in {"AF_INET", "AF_INET6"}:
+                    hosts.add(str(address.address).split("%", 1)[0].lower())
+    except Exception:
+        pass
+    return hosts
+
+
+LOCAL_NODE_HOSTS = _local_node_hosts()
+
+
+def node_url_is_local(url: str) -> bool:
+    try:
+        host = (urlparse(url).hostname or "").strip().lower().rstrip(".")
+    except ValueError:
+        return False
+    return bool(host) and host in LOCAL_NODE_HOSTS
+
+
 @app.get("/api/v1/comfy/nodes", dependencies=[Depends(authorize)])
 async def list_comfy_nodes():
     statuses = {item["id"]: item for item in manager.nodes_public()}
     nodes = []
     for row in node_registry.list(enabled_only=False):
         status_data = statuses.get(row["id"], {})
-        nodes.append({**row, **status_data})
+        nodes.append(
+            {
+                **row,
+                **status_data,
+                "local": node_url_is_local(str(row.get("url") or "")),
+            }
+        )
     return {
         "data": nodes,
         "health_interval_seconds": node_registry.health_interval(),

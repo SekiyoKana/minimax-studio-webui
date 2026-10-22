@@ -124,6 +124,12 @@ Persistent data is stored under `data/`:
 
 ## Update log
 
+### 2026-10-22: Local/remote node classification
+
+- Node location is now derived from its address: localhost, 127.0.0.1 and the machine's own interface addresses are local; every other host (Tailscale, LAN, public, RunningHub) is remote.
+- Remote-address nodes are labelled "Remote node" and the summary counts them separately.
+- The hidden node error area no longer reserves bottom padding.
+
 ### 2026-10-22: Music3 side-by-side inputs
 
 - Switching the workflow to Music3 INT8 now places the prompt and lyrics side by side at their original height, with the toolbar unchanged below.

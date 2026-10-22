@@ -1239,3 +1239,6 @@ button { appearance: none; -webkit-appearance: none; }
 @media (max-width: 700px) {
   .node-banner { flex-basis: 100%; }
 }
+
+
+.node-manager-error:empty { display: none; }

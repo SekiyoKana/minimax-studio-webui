@@ -820,7 +820,7 @@ function syncNodeProviderFields() {
 }
 
 function renderManagedNodes() {
-  const remoteCount = state.managedNodes.filter((node) => node.remote_proxy).length;
+  const remoteCount = state.managedNodes.filter((node) => node.remote_proxy || node.local === false).length;
   const localCount = state.managedNodes.length - remoteCount;
   el("nodeManagerSummary").textContent = state.locale === "en"
     ? `${state.managedNodes.length} nodes · ${localCount} local · ${remoteCount} remote`
@@ -842,6 +842,7 @@ function renderManagedNodes() {
       </div>`;
     }
     const provider = node.provider === "runninghub" ? "RunningHub API" : "ComfyUI API";
+    const location = node.local === false ? `${localized("远程节点", "Remote node")} · ` : "";
     const workflowType = node.runninghub_resource_type === "ai-app" ? "AI App" : "Workflow";
     const workflow = node.provider === "runninghub" ? ` · ${workflowType} ${escapeHtml(node.workflow_url || "-")}` : "";
     const keyState = node.has_api_key ? ` · ${localized("API Key 已保存", "API Key saved")}` : "";
@@ -868,7 +869,7 @@ function renderManagedNodes() {
         <div class="node-banner-head"><strong>${escapeHtml(node.provider === "runninghub" ? node.workflow_name || node.name : node.name)}</strong>${statusDot}</div>
         <code title="${escapeHtml(node.url)}">${escapeHtml(node.url)}</code>
         ${accounting}${workflowIssue}
-        <small>${provider}${workflow}${node.provider === "runninghub" && node.workflow_name && node.workflow_name !== node.name ? ` · ${escapeHtml(node.name)}` : ""}${keyState} · ID ${escapeHtml(node.id)}${node.last_checked ? ` · ${formatTime(node.last_checked, true)} ${checkedLabel}` : ""}${escapeHtml(activity)}</small>
+        <small>${location}${provider}${workflow}${node.provider === "runninghub" && node.workflow_name && node.workflow_name !== node.name ? ` · ${escapeHtml(node.name)}` : ""}${keyState} · ID ${escapeHtml(node.id)}${node.last_checked ? ` · ${formatTime(node.last_checked, true)} ${checkedLabel}` : ""}${escapeHtml(activity)}</small>
         ${restricted ? `<small class="node-restricted">${localized("RunningHub 端点工作流已关闭", "RunningHub endpoint workflows are disabled")}</small>` : ""}
       </div>
       <div class="node-row-actions"><button type="button" data-node-action="edit" title="编辑节点" aria-label="编辑 ${escapeHtml(node.name)}">${icon("pencil")}</button><button type="button" data-node-action="delete" title="删除节点" aria-label="删除 ${escapeHtml(node.name)}">${icon("trash-2")}</button></div>
