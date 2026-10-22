@@ -905,3 +905,49 @@ button { appearance: none; -webkit-appearance: none; }
 .composer-box:hover:not(:focus-within) {
   border-color: var(--field-border-strong);
 }
+
+/* Theme mode previews: light / dark / system split */
+.theme-preview-system {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+.theme-preview-system::before {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: rgba(0, 0, 0, .12);
+  content: "";
+}
+.theme-half { position: relative; width: 50%; height: 100%; overflow: hidden; }
+.theme-light { background: linear-gradient(135deg, #f5f7fb, #e9edf5); }
+.theme-light::after {
+  position: absolute;
+  top: 22%;
+  left: 16%;
+  width: 50%;
+  height: 24%;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .06);
+  content: "";
+}
+.theme-dark {
+  background:
+    radial-gradient(circle at 30% 25%, rgba(111, 211, 255, .35), transparent 55%),
+    radial-gradient(circle at 80% 75%, rgba(155, 107, 255, .32), transparent 55%),
+    #0b111b;
+}
+.theme-dark::after {
+  position: absolute;
+  top: 22%;
+  right: 16%;
+  width: 50%;
+  height: 24%;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .14);
+  content: "";
+}

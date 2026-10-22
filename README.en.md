@@ -47,18 +47,25 @@ The interface also supports a resizable asset sidebar with `localStorage` persis
 
 ![Studio workbench](docs/images/h3-studio-overview.jpg)
 
-## Skins
+## Appearance and skins
 
-The interface appearance is a presentation layer. Switch skins in Settings > Appearance; the choice applies immediately and is stored locally under the `h3-skin` key. Skins never change APIs, data, DOM structure, element order, visibility, copy, or behavior.
+Three appearance modes are available in Settings > Appearance and apply immediately:
 
-| Skin | Style |
+| Mode | Behavior |
 |---|---|
-| Meadow (default) | Apple-inspired light theme: parchment canvas, single Action Blue, hairlines and pill controls |
-| Aurora Glass | Dark glassmorphism: aurora backdrop, cyan/violet accents, serif headings |
+| Light | Fixed light appearance |
+| Dark | Fixed dark appearance |
+| System | Follows `prefers-color-scheme` and updates live (default) |
 
-| Aurora Glass workbench | Settings > Appearance |
-|---|---|
-| ![Aurora Glass](docs/images/h3-studio-aurora.jpg) | ![Skin settings](docs/images/h3-studio-skins.jpg) |
+The mode is stored locally under the `h3-theme` key; the legacy `h3-skin` value migrates automatically to Light or Dark. Two skin styles sit underneath:
+
+| Mode | Skin | Style |
+|---|---|---|
+| Light | Meadow (default) | Apple-inspired light: parchment canvas, single Action Blue, hairlines and pill controls |
+| Dark | Aurora Glass | Dark glassmorphism: aurora backdrop, cyan/violet accents, serif headings |
+| System | Automatic | Aurora Glass when the OS is dark, Meadow otherwise |
+
+Appearance is a presentation layer: CSS only overrides tokens and decorative properties, never DOM structure, order, visibility, copy or behavior. Generation, queue, assets, workflows and APIs behave identically in all three modes.
 
 ### Type scale
 
@@ -77,15 +84,15 @@ All interface text uses ten tokens from `:root`; new modules must not hard-code 
 | `--text-display` | 28px | Page title |
 | `--text-hero` | 32px | Empty-state headline |
 
-Rules for new modules and skins:
+Rules for new modules, modes and skins:
 
 1. Use the `:root` design tokens (`--canvas`, `--surface`, `--ink`, `--line`, `--accent`, `--blue`, `--text-*`, ...); never hardcode colors or `font-size`.
 2. Scope every skin rule under `html[data-skin="<id>"]` in `static/skins/skins.css`; never edit base rules for a skin. The shared visual layer lives in `static/design.css`.
 3. Skins may only override colors, borders, shadows, radius, fonts and backgrounds — no layout, sizing, order, visibility or behavior changes.
 4. Assets go in `static/skins/<id>/` with a `preview.jpg` (16:10).
-5. Register the skin in the `SKINS` and `SKIN_THEME_COLORS` constants in `static/app.js` and add its card to the Settings appearance panel.
-6. Canvas, WebGL and chart modules must listen for the `h3:skinchange` event and repaint using `event.detail.skin`; read `currentSkin()` once at startup.
-7. Verify the default skin still matches the current baseline, refresh documentation screenshots and asset versions after a base design change, and manually check the other skin before merging.
+5. Register a new mode in the `THEMES` and `resolveThemeSkin()` logic in `static/app.js` and add its `data-theme-option` card; `data-skin` remains `default` (Light) or `aurora` (Dark).
+6. Canvas, WebGL and chart modules must listen for `h3:themechange` and repaint using `event.detail.theme` / `event.detail.skin`; `h3:skinchange` still fires when the resolved skin changes.
+7. Verify the default mode still matches the baseline, refresh documentation screenshots and asset versions after a base design change, and manually check all three modes before merging.
 
 ## Data flow
 
@@ -116,6 +123,13 @@ Persistent data is stored under `data/`:
 `elapsed_seconds` is calculated from `started_at` to the terminal timestamp. Legacy jobs without `started_at` use creation time for compatibility.
 
 ## Update log
+
+### 2026-10-22: Light / Dark / System appearance
+
+- Replaced the skin list with three appearance modes: Light, Dark and System.
+- System mode follows `prefers-color-scheme` and updates live when the OS appearance changes.
+- The choice is stored under `h3-theme`; legacy `h3-skin` values migrate to Light or Dark automatically.
+- The two skin styles remain underneath: Meadow for light, Aurora Glass for dark.
 
 ### 2026-10-22: Apple-inspired interface rebuild
 

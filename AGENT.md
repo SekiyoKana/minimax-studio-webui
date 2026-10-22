@@ -579,12 +579,12 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 
 界面外观通过皮肤切换，皮肤属于纯展示层。开发新模块、修改界面或新增皮肤时必须遵守以下规则，确保默认皮肤与既有皮肤都不被破坏：
 
-- 不因皮肤改变任何 API、数据结构、DOM 结构、元素顺序、可见性或交互行为。`data-skin` 只允许出现在 `<html>` 上，默认皮肤不设置该属性。
+- 不因外观模式改变任何 API、数据结构、DOM 结构、元素顺序、可见性或交互行为。`data-skin` 只允许出现在 `<html>` 上（日间为 `default`，夜间为 `aurora`），日间模式不设置该属性；`data-theme` 记录 `light`、`dark` 或 `system`。
 - 所有颜色、圆角、字体使用 `:root` 设计令牌（`--canvas`、`--surface`、`--surface-soft`、`--surface-warm`、`--fill-secondary`、`--fill-tertiary`、`--fill-quaternary`、`--ink`、`--muted`、`--quiet`、`--line`、`--line-strong`、`--accent`、`--accent-soft`、`--blue`、`--green`、`--warning`、`--danger`、`--radius`、`--text-*`、`--sans`、`--display`、`--mono`）；禁止新增写死色值或 `font-size`。Apple 风格基线位于 `static/design.css`，新组件应复用其中已有的表面、字号和控件规则。
 - 文字大小只能使用 `--text-*` 令牌（micro 10 / caption 11 / small 12 / ui 13 / body 14 / lead 16 / heading-sm 20 / heading 24 / display 28 / hero 32）；需要新字号时先扩展令牌，不得写死 `font-size`。
 - 旧组件仍写死颜色时，只允许在 `static/skins/skins.css` 内以 `html[data-skin="<id>"]` 前缀覆盖其装饰属性，不得修改基础规则。测试 `test_skins_are_scoped_and_selectable_from_settings` 会校验所有规则均已限定作用域。
 - 皮肤资源放在 `static/skins/<id>/`，预览图固定命名 `preview.jpg`（16:10）。
-- 注册新皮肤需要同时完成：`static/app.js` 的 `SKINS` 常量、`SKIN_THEME_COLORS` 主题色、设置「外观」面板中的 `data-skin-option` 卡片。切换结果保存在 `localStorage` 的 `h3-skin` 键。
-- Canvas、WebGL、图表等无法被 CSS 换肤的绘制，必须监听 `document` 上的 `h3:skinchange` 事件，读取 `event.detail.skin` 后重绘；初始化时使用 `currentSkin()` 获取当前皮肤。若模块在皮肤切换前创建，也应读取一次初始值。
+- 注册新外观模式需要同时完成：`static/app.js` 的 `THEMES` 常量、`resolveThemeSkin()` 解析逻辑、`SKIN_THEME_COLORS` 主题色，以及设置「外观」面板中的 `data-theme-option` 卡片。选择结果保存在 `localStorage` 的 `h3-theme` 键，旧 `h3-skin` 会自动迁移；跟随系统模式监听 `prefers-color-scheme`。
+- Canvas、WebGL、图表等无法被 CSS 换肤的绘制，必须监听 `document` 上的 `h3:themechange` 事件，读取 `event.detail.theme` / `event.detail.skin` 后重绘；`h3:skinchange` 仍会在解析后的皮肤变化时派发。初始化时使用 `currentTheme()` 与 `currentSkin()` 获取当前模式与皮肤。
 - 自动化 Agent 调用 API 时不依赖皮肤，皮肤不会产生任何接口、字段或错误码差异。
 - 发布前验证默认皮肤仍符合当前视觉基线；调整基础设计时同步更新 README 截图和静态资源版本号，并手动检查「极光玻璃」皮肤下的工作台、设置、工作流管理、素材库、节点管理和任务详情页面。

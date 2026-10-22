@@ -56,20 +56,29 @@ MiniMax H3 Studio 为 MiniMax H3、H3 TTS、数字人、Music3 和通用 Running
 |---|---|
 | ![工作台](docs/images/h3-studio-overview.jpg) | ![极光玻璃](docs/images/h3-studio-aurora.jpg) |
 
-## 皮肤系统
+## 外观与皮肤
 
-界面外观由皮肤控制，默认皮肤「原野」是当前视觉基线（柔性圆角、浅灰画布与靛蓝强调色）。在「设置 → 外观」中切换，立即生效，保存在本机 `localStorage` 的 `h3-skin` 键，不写入任务数据，也不改变任何接口。
+界面提供三种外观模式，在「设置 → 外观」中切换，立即生效：
 
-| 皮肤 | 风格 |
+| 模式 | 行为 |
 |---|---|
-| 原野（默认） | Apple 风格浅色主题：浅灰画布、单一 Action Blue、发丝分隔线与胶囊控件 |
-| 极光玻璃 Aurora Glass | 深色玻璃拟态，极光背景、青色与紫色渐变、衬线标题 |
+| 日间 | 固定浅色外观 |
+| 夜间 | 固定深色外观 |
+| 跟随系统 | 读取 `prefers-color-scheme`，系统深浅色变化时实时切换（默认） |
 
-| 极光玻璃工作台 | 设置 → 外观 |
+模式保存在本机 `localStorage` 的 `h3-theme` 键；旧版本的 `h3-skin` 会自动迁移为日间或夜间。底层仍由两套皮肤样式实现：
+
+| 模式 | 底层皮肤 | 风格 |
+|---|---|---|
+| 日间 | 原野（默认） | Apple 风格浅色：浅灰画布、单一 Action Blue、发丝分隔与胶囊控件 |
+| 夜间 | 极光玻璃 Aurora Glass | 深色玻璃拟态：极光背景、青色与紫色渐变、衬线标题 |
+| 跟随系统 | 自动选择 | 系统深色时用极光玻璃，否则用原野 |
+
+| 外观设置 | 夜间工作台 |
 |---|---|
-| ![极光玻璃](docs/images/h3-studio-aurora.jpg) | ![皮肤设置](docs/images/h3-studio-skins.jpg) |
+| ![外观设置](docs/images/h3-studio-skins.jpg) | ![夜间](docs/images/h3-studio-aurora.jpg) |
 
-皮肤是纯展示层：CSS 只覆盖设计令牌和装饰属性，不改变 DOM 结构、元素顺序、可见性、文案或任何 JavaScript 行为。生成、队列、素材、工作流和 API 在两种皮肤下完全一致。
+外观是纯展示层：CSS 只覆盖设计令牌和装饰属性，不改变 DOM 结构、元素顺序、可见性、文案或任何 JavaScript 行为。生成、队列、素材、工作流和 API 在三种模式下完全一致。
 
 ### 文字层级
 
@@ -88,17 +97,17 @@ MiniMax H3 Studio 为 MiniMax H3、H3 TTS、数字人、Music3 和通用 Running
 | `--text-display` | 28px | 页面标题 |
 | `--text-hero` | 32px | 空状态主标题 |
 
-### 新增皮肤的规则
+### 新增外观与皮肤的规则
 
-追加新模块或新皮肤时遵守以下约定，默认皮肤和既有皮肤都不会被破坏：
+追加新模块、新外观模式或新皮肤时遵守以下约定，三种模式和既有皮肤都不会被破坏：
 
 1. 组件颜色与字号只使用 `:root` 设计令牌（`--canvas`、`--surface`、`--ink`、`--line`、`--accent`、`--blue`、`--text-*` 等），不要写死色值或 `font-size`。
 2. 皮肤样式写入 [`static/skins/skins.css`](static/skins/skins.css)，且必须限定在 `html[data-skin="<id>"]` 之下；不得为了某个皮肤修改基础规则。
 3. 皮肤只能覆盖颜色、边框、阴影、圆角、字体和背景；不得改变布局结构、尺寸、元素顺序、可见性或交互逻辑。
 4. 皮肤资源放在 `static/skins/<id>/`，预览图固定命名 `preview.jpg`（16:10）。
-5. 在 [`static/app.js`](static/app.js) 的 `SKINS`、`SKIN_THEME_COLORS` 常量和设置外观面板中注册皮肤；默认皮肤不设置 `data-skin` 属性。
-6. 新模块若使用 Canvas、WebGL 或图表等无法被 CSS 换肤的绘制方式，监听 `h3:skinchange` 事件读取 `event.detail.skin` 后重绘。
-7. 合并前运行完整测试；默认皮肤必须保持为当前视觉基线，调整基础设计时同步更新文档截图和静态资源版本号，并至少手动检查一次其他皮肤的关键页面。
+5. 新增外观模式需要同时更新 [`static/app.js`](static/app.js) 的 `THEMES`、`resolveThemeSkin()` 和设置外观面板的 `data-theme-option` 卡片；`data-skin` 仍只取 `default`（日间）或 `aurora`（夜间）。
+6. 新模块若使用 Canvas、WebGL 或图表等无法被 CSS 换肤的绘制方式，监听 `h3:themechange` 事件读取 `event.detail.theme` / `event.detail.skin` 后重绘；`h3:skinchange` 仍会在解析后的皮肤变化时派发。
+7. 合并前运行完整测试；默认模式必须保持为当前视觉基线，调整基础设计时同步更新文档截图和静态资源版本号，并至少手动检查一次三种模式的关键页面。
 
 ## 数据流程
 
@@ -129,6 +138,13 @@ flowchart LR
 任务进入终态后，`elapsed_seconds` 使用 `started_at` 到终态时间的差值。旧任务缺少 `started_at` 时使用创建时间兼容显示。
 
 ## 更新日志
+
+### 2026-10-22：日间 / 夜间 / 跟随系统
+
+- 外观切换从皮肤列表改为三种模式：日间、夜间、跟随系统。
+- 跟随系统监听 `prefers-color-scheme`，系统外观变化时实时切换。
+- 模式保存在 `h3-theme`；旧 `h3-skin` 自动迁移为日间或夜间。
+- 底层继续使用原野与极光玻璃两套皮肤样式。
 
 ### 2026-10-22：Apple 风格界面重做
 

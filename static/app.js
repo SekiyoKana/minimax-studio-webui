@@ -170,51 +170,105 @@ function setControlTitle(id, value) {
   }
 }
 
-const SKINS = [
-  { id: "default", name: "原野", nameEn: "Meadow", note: "默认 · 柔性圆角", noteEn: "Default · soft radius" },
-  { id: "aurora", name: "极光玻璃", nameEn: "Aurora Glass", note: "深色 · 玻璃拟态", noteEn: "Dark · glassmorphism" },
+const THEMES = [
+  { id: "light", name: "日间", nameEn: "Light", note: "浅色外观", noteEn: "Light appearance" },
+  { id: "dark", name: "夜间", nameEn: "Dark", note: "深色外观", noteEn: "Dark appearance" },
+  { id: "system", name: "跟随系统", nameEn: "System", note: "随系统自动切换", noteEn: "Match system appearance" },
 ];
-const SKIN_STORAGE_KEY = "h3-skin";
+const THEME_STORAGE_KEY = "h3-theme";
+const LEGACY_SKIN_STORAGE_KEY = "h3-skin";
 const SKIN_THEME_COLORS = { default: "#f5f5f7", aurora: "#070b12" };
+const DARK_SCHEME_QUERY = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 
-function normalizeSkin(id) {
-  return SKINS.some((skin) => skin.id === id) ? id : "default";
+function normalizeTheme(id) {
+  return THEMES.some((theme) => theme.id === id) ? id : "system";
 }
 
-function currentSkin() {
-  let stored = "";
-  try { stored = localStorage.getItem(SKIN_STORAGE_KEY) || ""; } catch (error) { /* storage disabled */ }
-  return normalizeSkin(document.documentElement.dataset.skin || stored || "default");
+function storedTheme() {
+  try {
+    const value = localStorage.getItem(THEME_STORAGE_KEY);
+    if (value) return value;
+    const legacy = localStorage.getItem(LEGACY_SKIN_STORAGE_KEY);
+    if (legacy === "aurora") return "dark";
+    if (legacy === "default") return "light";
+  } catch (error) { /* storage disabled */ }
+  return "";
 }
 
-function applySkin(id, { persist = true } = {}) {
-  const skin = normalizeSkin(id);
+function currentTheme() {
+  return normalizeTheme(document.documentElement.dataset.theme || storedTheme() || "system");
+}
+
+function systemPrefersDark() {
+  return Boolean(DARK_SCHEME_QUERY && DARK_SCHEME_QUERY.matches);
+}
+
+function resolveThemeSkin(mode) {
+  const theme = normalizeTheme(mode);
+  if (theme === "light") return "default";
+  if (theme === "dark") return "aurora";
+  return systemPrefersDark() ? "aurora" : "default";
+}
+
+function applyTheme(mode, { persist = true } = {}) {
+  const theme = normalizeTheme(mode);
+  const skin = resolveThemeSkin(theme);
   if (skin === "default") delete document.documentElement.dataset.skin;
   else document.documentElement.dataset.skin = skin;
+  document.documentElement.dataset.theme = theme;
   if (persist) {
-    try { localStorage.setItem(SKIN_STORAGE_KEY, skin); } catch (error) { /* storage disabled */ }
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+      localStorage.removeItem(LEGACY_SKIN_STORAGE_KEY);
+    } catch (error) { /* storage disabled */ }
   }
   const themeColor = document.querySelector('meta[name="theme-color"]');
   if (themeColor) themeColor.content = SKIN_THEME_COLORS[skin] || SKIN_THEME_COLORS.default;
-  document.dispatchEvent(new CustomEvent("h3:skinchange", { detail: { skin } }));
-  renderSkinOptions();
-  return skin;
+  document.dispatchEvent(new CustomEvent("h3:themechange", { detail: { theme, skin, systemDark: systemPrefersDark() } }));
+  document.dispatchEvent(new CustomEvent("h3:skinchange", { detail: { skin, theme } }));
+  renderThemeOptions();
+  return theme;
 }
 
-function renderSkinOptions() {
-  const active = currentSkin();
-  document.querySelectorAll("[data-skin-option]").forEach((card) => {
-    const skin = SKINS.find((item) => item.id === card.dataset.skinOption);
-    if (!skin) return;
-    const isActive = skin.id === active;
+function applySkin(id, options) {
+  const mode = id === "aurora" ? "dark" : id === "default" ? "light" : "system";
+  return applyTheme(mode, options);
+}
+
+function currentSkin() {
+  return resolveThemeSkin(currentTheme());
+}
+
+function renderThemeOptions() {
+  const active = currentTheme();
+  document.querySelectorAll("[data-theme-option]").forEach((card) => {
+    const theme = THEMES.find((item) => item.id === card.dataset.themeOption);
+    if (!theme) return;
+    const isActive = theme.id === active;
     card.classList.toggle("is-active", isActive);
     card.setAttribute("aria-checked", String(isActive));
     card.tabIndex = isActive ? 0 : -1;
     const name = card.querySelector(".skin-card-copy strong");
     const note = card.querySelector(".skin-card-copy small");
-    if (name) name.textContent = localized(skin.name, skin.nameEn);
-    if (note) note.textContent = localized(skin.note, skin.noteEn);
+    if (name) name.textContent = localized(theme.name, theme.nameEn);
+    if (note) note.textContent = localized(theme.note, theme.noteEn);
   });
+  const help = el("skinHelp");
+  if (help) {
+    help.textContent = localized(
+      "外观只改变界面样式，不影响生成、队列、数据与接口。跟随系统时会随系统深浅色自动切换。",
+      "Appearance only changes the interface; generation, queue, data and APIs are unaffected. System mode follows your OS light/dark setting."
+    );
+  }
+}
+
+function watchSystemTheme() {
+  if (!DARK_SCHEME_QUERY) return;
+  const handler = () => {
+    if (currentTheme() === "system") applyTheme("system", { persist: false });
+  };
+  if (DARK_SCHEME_QUERY.addEventListener) DARK_SCHEME_QUERY.addEventListener("change", handler);
+  else if (DARK_SCHEME_QUERY.addListener) DARK_SCHEME_QUERY.addListener(handler);
 }
 
 function applyStaticLocale() {
@@ -247,7 +301,7 @@ function applyStaticLocale() {
   el("apiDocsLink").title = t("apiDocs");
   el("apiDocsLink").setAttribute("aria-label", t("apiDocs"));
   syncNodeProviderFields();
-  renderSkinOptions();
+  renderThemeOptions();
   if (state.locale !== "en") return;
   setText(".skip-link", "Skip to chat");
   setText(".edit-banner span", "Editing queued task");
@@ -274,7 +328,6 @@ function applyStaticLocale() {
   setText("#settingsTabAppearance", "Appearance");
   setText("#settingsTabSystem", "System");
   setText("#settingsTabUpload", "Upload");
-  setText("#skinHelp", "Skins change appearance only. Generation, queue, data and APIs stay the same. Selection applies immediately and is stored on this device.");
   document.querySelector(".settings-tabs")?.setAttribute("aria-label", "Settings categories");
   setText("#settingsPanelUpload .switch-row > span:first-child", "Compress large reference images");
   setText("#settingsUploadHelp", "Images over 1 MB are compressed locally before upload.");
@@ -5071,21 +5124,21 @@ el("openGlobalSettings").addEventListener("click", () => openGlobalSettings("sys
 document.querySelectorAll("[data-settings-tab]").forEach((button) => {
   button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab));
 });
-el("skinGrid")?.addEventListener("click", (event) => {
-  const card = event.target.closest("[data-skin-option]");
+el("themeGrid")?.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-theme-option]");
   if (!card) return;
-  applySkin(card.dataset.skinOption);
+  applyTheme(card.dataset.themeOption);
   card.focus();
 });
-el("skinGrid")?.addEventListener("keydown", (event) => {
+el("themeGrid")?.addEventListener("keydown", (event) => {
   if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
-  const cards = Array.from(document.querySelectorAll("[data-skin-option]"));
+  const cards = Array.from(document.querySelectorAll("[data-theme-option]"));
   const index = cards.indexOf(document.activeElement);
   if (index < 0) return;
   event.preventDefault();
   const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
   const next = cards[(index + step + cards.length) % cards.length];
-  applySkin(next.dataset.skinOption);
+  applyTheme(next.dataset.themeOption);
   next.focus();
 });
 el("closeGlobalSettings").addEventListener("click", closeGlobalSettings);
@@ -5529,7 +5582,8 @@ window.addEventListener("resize", () => {
 });
 
 async function initialize() {
-  applySkin(currentSkin(), { persist: false });
+  applyTheme(currentTheme(), { persist: false });
+  watchSystemTheme();
   if (ANDROID_CLIENT) {
     document.body.classList.add("android-client");
     el("androidServerSettings").hidden = false;

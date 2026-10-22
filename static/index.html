@@ -7,16 +7,27 @@
     <meta name="theme-color" content="#f5f5f7">
     <title>MiniMax Studio</title>
     <script>
-      try {
-        var storedSkin = localStorage.getItem("h3-skin");
-        if (storedSkin && /^[a-z0-9-]{1,40}$/.test(storedSkin)) document.documentElement.dataset.skin = storedSkin;
-      } catch (error) { /* storage disabled: keep the default skin */ }
+      (function () {
+        var mode = "";
+        try { mode = localStorage.getItem("h3-theme") || ""; } catch (error) { /* storage disabled */ }
+        if (!mode) {
+          try {
+            var legacy = localStorage.getItem("h3-skin") || "";
+            if (legacy === "aurora") mode = "dark";
+            else if (legacy === "default") mode = "light";
+          } catch (error) { /* storage disabled */ }
+        }
+        if (!mode) mode = "system";
+        var dark = mode === "dark" || (mode === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (dark) document.documentElement.dataset.skin = "aurora";
+        document.documentElement.dataset.theme = mode;
+      })();
     </script>
     <link rel="stylesheet" href="/assets/styles.css?v=56&rev=66">
-    <link rel="stylesheet" href="/assets/design.css?v=12">
+    <link rel="stylesheet" href="/assets/design.css?v=13">
     <link rel="stylesheet" href="/assets/skins/skins.css?v=6">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
-    <script src="/assets/app.js?v=75&rev=86&upscale=1" defer></script>
+    <script src="/assets/app.js?v=76&rev=87&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -481,17 +492,24 @@
             <label>API Key<input id="aiApiKey" type="password" autocomplete="new-password" placeholder="sk-…"><small class="secret-field-status" id="aiApiKeyStatus"></small></label>
           </section>
           <section class="settings-tab-panel" id="settingsPanelAppearance" role="tabpanel" aria-labelledby="settingsTabAppearance" data-settings-panel="appearance" hidden>
-            <div class="skin-grid" id="skinGrid" role="radiogroup" aria-label="界面皮肤">
-              <button class="skin-card is-active" type="button" data-skin-option="default" role="radio" aria-checked="true">
+            <div class="skin-grid" id="themeGrid" role="radiogroup" aria-label="界面外观">
+              <button class="skin-card" type="button" data-theme-option="light" role="radio" aria-checked="false">
                 <span class="skin-card-preview skin-preview-default" aria-hidden="true"><i class="skin-preview-side"></i><i class="skin-preview-main"></i><i class="skin-preview-bar"></i><i class="skin-preview-dot"></i></span>
-                <span class="skin-card-copy"><strong>原野</strong><small>默认 · 柔性圆角</small></span>
+                <span class="skin-card-copy"><strong>日间</strong><small>浅色外观</small></span>
               </button>
-              <button class="skin-card" type="button" data-skin-option="aurora" role="radio" aria-checked="false">
+              <button class="skin-card" type="button" data-theme-option="dark" role="radio" aria-checked="false">
                 <span class="skin-card-preview"><img src="/assets/skins/aurora/preview.jpg" alt="" loading="lazy"></span>
-                <span class="skin-card-copy"><strong>极光玻璃</strong><small>Aurora Glass · 深色玻璃拟态</small></span>
+                <span class="skin-card-copy"><strong>夜间</strong><small>深色外观</small></span>
+              </button>
+              <button class="skin-card is-active" type="button" data-theme-option="system" role="radio" aria-checked="true">
+                <span class="skin-card-preview theme-preview-system" aria-hidden="true">
+                  <span class="theme-half theme-light"></span>
+                  <span class="theme-half theme-dark"></span>
+                </span>
+                <span class="skin-card-copy"><strong>跟随系统</strong><small>随系统自动切换</small></span>
               </button>
             </div>
-            <p class="skin-help" id="skinHelp">皮肤只改变界面外观，不影响生成、队列、数据与接口。切换后立即生效并保存在本机。</p>
+            <p class="skin-help" id="skinHelp">外观只改变界面样式，不影响生成、队列、数据与接口。跟随系统时会随系统深浅色自动切换。</p>
           </section>
           <section class="settings-tab-panel" id="settingsPanelSystem" role="tabpanel" aria-labelledby="settingsTabSystem" data-settings-panel="system" hidden>
             <label>节点状态查询周期（秒）<input id="globalHealthInterval" type="number" min="5" max="3600" step="1"></label>
