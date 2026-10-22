@@ -465,6 +465,27 @@ class JobStore:
                 if job.get("request", {}).get("incognito")
             ]
 
+    def system_log(self, message: str, level: str = "info") -> None:
+        """写入系统级运行日志（不属于任何任务），用于本地服务托管等事件。"""
+        text = str(message or "").strip()
+        if not text:
+            return
+        event = {
+            "timestamp": utc_now(),
+            "job_id": "",
+            "level": level if level in {"info", "error", "warning"} else "info",
+            "status": "system",
+            "progress": None,
+            "message": text,
+        }
+        with self._lock:
+            self._events.append(event)
+            self._revision += 1
+        if event["level"] == "error":
+            logger.error("H3 system: %s", text)
+        else:
+            logger.info("H3 system: %s", text)
+
     def logs(self, limit: int = 100) -> list[dict[str, Any]]:
         with self._lock:
             visible = []
@@ -1098,6 +1119,10 @@ class JobManager:
             if self._stop_event.is_set():
                 return
             self.refresh_node_health()
+
+    def wake_health_check(self) -> None:
+        """立即唤醒健康检查线程，让新启动的节点尽快刷新在线状态。"""
+        self._health_wakeup.set()
 
     def reconfigure(self, nodes: list[Any] | tuple[Any, ...], health_interval: float) -> None:
         configured = {

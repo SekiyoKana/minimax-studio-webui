@@ -67,6 +67,8 @@ const state = {
   workflowEditorReturnFocus: null,
   referenceProcessing: false,
   nodeEditingId: null,
+  bindLocalComfyui: false,
+  localComfyTimer: null,
   runningHubSchemaKey: "",
   runningHubRenderSignature: "",
   runningHubResourceId: "",
@@ -147,6 +149,7 @@ function setTitle(selector, value) {
   if (!target) return;
   target.title = value;
   target.setAttribute("aria-label", value);
+  target.dataset.tip = value;
 }
 
 function setLeadingText(selector, value) {
@@ -166,6 +169,76 @@ function setControlTitle(id, value) {
     control.title = value;
     control.setAttribute("aria-label", value);
   }
+}
+
+const HEADER_TIP_DELAY = 2000;
+let headerTipBubble = null;
+
+function syncHeaderTips() {
+  document.querySelectorAll(".header-actions > .icon-button").forEach((target) => {
+    const label = (target.dataset.tip || target.getAttribute("aria-label") || target.getAttribute("title") || "").trim();
+    if (label) target.dataset.tip = label;
+    if (target.hasAttribute("title")) target.removeAttribute("title");
+  });
+}
+
+function initHeaderTooltips() {
+  const bar = document.querySelector(".header-actions");
+  if (!bar || headerTipBubble) return;
+  const bubble = document.createElement("div");
+  bubble.className = "header-tip";
+  bubble.setAttribute("role", "tooltip");
+  document.body.appendChild(bubble);
+  headerTipBubble = bubble;
+  let timer = 0;
+  let active = null;
+
+  const hideTip = () => {
+    window.clearTimeout(timer);
+    timer = 0;
+    active = null;
+    bubble.classList.remove("show");
+  };
+  const showTip = () => {
+    if (!active || !active.isConnected) return hideTip();
+    const label = (active.dataset.tip || "").trim();
+    if (!label) return hideTip();
+    bubble.textContent = label;
+    bubble.classList.add("show");
+    const rect = active.getBoundingClientRect();
+    const width = bubble.offsetWidth;
+    const left = rect.left + rect.width / 2 - width / 2;
+    const clamped = Math.min(Math.max(8, left), Math.max(8, window.innerWidth - width - 8));
+    bubble.style.left = `${Math.round(clamped)}px`;
+    bubble.style.top = `${Math.round(rect.bottom + 10)}px`;
+  };
+  const targetFrom = (node) => (node instanceof Element ? node.closest(".header-actions > .icon-button") : null);
+
+  bar.addEventListener("pointerover", (event) => {
+    const target = targetFrom(event.target);
+    if (!target || target.hidden || target === active) return;
+    hideTip();
+    active = target;
+    timer = window.setTimeout(showTip, HEADER_TIP_DELAY);
+  });
+  bar.addEventListener("pointerout", (event) => {
+    const target = targetFrom(event.target);
+    if (!target || target !== active) return;
+    const next = event.relatedTarget;
+    if (next instanceof Node && target.contains(next)) return;
+    hideTip();
+  });
+  bar.addEventListener("focusin", (event) => {
+    const target = targetFrom(event.target);
+    if (!target || target.hidden) return;
+    active = target;
+    window.clearTimeout(timer);
+    showTip();
+  });
+  bar.addEventListener("focusout", hideTip);
+  document.addEventListener("pointerdown", hideTip, true);
+  window.addEventListener("scroll", hideTip, true);
+  window.addEventListener("resize", hideTip);
 }
 
 const THEMES = [
@@ -286,7 +359,7 @@ function applyStaticLocale() {
   setTitle("#openNodeManager", localized("管理推理节点", "Manage inference nodes"));
   setTitle("#openWorkflowManager", localized("管理工作流", "Manage workflows"));
   setTitle("#openGlobalSettings", localized("设置", "Settings"));
-  setText("#openWorkflowManager span", localized("工作流", "Workflows"));
+  setTitle("#androidServerSettings", localized("服务器连接", "Server connection"));
     setTitle("#closeAssetDetail", t("close"));
   setText("#deleteAssetDetail span", t("deleteRecord"));
   setText("#reuseOutputAssetDetail span", t("useAsInput"));
@@ -298,6 +371,7 @@ function applyStaticLocale() {
   setText("#moveSelectedAssets span", t("moveTo"));
   el("apiDocsLink").title = t("apiDocs");
   el("apiDocsLink").setAttribute("aria-label", t("apiDocs"));
+  el("apiDocsLink").dataset.tip = t("apiDocs");
   syncNodeProviderFields();
   renderThemeOptions();
   if (state.locale !== "en") return;
@@ -325,6 +399,9 @@ function applyStaticLocale() {
   setText("#settingsTabAppearance", "Appearance");
   setText("#settingsTabSystem", "System");
   setText("#settingsTabUpload", "Upload");
+  setText("#settingsTabExperimental", "Experimental");
+  setText("#bindLocalComfyuiHelp", "When enabled, ComfyUI nodes on this machine show a Manageable badge; fill in a launch path in the node editor to start and stop that ComfyUI from the inference node panel.");
+  setText("#bindLocalComfyuiEnvHelp", "Launching prefers the node directory's private environment (venv, .venv, env) and falls back to the global Python environment. Failures are logged with the original error in Live logs.");
   setText("#videoUpscaleTitle", "Video upscale");
   setText("#videoUpscaleSubtitle", "Choose the upscale type and scale. This runs an independent upscale workflow without changing your current selection.");
   setLeadingText("#videoUpscaleCategoryField", "Upscale type");
@@ -497,6 +574,22 @@ function applyStaticLocale() {
   setText("#settingsTabModel", localized("模型", "Model"));
   setText("#settingsTabSystem", localized("系统", "System"));
   setText("#settingsTabUpload", localized("上传", "Upload"));
+  setText("#settingsTabExperimental", localized("实验性功能", "Experimental"));
+  setText("#settingsPanelExperimental .switch-row > span:first-child", localized("绑定本地 ComfyUI 服务", "Bind local ComfyUI service"));
+  setText(
+    "#bindLocalComfyuiHelp",
+    localized(
+      "开启后，本机环境的 ComfyUI 节点会显示「可接管」（黄色）标签；在节点编辑中填写启动路径后，可在推理节点面板直接开启或关闭该 ComfyUI 服务，服务运行时标签变为绿色的「已接管」。",
+      "When enabled, ComfyUI nodes on this machine show a yellow Manageable badge; fill in a launch path in the node editor to start and stop that ComfyUI from the inference node panel. While the service runs the badge turns green and reads Managed."
+    )
+  );
+  setText(
+    "#bindLocalComfyuiEnvHelp",
+    localized(
+      "启动时优先使用节点目录中的私有环境（如 venv、.venv、env），找不到时回退到全局 Python 环境。启动失败会在「实时日志」中记录失败原因和原始报错。",
+      "Launching prefers the node directory's private environment (venv, .venv, env) and falls back to the global Python environment. Failures are logged with the original error in Live logs."
+    )
+  );
   document.querySelector(".settings-tabs")?.setAttribute("aria-label", localized("设置分类", "Settings categories"));
   setTitle("#mentionTrigger", "Insert image or use a quick action");
   setTitle("#optimizePrompt", "Optimize prompt");
@@ -516,6 +609,7 @@ function applyStaticLocale() {
   setControlTitle("duration", "Duration");
   setControlTitle("steps", "Sampling steps");
   el("lyrics").placeholder = "Enter lyrics using [Intro], [Verse], [Chorus], [Bridge], [Instrumental], and [Outro] sections";
+  syncHeaderTips();
 }
 
 function statusLabel(status) {
@@ -879,6 +973,7 @@ function syncNodeProviderFields() {
   el("nodeUrlLabel").hidden = runningHub;
   el("nodeUrl").hidden = runningHub;
   el("nodeUrl").required = !runningHub;
+  syncLocalComfyFields();
   el("nodeWorkflowUrl").required = runningHub;
   el("nodeMaxConcurrency").required = runningHub;
   const editing = state.managedNodes.find((node) => node.id === state.nodeEditingId);
@@ -891,6 +986,100 @@ function syncNodeProviderFields() {
     ? (editing?.has_api_key ? localized("已保存 API Key，留空不会修改", "An API Key is saved; leave blank to keep it") : localized("RunningHub API Key 仅保存在服务端数据库", "The RunningHub API Key is stored only in the server database"))
     : localized("ComfyUI 未启用鉴权时可留空", "Leave blank when ComfyUI authentication is disabled");
   el("nodeNameLabel").textContent = localized("节点名称", "Node name");
+}
+
+function platformKind() {
+  if (state.platform) return state.platform;
+  const agent = navigator.userAgent || "";
+  if (/Mac OS X|Macintosh/i.test(agent)) return "macos";
+  if (/Linux/i.test(agent)) return "linux";
+  return "windows";
+}
+
+function launchPathPlaceholder() {
+  const platform = platformKind();
+  if (platform === "macos") return "/Users/you/ComfyUI 或 /Users/you/ComfyUI/main.py";
+  if (platform === "linux") return "~/ComfyUI 或 ~/ComfyUI/main.py";
+  return "D:\\ComfyUI 或 D:\\ComfyUI\\main.py";
+}
+
+function syncLocalComfyFields() {
+  const field = el("nodeLaunchPathField");
+  if (!field) return;
+  const runningHub = el("nodeProvider")?.value === "runninghub";
+  field.hidden = runningHub || state.bindLocalComfyui !== true;
+  if (el("nodeLaunchPathLabel")) {
+    el("nodeLaunchPathLabel").textContent = localized("ComfyUI 启动路径", "ComfyUI launch path");
+  }
+  if (el("nodeLaunchPath")) {
+    el("nodeLaunchPath").placeholder = launchPathPlaceholder();
+  }
+  if (el("nodeLaunchPathHint")) {
+    el("nodeLaunchPathHint").textContent = localized(
+      "填写 ComfyUI 目录或 main.py 路径（Windows 与 macOS 写法均可），用于在本机接管启动与关闭",
+      "Directory or main.py path (Windows and macOS styles both work) used to start and stop this ComfyUI on the current machine"
+    );
+  }
+}
+
+function localComfyStatusLabel(runtime) {
+  const status = runtime?.status || "stopped";
+  if (status === "starting") return localized("启动中…", "Starting…");
+  if (status === "running") return runtime?.managed === false ? localized("运行中（外部）", "Running (external)") : localized("运行中", "Running");
+  if (status === "stopping") return localized("关闭中…", "Stopping…");
+  if (status === "failed") return localized("启动失败", "Failed");
+  return localized("已关闭", "Stopped");
+}
+
+const localComfyPending = new Set();
+
+function scheduleLocalComfyRefresh() {
+  clearTimeout(state.localComfyTimer);
+  state.localComfyTimer = null;
+  if (localComfyPending.size) return;
+  if (el("nodeModal")?.hidden) return;
+  const transitioning = state.managedNodes.some((node) => {
+    const status = node.local_runtime?.status;
+    return status === "starting" || status === "stopping";
+  });
+  if (!transitioning) return;
+  state.localComfyTimer = setTimeout(() => {
+    loadManagedNodes().catch(() => {}).finally(() => scheduleLocalComfyRefresh());
+  }, 2000);
+}
+
+function applyLocalRuntime(nodeId, runtime) {
+  const target = state.managedNodes.find((item) => item.id === nodeId);
+  if (!target) return;
+  if (runtime) target.local_runtime = runtime;
+  else delete target.local_runtime;
+  renderManagedNodes();
+}
+
+async function toggleLocalComfy(nodeId, start) {
+  const node = state.managedNodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  el("nodeManagerError").textContent = "";
+  const action = start ? "start" : "stop";
+  localComfyPending.add(nodeId);
+  applyLocalRuntime(nodeId, { ...(node.local_runtime || {}), status: start ? "starting" : "stopping", error: "" });
+  scheduleLocalComfyRefresh();
+  try {
+    const payload = await api(`/api/v1/comfy/nodes/${encodeURIComponent(nodeId)}/local-comfy/${action}`, { method: "POST" });
+    applyLocalRuntime(nodeId, payload?.local_runtime || null);
+    checkHealth().catch(() => {});
+  } catch (error) {
+    const current = state.managedNodes.find((item) => item.id === nodeId);
+    applyLocalRuntime(nodeId, {
+      ...(current?.local_runtime || {}),
+      status: start ? "failed" : "stopped",
+      error: error.message,
+    });
+    el("nodeManagerError").textContent = error.message;
+  } finally {
+    localComfyPending.delete(nodeId);
+    scheduleLocalComfyRefresh();
+  }
 }
 
 function renderManagedNodes() {
@@ -912,7 +1101,7 @@ function renderManagedNodes() {
       const owner = node.owner_name || node.source?.name || localized("远程设备", "Remote device");
       return `<div class="node-banner remote-node" data-node-id="${escapeHtml(node.id)}">
         <div class="node-banner-body"><div class="node-banner-head"><strong>${escapeHtml(node.name || localized("远程推理节点", "Remote inference node"))}</strong>${statusDot}</div><small>${escapeHtml(localized("远程代理节点", "Remote proxy node"))} · ${escapeHtml(t("owner"))} ${escapeHtml(owner)}${escapeHtml(activity)}</small></div>
-        <div class="node-row-actions" aria-hidden="true"></div>
+        <div class="node-banner-side"><div class="node-row-actions" aria-hidden="true"></div></div>
       </div>`;
     }
     const provider = node.provider === "runninghub" ? "RunningHub API" : "ComfyUI API";
@@ -938,15 +1127,35 @@ function renderManagedNodes() {
     const checkedLabel = node.provider === "runninghub"
       ? node.account_error ? t("balanceFailed") : t("balanceUpdated")
       : localized("检测", "checked");
+    const takeover = node.takeover === true;
+    const runtime = node.local_runtime || null;
+    const supervised = ["running", "starting", "stopping"].includes(String(runtime?.status || ""));
+    const badge = takeover
+      ? supervised
+        ? `<span class="node-badge is-supervised" title="${escapeHtml(localized("本地 ComfyUI 服务由 Studio 接管运行", "The local ComfyUI service is managed by Studio"))}">${escapeHtml(localized("已接管", "Managed"))}</span>`
+        : `<span class="node-badge is-manageable" title="${escapeHtml(localized("填写启动路径后可由 Studio 接管运行", "Add a launch path so Studio can manage this service"))}">${escapeHtml(localized("可接管", "Manageable"))}</span>`
+      : "";
+    const transition = runtime?.status === "starting" || runtime?.status === "stopping";
+    const powerLabel = localComfyStatusLabel(runtime);
+    const power = takeover && String(node.launch_path || "").trim()
+      ? `<label class="node-power" title="${escapeHtml(runtime?.status === "running" ? localized("关闭本机 ComfyUI 服务", "Stop the local ComfyUI service") : localized("启动本机 ComfyUI 服务", "Start the local ComfyUI service"))}">${runtime && runtime.status !== "stopped" ? `<span class="node-power-text">${escapeHtml(powerLabel)}</span>` : ""}<input type="checkbox" data-node-action="power" ${runtime?.status === "running" || runtime?.status === "starting" ? "checked" : ""} ${transition ? "disabled" : ""} aria-label="${escapeHtml(powerLabel)}"><span class="switch"></span></label>`
+      : "";
+    const powerError = takeover && runtime?.status === "failed" && runtime.error
+      ? `<small class="node-power-error" title="${escapeHtml(runtime.error)}">${escapeHtml(String(runtime.error).split("\n")[0])}</small>`
+      : "";
     return `<div class="node-banner${restricted ? " is-restricted" : ""}" data-node-id="${escapeHtml(node.id)}">
       <div class="node-banner-body">
-        <div class="node-banner-head"><strong>${escapeHtml(node.provider === "runninghub" ? node.workflow_name || node.name : node.name)}</strong>${statusDot}</div>
+        <div class="node-banner-head"><strong>${escapeHtml(node.provider === "runninghub" ? node.workflow_name || node.name : node.name)}</strong>${badge}${statusDot}</div>
         <code title="${escapeHtml(node.url)}">${escapeHtml(node.url)}</code>
         ${accounting}${workflowIssue}
         <small>${location}${provider}${workflow}${node.provider === "runninghub" && node.workflow_name && node.workflow_name !== node.name ? ` · ${escapeHtml(node.name)}` : ""}${keyState} · ID ${escapeHtml(node.id)}${node.last_checked ? ` · ${formatTime(node.last_checked, true)} ${checkedLabel}` : ""}${escapeHtml(activity)}</small>
         ${restricted ? `<small class="node-restricted">${localized("RunningHub 端点工作流已关闭", "RunningHub endpoint workflows are disabled")}</small>` : ""}
+        ${powerError}
       </div>
-      <div class="node-row-actions"><button type="button" data-node-action="edit" title="${localized("编辑节点", "Edit node")}" aria-label="${localized("编辑节点", "Edit node")} ${escapeHtml(node.name)}">${icon("pencil")}</button><button type="button" data-node-action="delete" title="${localized("删除节点", "Delete node")}" aria-label="${localized("删除节点", "Delete node")} ${escapeHtml(node.name)}">${icon("trash-2")}</button></div>
+      <div class="node-banner-side">
+        ${power}
+        <div class="node-row-actions"><button type="button" data-node-action="edit" title="${localized("编辑节点", "Edit node")}" aria-label="${localized("编辑节点", "Edit node")} ${escapeHtml(node.name)}">${icon("pencil")}</button><button type="button" data-node-action="delete" title="${localized("删除节点", "Delete node")}" aria-label="${localized("删除节点", "Delete node")} ${escapeHtml(node.name)}">${icon("trash-2")}</button></div>
+      </div>
     </div>`;
   }).join("") : `<p class="quiet">${state.locale === "en" ? "No nodes" : "暂无节点"}</p>`;
   refreshIcons();
@@ -968,17 +1177,24 @@ function syncManagedNodeStatuses(nodes) {
 async function loadManagedNodes() {
   const payload = await api("/api/v1/comfy/nodes");
   const statuses = new Map(state.nodes.map((node) => [node.id, node]));
-  const localNodes = (payload.data || []).map((node) => ({
-    ...node,
-    ...(statuses.get(node.id) || {}),
-  }));
+  const localNodes = (payload.data || []).map((node) => {
+    const merged = { ...node, ...(statuses.get(node.id) || {}) };
+    if (localComfyPending.has(node.id)) {
+      const previous = state.managedNodes.find((item) => item.id === node.id);
+      if (previous?.local_runtime) merged.local_runtime = previous.local_runtime;
+    }
+    return merged;
+  });
   const localIds = new Set(localNodes.map((node) => node.id));
   const remoteNodes = state.nodes
     .filter((node) => node.remote_proxy && !localIds.has(node.id))
     .map((node) => ({ ...node, enabled: true, managed_remote: true }));
   state.managedNodes = [...localNodes, ...remoteNodes];
   if (el("nodeHealthInterval")) el("nodeHealthInterval").value = String(payload.health_interval_seconds || 60);
+  state.bindLocalComfyui = payload.bind_local_comfyui === true;
   renderManagedNodes();
+  syncLocalComfyFields();
+  scheduleLocalComfyRefresh();
 }
 
 function openNodeEditor(nodeId = null) {
@@ -991,6 +1207,7 @@ function openNodeEditor(nodeId = null) {
   el("nodeApiKey").value = "";
   el("nodeWorkflowUrl").value = node?.workflow_url || "";
   el("nodeMaxConcurrency").value = String(node?.max_concurrency || 1);
+  el("nodeLaunchPath").value = node?.launch_path || "";
   el("nodeEnabled").checked = node ? Boolean(node.enabled) : true;
   el("nodeEnabled").closest(".node-enabled-row").hidden = !node;
   el("nodeEditorModal").hidden = false;
@@ -1077,6 +1294,11 @@ async function saveNode(event) {
     workflow_url: el("nodeWorkflowUrl").value.trim(),
     max_concurrency: Number(el("nodeMaxConcurrency").value || 1),
   };
+  if (el("nodeLaunchPathField") && !el("nodeLaunchPathField").hidden) {
+    body.launch_path = el("nodeLaunchPath").value.trim();
+  } else if (!editing) {
+    body.launch_path = "";
+  }
   let url = "/api/v1/comfy/nodes";
   let method = "POST";
   if (editing) {
@@ -1119,6 +1341,66 @@ const WORKFLOW_FIELDS = [
   ["duration", "时长"], ["num_frames", "帧数"], ["steps", "步数"], ["seed", "随机种子"],
 ];
 
+// Conditioning nodes expose link-style reference inputs such as
+// "ref_images.ref_image_0". Binding one of these families lets the engine create
+// a matching loader node on the fly, so a workflow can take any number of files.
+const REFERENCE_SLOT_FAMILIES = {
+  ref_images: { kind: "image", suffix: "ref_image" },
+  ref_videos: { kind: "video", suffix: "ref_video" },
+  ref_audios: { kind: "audio", suffix: "ref_audio" },
+};
+
+function workflowSlotTargets(graph) {
+  const found = new Map();
+  Object.entries(graph || {}).forEach(([nodeId, node]) => {
+    Object.keys(node?.inputs || {}).forEach((key) => {
+      const match = /^(ref_images|ref_videos|ref_audios)\.ref_(image|video|audio)_(\d+)$/.exec(key);
+      if (!match) return;
+      const id = `${nodeId}:${match[1]}`;
+      const entry = found.get(id) || { nodeId, family: match[1], indexes: [] };
+      entry.indexes.push(Number(match[3]) + 1);
+      found.set(id, entry);
+    });
+  });
+  return [...found.values()].map((entry) => ({
+    ...entry,
+    kind: REFERENCE_SLOT_FAMILIES[entry.family].kind,
+    indexes: [...new Set(entry.indexes)].sort((a, b) => a - b),
+  }));
+}
+
+function referenceSlotFamiliesForNode(nodeId, node) {
+  const families = new Set();
+  Object.keys(node?.inputs || {}).forEach((key) => {
+    const match = /^(ref_images|ref_videos|ref_audios)\./.exec(key);
+    if (match) families.add(match[1]);
+  });
+  if (/Reference/i.test(String(node?.class_type || ""))) {
+    Object.keys(REFERENCE_SLOT_FAMILIES).forEach((family) => families.add(family));
+  }
+  return [...families].map((family) => ({ family, kind: REFERENCE_SLOT_FAMILIES[family].kind }));
+}
+
+function referenceSlotLabel(family) {
+  const kind = REFERENCE_SLOT_FAMILIES[family].kind;
+  const text = { image: ["图片槽位", "image slot"], video: ["视频槽位", "video slot"], audio: ["音频槽位", "audio slot"] }[kind];
+  return `${family} · ${localized(text[0], text[1])}`;
+}
+
+function autoFillWorkflowReferenceMappings() {
+  if (el("workflowReferenceMappings").children.length) return 0;
+  const rows = [];
+  workflowSlotTargets(state.workflowDraftJson).forEach((slot) => {
+    slot.indexes.forEach((index) => {
+      rows.push({ type: slot.kind, index, node_id: slot.nodeId, input: slot.family, slot: true, required: true });
+    });
+  });
+  if (!rows.length) return 0;
+  el("workflowReferenceMappings").replaceChildren(...rows.map((row) => renderWorkflowReferenceMapping(row)));
+  refreshIcons();
+  return rows.length;
+}
+
 function workflowNodeSelect(graph, selected = "", className = "workflow-node-select") {
   const options = Object.entries(graph || {}).map(([nodeId, node]) => (
     `<option value="${escapeHtml(nodeId)}"${nodeId === selected ? " selected" : ""}>${escapeHtml(`${nodeId} · ${node.class_type || "Node"}`)}</option>`
@@ -1126,7 +1408,7 @@ function workflowNodeSelect(graph, selected = "", className = "workflow-node-sel
   return `<select class="${className}" aria-label="${localized("工作流节点", "Workflow node")}">${options}</select>`;
 }
 
-function updateWorkflowMappingInputOptions(row) {
+function updateWorkflowMappingInputOptions(row, { reference = false } = {}) {
   const graph = state.workflowDraftJson || {};
   const nodeSelect = row.querySelector("[data-workflow-node]");
   const inputSelect = row.querySelector("[data-workflow-input]");
@@ -1136,8 +1418,16 @@ function updateWorkflowMappingInputOptions(row) {
   const inputs = Object.entries(node?.inputs || {}).filter(([, value]) => !(
     Array.isArray(value) && value.length === 2 && typeof value[0] === "string" && Number.isInteger(value[1])
   ));
-  inputSelect.innerHTML = inputs.map(([name]) => `<option value="${escapeHtml(JSON.stringify([nodeSelect.value, name]))}">${escapeHtml(name)}</option>`).join("");
-  if (inputs.some(([name]) => JSON.stringify([nodeSelect.value, name]) === previous)) inputSelect.value = previous;
+  const options = inputs.map(([name]) => (
+    `<option value="${escapeHtml(JSON.stringify([nodeSelect.value, name]))}">${escapeHtml(name)}</option>`
+  ));
+  if (reference) {
+    referenceSlotFamiliesForNode(nodeSelect.value, node).forEach(({ family }) => {
+      options.push(`<option value="${escapeHtml(JSON.stringify([nodeSelect.value, family]))}">${escapeHtml(referenceSlotLabel(family))}</option>`);
+    });
+  }
+  inputSelect.innerHTML = options.join("");
+  if (previous && [...inputSelect.options].some((option) => option.value === previous)) inputSelect.value = previous;
 }
 
 function renderWorkflowFieldMapping(mapping = {}) {
@@ -1155,8 +1445,16 @@ function renderWorkflowFieldMapping(mapping = {}) {
   return row;
 }
 
+function defaultReferenceNodeId() {
+  const graph = state.workflowDraftJson || {};
+  const slot = workflowSlotTargets(graph)[0];
+  if (slot) return slot.nodeId;
+  const keys = Object.keys(graph);
+  return keys.find((key) => /Reference/i.test(String(graph[key]?.class_type || ""))) || keys[0] || "";
+}
+
 function renderWorkflowReferenceMapping(mapping = {}) {
-  const nodeId = mapping.node_id || Object.keys(state.workflowDraftJson || {})[0] || "";
+  const nodeId = mapping.node_id || defaultReferenceNodeId();
   const row = document.createElement("div");
   row.className = "workflow-mapping-row reference-row";
   const type = mapping.type || "image";
@@ -1164,9 +1462,12 @@ function renderWorkflowReferenceMapping(mapping = {}) {
   row.innerHTML = `<select data-ref-type aria-label="${localized("素材类型", "Reference type")}">${typeOptions}</select><input data-ref-index type="number" min="1" max="15" value="${Number(mapping.index || 1)}" aria-label="${localized("同类型序号", "Reference index")}">${workflowNodeSelect(state.workflowDraftJson, nodeId, "workflow-node-select")}<select data-workflow-input aria-label="${localized("节点输入", "Node input")}"></select><label class="workflow-required-option"><input data-ref-required type="checkbox"${mapping.required === false ? "" : " checked"}><span>${localized("必需", "Required")}</span></label><button type="button" data-remove-mapping title="${localized("移除映射", "Remove mapping")}" aria-label="${localized("移除映射", "Remove mapping")}">${icon("trash-2")}</button>`;
   row.querySelector(".workflow-node-select").dataset.workflowNode = "";
   row.querySelector(".workflow-node-select").classList.remove("workflow-node-select");
-  row.querySelector("[data-workflow-node]").addEventListener("change", () => updateWorkflowMappingInputOptions(row));
-  row.querySelector("[data-remove-mapping]").addEventListener("click", () => row.remove());
-  updateWorkflowMappingInputOptions(row);
+  row.querySelector("[data-workflow-node]").addEventListener("change", () => updateWorkflowMappingInputOptions(row, { reference: true }));
+  row.querySelector("[data-remove-mapping]").addEventListener("click", () => {
+    row.remove();
+    autoFillWorkflowReferenceMappings();
+  });
+  updateWorkflowMappingInputOptions(row, { reference: true });
   if (mapping.input) row.querySelector("[data-workflow-input]").value = JSON.stringify([nodeId, mapping.input]);
   return row;
 }
@@ -1175,6 +1476,7 @@ function renderWorkflowMappingRows(workflow = null) {
   const fields = workflow?.field_mappings || {};
   el("workflowFieldMappings").replaceChildren(...Object.entries(fields).map(([field, binding]) => renderWorkflowFieldMapping({ field, ...binding })));
   el("workflowReferenceMappings").replaceChildren(...(workflow?.reference_mappings || []).map(renderWorkflowReferenceMapping));
+  autoFillWorkflowReferenceMappings();
   refreshIcons();
 }
 
@@ -1299,7 +1601,7 @@ async function openWorkflowEditor(workflowId) {
     document.body.classList.add("modal-open");
     requestAnimationFrame(() => el("workflowName").focus());
   } catch (error) {
-    el("workflowManagerError").textContent = error.message;
+    setWorkflowManagerError(error.message);
   }
 }
 
@@ -1323,11 +1625,20 @@ function workflowPayloadFromEditor() {
   const referenceMappings = Array.from(el("workflowReferenceMappings").querySelectorAll(".workflow-mapping-row")).map((row) => {
     const selectedTarget = row.querySelector("[data-workflow-input]").value;
     const [node_id, input] = JSON.parse(selectedTarget);
+    const type = row.querySelector("[data-ref-type]").value;
+    const slot = Object.hasOwn(REFERENCE_SLOT_FAMILIES, input);
+    if (slot && REFERENCE_SLOT_FAMILIES[input].kind !== type) {
+      throw new Error(localized(
+        `“${input}”槽位只能映射 ${REFERENCE_SLOT_FAMILIES[input].kind} 素材`,
+        `Slot "${input}" only accepts ${REFERENCE_SLOT_FAMILIES[input].kind} media`,
+      ));
+    }
     return {
-      type: row.querySelector("[data-ref-type]").value,
+      type,
       index: Number(row.querySelector("[data-ref-index]").value),
       node_id,
       input,
+      slot,
       required: row.querySelector("[data-ref-required]").checked,
     };
   });
@@ -1378,7 +1689,7 @@ async function setWorkflowVisibility(workflow, visible) {
     });
     await loadWorkflows();
   } catch (error) {
-    el("workflowManagerError").textContent = error.message;
+    setWorkflowManagerError(error.message);
     renderWorkflowList();
   }
 }
@@ -1391,12 +1702,12 @@ async function syncWorkflow(workflowId, manualConfirm = false) {
       body: JSON.stringify({ manual_confirm: manualConfirm }),
     });
     const failures = (result.data || []).filter((item) => item.status === "failed");
-    el("workflowManagerError").textContent = failures.length
+    setWorkflowManagerError(failures.length
       ? failures.map((item) => `${item.node_id}: ${item.error}`).join(" · ")
-      : manualConfirm ? localized("远端副本已校验", "Remote copies verified") : "";
+      : manualConfirm ? localized("远端副本已校验", "Remote copies verified") : "");
     await loadWorkflows();
   } catch (error) {
-    el("workflowManagerError").textContent = error.message;
+    setWorkflowManagerError(error.message);
   }
 }
 
@@ -1411,7 +1722,7 @@ async function downloadWorkflow(workflowId) {
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (error) {
-    el("workflowManagerError").textContent = error.message;
+    setWorkflowManagerError(error.message);
   }
 }
 
@@ -1420,23 +1731,23 @@ async function deleteWorkflow(workflowId) {
   if (!workflow || !window.confirm(localized(`确认删除工作流“${workflow.name}”？`, `Delete workflow "${workflow.name}"?`))) return;
   try {
     const result = await api(`/api/v1/workflows/${encodeURIComponent(workflowId)}`, { method: "DELETE" });
-    if (result.remote_cleanup_errors?.length) el("workflowManagerError").textContent = result.remote_cleanup_errors.map((item) => `${item.node_id}: ${item.error}`).join(" · ");
+    if (result.remote_cleanup_errors?.length) setWorkflowManagerError(result.remote_cleanup_errors.map((item) => `${item.node_id}: ${item.error}`).join(" · "));
     await loadWorkflows();
   } catch (error) {
-    el("workflowManagerError").textContent = error.message;
+    setWorkflowManagerError(error.message);
   }
 }
 
 async function openWorkflowManager() {
   el("workflowModal").hidden = false;
   document.body.classList.add("modal-open");
-  el("workflowManagerError").textContent = "";
+  setWorkflowManagerError("");
   refreshIcons();
   try {
     await Promise.all([loadWorkflows(), loadManagedNodes()]);
     renderWorkflowList();
   } catch (error) {
-    el("workflowManagerError").textContent = error.message;
+    setWorkflowManagerError(error.message);
   }
 }
 
@@ -1458,9 +1769,10 @@ async function handleWorkflowJsonFile(file) {
     if (!graph || typeof graph !== "object" || Array.isArray(graph) || !Object.keys(graph).length) throw new Error(localized("JSON 顶层必须是非空节点对象", "The JSON root must be a non-empty node object"));
     state.workflowDraftJson = graph;
     renderWorkflowMappingRows();
+    const slots = el("workflowReferenceMappings").querySelectorAll(".workflow-mapping-row").length;
     renderWorkflowResultNodes();
     renderWorkflowTargets(Array.from(el("workflowTargetNodes").querySelectorAll("input:checked")).map((input) => input.value));
-    el("workflowFileStatus").textContent = `${file.name} · ${(file.size / 1024).toFixed(1)} KB`;
+    el("workflowFileStatus").textContent = `${file.name} · ${(file.size / 1024).toFixed(1)} KB${slots ? ` · ${localized(`已识别 ${slots} 个参考素材槽位`, `${slots} reference slots detected`)}` : ""}`;
     el("workflowEditorError").textContent = "";
   } catch (error) {
     el("workflowEditorError").textContent = localized(`无法读取工作流 JSON：${error.message}`, `Cannot read workflow JSON: ${error.message}`);
@@ -2341,7 +2653,7 @@ function renderReferences() {
         ? `<video src="${escapeHtml(item.url)}" muted playsinline preload="metadata" aria-label="${escapeHtml(name)}"></video>`
         : `<span class="reference-type">${icon(kind === "video" ? "film" : kind === "audio" ? "audio-lines" : kind === "file" ? "file" : "image")}</span>`;
     const thumb = item.url
-      ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer" class="reference-link" aria-label="${localized("查看", "View")} ${escapeHtml(name)}">${media}</a>`
+      ? `<a href="${escapeHtml(item.url)}" class="reference-link" data-preview-url="${escapeHtml(item.url)}" data-preview-name="${escapeHtml(name)}" data-preview-type="${escapeHtml(kind)}" aria-label="${localized("预览", "Preview")} ${escapeHtml(name)}">${media}</a>`
       : media;
     return `<div class="reference-chip" title="${escapeHtml(name)}">
       <span class="reference-preview">${thumb}</span>
@@ -2541,6 +2853,7 @@ function setDimensions(width, height) {
 async function checkHealth() {
   try {
     const data = await api("/health");
+    if (data.platform) state.platform = data.platform;
     renderHealthState(data.nodes || [], data.queue_depth || 0);
   } catch {
     el("healthDot").className = "status-dot offline";
@@ -3157,7 +3470,7 @@ function referenceSummary(job) {
     } else if (item.type === "audio") {
       preview = `<audio src="${escapeHtml(url)}" controls preload="metadata" aria-label="${escapeHtml(name)}"></audio>`;
     }
-    return `<a class="message-asset" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="${localized("查看", "View")} ${escapeHtml(name)}">${preview}<span class="message-asset-copy"><b>${escapeHtml(labels[index])}</b><small>${escapeHtml(name)}</small></span></a>`;
+    return `<a class="message-asset" href="${escapeHtml(url)}" data-preview-url="${escapeHtml(url)}" data-preview-name="${escapeHtml(name)}" data-preview-type="${escapeHtml(item.type || "")}" rel="noreferrer" title="${localized("预览", "Preview")} ${escapeHtml(name)}">${preview}<span class="message-asset-copy"><b>${escapeHtml(labels[index])}</b><small>${escapeHtml(name)}</small></span></a>`;
   }).join("")}</div>`;
 }
 
@@ -3298,7 +3611,7 @@ function assetDetailFile(item, index, job) {
   let media = `<span class="asset-detail-file-media">${icon(item.type === "video" ? "film" : item.type === "audio" ? "audio-lines" : "image")}</span>`;
   if (item.type === "image") media = `<span class="asset-detail-file-media"><img src="${escapeHtml(url)}" alt="${escapeHtml(name)}" loading="lazy"></span>`;
   if (item.type === "video") media = `<span class="asset-detail-file-media"><video src="${escapeHtml(url)}" muted playsinline preload="metadata"></video></span>`;
-  return `<a class="asset-detail-file" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${media}<div><b>${escapeHtml(name)}</b><small>${escapeHtml(item.type || "file")}${item.size ? ` · ${formatBytes(item.size)}` : ""}</small></div></a>`;
+  return `<a class="asset-detail-file" href="${escapeHtml(url)}" data-preview-url="${escapeHtml(url)}" data-preview-name="${escapeHtml(name)}" data-preview-type="${escapeHtml(item.type || "file")}">${media}<div><b>${escapeHtml(name)}</b><small>${escapeHtml(item.type || "file")}${item.size ? ` · ${formatBytes(item.size)}` : ""}</small></div></a>`;
 }
 
 function runningHubParameterFacts(request) {
@@ -3335,7 +3648,7 @@ function renderAssetDetail(job, windowNode = el("assetDetailModal")) {
       : mediaType === "image"
         ? `<img src="${escapeHtml(job.result_url)}" alt="${escapeHtml(shortTitle(job))}">`
         : mediaType === "file"
-          ? `<a class="detail-download" href="${escapeHtml(job.result_url)}" download>${icon("download")}<span>${mediaDownloadLabel(mediaType)}</span></a>`
+          ? `<div class="asset-detail-placeholder">${icon("file-question")}<span>${localized("该文件无法预览", "This file cannot be previewed")}</span></div>`
           : `<video controls playsinline preload="metadata" src="${escapeHtml(job.result_url)}"></video>`
     : `<div class="asset-detail-placeholder">${icon(job.status === "running" ? "loader-circle" : "file-x-2")}<span>${t("outputUnavailable")}</span></div>`;
   const files = references.length
@@ -4001,9 +4314,11 @@ function renderQueue(queue) {
   el("queueCount").textContent = queue.length;
   el("opsQueueBadge").textContent = queuedCount;
   el("opsQueueBadge").hidden = queuedCount === 0;
-  el("openOps").title = queuedCount
+  const opsTip = queuedCount
     ? localized(`运行日志 · ${queuedCount} 个排队`, `Activity log · ${queuedCount} queued`)
     : localized("运行日志", "Activity log");
+  el("openOps").dataset.tip = opsTip;
+  el("openOps").setAttribute("aria-label", opsTip);
   el("activeTaskSummary").textContent = running
     ? anonymousRunning
       ? state.locale === "en" ? "A task is running" : "有任务正在运行中"
@@ -4027,7 +4342,9 @@ function renderQueue(queue) {
 
 function renderLogs(logs) {
   state.logs = logs;
-  const visible = logs.filter((item) => new Date(item.timestamp).getTime() >= state.logFloor);
+  const merged = [...logs, ...(state.workflowIssues || [])];
+  merged.sort((left, right) => String(left.timestamp || "").localeCompare(String(right.timestamp || "")));
+  const visible = merged.filter((item) => new Date(item.timestamp).getTime() >= state.logFloor);
   const container = el("logList");
   const previousTop = container.scrollTop;
   const followTail = state.logFollowTail;
@@ -4047,6 +4364,27 @@ function renderLogs(logs) {
   requestAnimationFrame(() => {
     container.scrollTop = followTail ? container.scrollHeight : previousTop;
   });
+}
+
+function reportWorkflowIssue(message, { level = "error", reveal = true } = {}) {
+  const text = String(message ?? "").trim();
+  if (!text) return;
+  const entry = {
+    timestamp: new Date().toISOString(),
+    level,
+    message: localized(`工作流：${text}`, `Workflow: ${text}`),
+  };
+  state.workflowIssues = [...(state.workflowIssues || []), entry].slice(-20);
+  renderLogs(state.logs || []);
+  if (reveal) openOpsWindow();
+}
+
+// Workflow failures belong to the runtime log window; the inline banner above
+// the workflow grid stays hidden so node cards keep their full height.
+function setWorkflowManagerError(message) {
+  const node = el("workflowManagerError");
+  if (node) node.textContent = message || "";
+  reportWorkflowIssue(message);
 }
 
 function renderCombinedRuntime() {
@@ -4178,6 +4516,9 @@ async function loadGeneralSettings() {
   el("runninghubEnabled").checked = state.runninghubEnabled;
   state.excludeRunningHubAuto = payload.exclude_runninghub_auto === true;
   el("excludeRunningHubAuto").checked = state.excludeRunningHubAuto;
+  state.bindLocalComfyui = payload.bind_local_comfyui === true;
+  el("bindLocalComfyui").checked = state.bindLocalComfyui;
+  syncLocalComfyFields();
   applyRunningHubAvailability();
   el("remoteDisconnectPolicy").value = payload.remote_disconnect_policy || "encrypt";
   el("remoteRecordsKey").value = payload.remote_records_key || "";
@@ -4212,6 +4553,7 @@ async function saveGeneralSettings(event) {
         auto_compress_large_images: el("autoCompressLargeImages").checked,
         runninghub_enabled: el("runninghubEnabled").checked,
         exclude_runninghub_auto: el("excludeRunningHubAuto").checked,
+        bind_local_comfyui: el("bindLocalComfyui").checked,
         remote_disconnect_policy: el("remoteDisconnectPolicy").value,
         remote_records_key: key,
       }),
@@ -4227,6 +4569,8 @@ async function saveGeneralSettings(event) {
     state.generalSettings.auto_compress_large_images = el("autoCompressLargeImages").checked;
     state.runninghubEnabled = el("runninghubEnabled").checked;
     state.excludeRunningHubAuto = el("excludeRunningHubAuto").checked;
+    state.bindLocalComfyui = el("bindLocalComfyui").checked;
+    syncLocalComfyFields();
     applyRunningHubAvailability();
     renderManagedNodes();
     if (!el("showRuntimeLogs").checked) closeOpsWindow();
@@ -4292,22 +4636,63 @@ function localAssetPreviewMarkup(asset) {
   return `<span class="asset-audio-icon" aria-hidden="true">${icon("file")}</span>`;
 }
 
-function openLocalAssetPreview(asset) {
-  if (!asset.preview_url || asset.asset_deleted || asset.locked) return;
-  const url = escapeHtml(asset.preview_url);
-  const name = escapeHtml(asset.name || asset.file_name || localized("本地素材", "Local asset"));
-  const mediaType = asset.media_type || "file";
-  const preview = mediaType === "image"
-    ? `<img src="${url}" alt="${name}">`
-    : mediaType === "video"
-      ? `<video src="${url}" controls playsinline autoplay preload="metadata" aria-label="${name}"></video>`
-      : mediaType === "audio"
-        ? `<audio src="${url}" controls autoplay preload="metadata" aria-label="${name}"></audio>`
-        : `<div class="local-asset-preview-unsupported">${icon("file")}<span>${localized("该文件无法直接预览", "This file cannot be previewed directly")}</span></div>`;
-  el("localAssetPreviewBody").innerHTML = preview;
-  el("localAssetPreviewModal").hidden = false;
+const ASSET_PREVIEW_PATTERNS = [
+  ["image", /\.(png|jpe?g|gif|webp|bmp|avif|svg|heic|heif)$/i],
+  ["video", /\.(mp4|webm|mov|m4v|ogv|mkv)$/i],
+  ["audio", /\.(mp3|wav|ogg|m4a|flac|aac|opus|wma|amr)$/i],
+];
+
+function assetPreviewKind(url, declaredType) {
+  const type = String(declaredType || "").toLowerCase();
+  if (["image", "video", "audio"].includes(type)) return type;
+  if (type.startsWith("image/")) return "image";
+  if (type.startsWith("video/")) return "video";
+  if (type.startsWith("audio/")) return "audio";
+  const path = String(url || "").split("?")[0].split("#")[0];
+  for (const [kind, pattern] of ASSET_PREVIEW_PATTERNS) {
+    if (pattern.test(path)) return kind;
+  }
+  return "file";
+}
+
+function assetPreviewMarkup(asset) {
+  const url = String(asset.url || "");
+  const name = asset.name || localized("素材", "Asset");
+  const kind = assetPreviewKind(url, asset.type);
+  const safeUrl = escapeHtml(url);
+  const safeName = escapeHtml(name);
+  if (kind === "image" && url) return `<img src="${safeUrl}" alt="${safeName}">`;
+  if (kind === "video" && url) return `<video src="${safeUrl}" controls playsinline autoplay preload="metadata" aria-label="${safeName}"></video>`;
+  if (kind === "audio" && url) {
+    return `<div class="asset-preview-audio"><div class="asset-preview-audio-name">${icon("audio-lines")}<b>${safeName}</b></div><audio src="${safeUrl}" controls autoplay preload="metadata" aria-label="${safeName}"></audio></div>`;
+  }
+  return `<div class="local-asset-preview-unsupported">${icon("file-question")}<b>${safeName}</b><span>${localized("该文件无法预览", "This file cannot be previewed")}</span></div>`;
+}
+
+function openAssetPreview(asset) {
+  const body = el("localAssetPreviewBody");
+  if (!body) return;
+  const kind = assetPreviewKind(asset.url, asset.type);
+  body.innerHTML = assetPreviewMarkup(asset);
+  const dialog = document.querySelector(".local-asset-preview-dialog");
+  if (dialog) dialog.setAttribute("aria-label", asset.name || localized("素材预览", "Asset preview"));
+  const modal = el("localAssetPreviewModal");
+  modal.classList.toggle("is-compact", kind === "audio" || kind === "file");
+  modal.hidden = false;
   document.body.classList.add("modal-open");
   refreshIcons();
+}
+
+function openLocalAssetPreview(asset) {
+  if (asset.asset_deleted) {
+    openAssetPreview({ url: "", name: asset.name || asset.file_name || "", type: "file" });
+    return;
+  }
+  openAssetPreview({
+    url: asset.locked ? "" : asset.preview_url || "",
+    name: asset.name || asset.file_name || localized("本地素材", "Local asset"),
+    type: asset.locked ? "file" : asset.media_type || "file",
+  });
 }
 
 function closeLocalAssetPreview() {
@@ -5057,6 +5442,20 @@ promptInput.addEventListener("click", () => {
 });
 promptInput.addEventListener("scroll", positionMentionMenu, { passive: true });
 
+document.addEventListener("click", (event) => {
+  const trigger = event.target.closest("[data-preview-url]");
+  if (!trigger) return;
+  const media = event.target.closest("audio, video");
+  if (media && media.hasAttribute("controls")) return;
+  event.preventDefault();
+  event.stopPropagation();
+  openAssetPreview({
+    url: trigger.dataset.previewUrl,
+    name: trigger.dataset.previewName || "",
+    type: trigger.dataset.previewType || "",
+  });
+});
+
 el("assetGrid").addEventListener("click", (event) => {
   const folderAction = event.target.closest("[data-folder-action]");
   if (folderAction) {
@@ -5533,6 +5932,13 @@ el("nodeList").addEventListener("click", (event) => {
   if (action.dataset.nodeAction === "edit") openNodeEditor(row.dataset.nodeId);
   if (action.dataset.nodeAction === "delete") deleteNode(row.dataset.nodeId);
 });
+el("nodeList").addEventListener("change", (event) => {
+  const input = event.target.closest('[data-node-action="power"]');
+  if (!input) return;
+  const row = input.closest("[data-node-id]");
+  if (!row) return;
+  toggleLocalComfy(row.dataset.nodeId, input.checked);
+});
 el("nodeModal").addEventListener("click", (event) => {
   if (event.target === el("nodeModal")) closeNodeManager();
 });
@@ -5566,7 +5972,7 @@ el("workflowList").addEventListener("click", (event) => {
   if (action === "download") downloadWorkflow(workflowId);
   if (action === "sync") syncWorkflow(workflowId, false);
   if (action === "verify") {
-    el("workflowManagerError").textContent = localized("上传同名 JSON 到目标 ComfyUI 的 workflows 用户目录后执行校验", "Upload the JSON with the same filename to the target ComfyUI workflows user directory, then verify");
+    setWorkflowManagerError(localized("上传同名 JSON 到目标 ComfyUI 的 workflows 用户目录后执行校验", "Upload the JSON with the same filename to the target ComfyUI workflows user directory, then verify"));
     syncWorkflow(workflowId, true);
   }
   if (action === "delete") deleteWorkflow(workflowId);
@@ -5732,6 +6138,8 @@ async function initialize() {
   }
   restoreSidebarWidth();
   applyStaticLocale();
+  initHeaderTooltips();
+  syncHeaderTips();
   updateModelUi();
   updateIncognitoUi();
   renderReferences();

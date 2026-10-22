@@ -5,6 +5,7 @@ import os
 import re
 import sqlite3
 import threading
+from contextlib import closing
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,7 @@ class ComfyNodeConfig:
     last_call_consumed_money: float | None = None
     last_call_cost_at: str = ""
     last_call_job_id: str = ""
+    launch_path: str = ""
 
 
 def parse_runninghub_resource_url(value: str) -> tuple[str, str, str]:
@@ -81,7 +83,7 @@ class NodeRegistry:
         return connection
 
     def _initialize(self) -> None:
-        with self._lock, self._connect() as connection:
+        with self._lock, closing(self._connect()) as connection, connection:
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS comfy_nodes (
@@ -107,6 +109,7 @@ class NodeRegistry:
                     last_call_consumed_money REAL,
                     last_call_cost_at TEXT NOT NULL DEFAULT '',
                     last_call_job_id TEXT NOT NULL DEFAULT '',
+                    launch_path TEXT NOT NULL DEFAULT '',
                     max_concurrency INTEGER NOT NULL DEFAULT 1
                         CHECK (max_concurrency BETWEEN 1 AND 64),
                     enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
@@ -143,6 +146,7 @@ class NodeRegistry:
                 "last_call_consumed_money": "REAL",
                 "last_call_cost_at": "TEXT NOT NULL DEFAULT ''",
                 "last_call_job_id": "TEXT NOT NULL DEFAULT ''",
+                "launch_path": "TEXT NOT NULL DEFAULT ''",
                 "max_concurrency": "INTEGER NOT NULL DEFAULT 1",
             }
             for name, definition in migrations.items():
@@ -183,6 +187,7 @@ class NodeRegistry:
                         last_call_consumed_money REAL,
                         last_call_cost_at TEXT NOT NULL DEFAULT '',
                         last_call_job_id TEXT NOT NULL DEFAULT '',
+                        launch_path TEXT NOT NULL DEFAULT '',
                         max_concurrency INTEGER NOT NULL DEFAULT 1
                             CHECK (max_concurrency BETWEEN 1 AND 64),
                         enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
@@ -196,7 +201,7 @@ class NodeRegistry:
                         account_balance_money, account_currency, account_current_tasks,
                         account_api_type, account_error, last_call_consumed_coins,
                         last_call_consumed_money, last_call_cost_at, last_call_job_id,
-                        max_concurrency, enabled, created_at, updated_at
+                        launch_path, max_concurrency, enabled, created_at, updated_at
                     )
                     SELECT
                         id, name, url, provider, api_key, workflow_id, workflow_url,
@@ -205,7 +210,7 @@ class NodeRegistry:
                         account_balance_money, account_currency, account_current_tasks,
                         account_api_type, account_error, last_call_consumed_coins,
                         last_call_consumed_money, last_call_cost_at, last_call_job_id,
-                        max_concurrency, enabled, created_at, updated_at
+                        launch_path, max_concurrency, enabled, created_at, updated_at
                     FROM comfy_nodes;
                     DROP TABLE comfy_nodes;
                     ALTER TABLE comfy_nodes_migrated RENAME TO comfy_nodes;
@@ -254,6 +259,7 @@ class NodeRegistry:
         max_concurrency: int = 1,
         workflow_name: str = "",
         runninghub_schema: dict[str, Any] | None = None,
+        launch_path: str = "",
     ) -> ComfyNodeConfig:
         node_id = node_id.strip()
         name = name.strip()
@@ -262,6 +268,7 @@ class NodeRegistry:
         api_key = api_key.strip()
         workflow_url = workflow_url.strip()
         workflow_name = workflow_name.strip()
+        launch_path = (launch_path or "").strip()
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", node_id):
             raise ValueError("节点 ID 只能包含字母、数字、点、下划线和连字符")
         if node_id == "auto":
@@ -291,6 +298,10 @@ class NodeRegistry:
             max_concurrency = 1
             workflow_name = ""
             runninghub_schema = None
+        if len(launch_path) > 1000:
+            raise ValueError("ComfyUI 启动路径不能超过 1000 个字符")
+        if provider == "runninghub":
+            launch_path = ""
         parsed = urlsplit(url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise ValueError("API 地址必须是有效的 HTTP(S) URL")
@@ -309,6 +320,7 @@ class NodeRegistry:
             runninghub_schema_updated_at=str(
                 (runninghub_schema or {}).get("updated_at") or ""
             ),
+            launch_path=launch_path,
         )
 
     def build_config(
@@ -322,6 +334,7 @@ class NodeRegistry:
         max_concurrency: int = 1,
         workflow_name: str = "",
         runninghub_schema: dict[str, Any] | None = None,
+        launch_path: str = "",
     ) -> ComfyNodeConfig:
         return self._validate(
             node_id,
@@ -333,6 +346,7 @@ class NodeRegistry:
             max_concurrency,
             workflow_name,
             runninghub_schema,
+            launch_path,
         )
 
     @staticmethod
@@ -354,7 +368,7 @@ class NodeRegistry:
         if enabled_only:
             query += " WHERE enabled = 1"
         query += " ORDER BY created_at, id"
-        with self._lock, self._connect() as connection:
+        with self._lock, closing(self._connect()) as connection, connection:
             rows = [dict(row) for row in connection.execute(query).fetchall()]
         return rows if include_secrets else [self._public(row) for row in rows]
 
@@ -383,12 +397,13 @@ class NodeRegistry:
                 last_call_consumed_money=row["last_call_consumed_money"],
                 last_call_cost_at=row["last_call_cost_at"],
                 last_call_job_id=row["last_call_job_id"],
+                launch_path=row["launch_path"],
             )
             for row in self.list(enabled_only=True, include_secrets=True)
         )
 
     def _get_raw(self, node_id: str) -> dict[str, Any] | None:
-        with self._lock, self._connect() as connection:
+        with self._lock, closing(self._connect()) as connection, connection:
             row = connection.execute(
                 "SELECT * FROM comfy_nodes WHERE id = ?", (node_id,)
             ).fetchone()
@@ -409,6 +424,7 @@ class NodeRegistry:
         max_concurrency: int = 1,
         workflow_name: str = "",
         runninghub_schema: dict[str, Any] | None = None,
+        launch_path: str = "",
     ) -> dict[str, Any]:
         node = self._validate(
             node_id,
@@ -420,16 +436,17 @@ class NodeRegistry:
             max_concurrency,
             workflow_name,
             runninghub_schema,
+            launch_path,
         )
         now = utc_now()
         try:
-            with self._lock, self._connect() as connection:
+            with self._lock, closing(self._connect()) as connection, connection:
                 connection.execute(
                     "INSERT INTO comfy_nodes "
                     "(id, name, url, provider, api_key, workflow_id, workflow_url, "
                     "runninghub_resource_type, workflow_name, runninghub_schema, "
-                    "runninghub_schema_updated_at, max_concurrency, enabled, created_at, "
-                    "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
+                    "runninghub_schema_updated_at, launch_path, max_concurrency, enabled, "
+                    "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
                     (
                         node.id,
                         node.name,
@@ -444,6 +461,7 @@ class NodeRegistry:
                         if node.runninghub_schema
                         else "",
                         node.runninghub_schema_updated_at,
+                        node.launch_path,
                         node.max_concurrency,
                         now,
                         now,
@@ -465,10 +483,16 @@ class NodeRegistry:
         max_concurrency: int = 1,
         workflow_name: str = "",
         runninghub_schema: dict[str, Any] | None = None,
+        launch_path: str | None = None,
     ) -> dict[str, Any]:
         existing = self._get_raw(node_id)
         if not existing:
             raise KeyError(node_id)
+        effective_launch_path = (
+            (existing.get("launch_path") or "")
+            if launch_path is None
+            else str(launch_path)
+        )
         submitted_api_key = (api_key or "").strip()
         effective_api_key = (
             submitted_api_key or existing["api_key"]
@@ -485,14 +509,15 @@ class NodeRegistry:
             max_concurrency,
             workflow_name,
             runninghub_schema,
+            effective_launch_path,
         )
-        with self._lock, self._connect() as connection:
+        with self._lock, closing(self._connect()) as connection, connection:
             connection.execute(
                 "UPDATE comfy_nodes SET name = ?, url = ?, provider = ?, api_key = ?, "
                 "workflow_id = ?, workflow_url = ?, runninghub_resource_type = ?, "
                 "workflow_name = ?, runninghub_schema = ?, "
-                "runninghub_schema_updated_at = ?, max_concurrency = ?, enabled = ?, "
-                "updated_at = ? "
+                "runninghub_schema_updated_at = ?, launch_path = ?, max_concurrency = ?, "
+                "enabled = ?, updated_at = ? "
                 "WHERE id = ?",
                 (
                     node.name,
@@ -507,6 +532,7 @@ class NodeRegistry:
                     if node.runninghub_schema
                     else "",
                     node.runninghub_schema_updated_at,
+                    node.launch_path,
                     node.max_concurrency,
                     int(enabled),
                     utc_now(),
@@ -542,6 +568,7 @@ class NodeRegistry:
             last_call_consumed_money=row["last_call_consumed_money"],
             last_call_cost_at=row["last_call_cost_at"],
             last_call_job_id=row["last_call_job_id"],
+            launch_path=row["launch_path"],
         )
 
     def update_runtime(self, node_id: str, values: dict[str, Any]) -> None:
@@ -573,19 +600,19 @@ class NodeRegistry:
                     "runninghub_schema_updated_at", str(schema.get("updated_at") or "")
                 )
         assignments = ", ".join(f"{key} = ?" for key in updates)
-        with self._lock, self._connect() as connection:
+        with self._lock, closing(self._connect()) as connection, connection:
             connection.execute(
                 f"UPDATE comfy_nodes SET {assignments} WHERE id = ?",
                 (*updates.values(), node_id),
             )
 
     def delete(self, node_id: str) -> bool:
-        with self._lock, self._connect() as connection:
+        with self._lock, closing(self._connect()) as connection, connection:
             cursor = connection.execute("DELETE FROM comfy_nodes WHERE id = ?", (node_id,))
             return cursor.rowcount > 0
 
     def health_interval(self) -> float:
-        with self._lock, self._connect() as connection:
+        with self._lock, closing(self._connect()) as connection, connection:
             row = connection.execute(
                 "SELECT value FROM service_settings WHERE key = ?", (self.HEALTH_KEY,)
             ).fetchone()
@@ -596,7 +623,7 @@ class NodeRegistry:
 
     def set_health_interval(self, seconds: float) -> float:
         seconds = max(5.0, min(3600.0, float(seconds)))
-        with self._lock, self._connect() as connection:
+        with self._lock, closing(self._connect()) as connection, connection:
             connection.execute(
                 "INSERT INTO service_settings (key, value, updated_at) VALUES (?, ?, ?) "
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",

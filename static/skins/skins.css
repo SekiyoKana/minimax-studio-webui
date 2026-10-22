@@ -39,6 +39,10 @@ html[data-skin="aurora"] {
   --green: #57e0b0;
   --warning: #ffc46b;
   --danger: #ff7d8a;
+  --takeover-manageable: #ffc46b;
+  --takeover-manageable-bg: rgba(255, 196, 107, .16);
+  --takeover-managed: #57e0b0;
+  --takeover-managed-bg: rgba(87, 224, 176, .14);
   --radius: 18px;
   --skin-serif: ui-serif, "Songti SC", "Noto Serif SC", Georgia, "Times New Roman", serif;
 }

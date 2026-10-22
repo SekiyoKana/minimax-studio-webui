@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from pathlib import Path
@@ -643,7 +644,7 @@ class ContractTests(unittest.TestCase):
     def test_legacy_node_table_migrates_without_unique_url_constraint(self):
         with TemporaryDirectory() as temp:
             database = Path(temp) / "config.db"
-            with sqlite3.connect(database) as connection:
+            with closing(sqlite3.connect(database)) as connection, connection:
                 connection.executescript(
                     """
                     CREATE TABLE comfy_nodes (
@@ -1678,14 +1679,16 @@ class ContractTests(unittest.TestCase):
             sidecar.write_text("{}", encoding="utf-8")
             job_path = jobs_dir / "expired.json"
             job_path.write_text(
-                """{
-  "id": "expired",
-  "status": "completed",
-  "request": {"prompt": "secret prompt", "incognito": true},
-  "input_paths": ["%s"],
-  "result_path": "%s",
-  "expires_at": "2000-01-01T00:00:00+00:00"
-}""" % (upload, result),
+                json.dumps(
+                    {
+                        "id": "expired",
+                        "status": "completed",
+                        "request": {"prompt": "secret prompt", "incognito": True},
+                        "input_paths": [str(upload)],
+                        "result_path": str(result),
+                        "expires_at": "2000-01-01T00:00:00+00:00",
+                    }
+                ),
                 encoding="utf-8",
             )
 

@@ -220,6 +220,73 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(output.suffix, ".mp4")
 
 
+    def test_custom_workflow_reference_slots_build_loader_nodes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            settings = Settings(root=root, comfy_output_dir=root / "remote-output")
+            settings.ensure_directories()
+            graph = {
+                "44": {
+                    "class_type": "MiniMaxH3ReferenceToVideo",
+                    "inputs": {
+                        "prompt": "default",
+                        "ref_images.ref_image_0": ["40", 0],
+                        "ref_videos.ref_video_0": ["50", 0],
+                        "ref_video_audios.ref_video_audio_0": ["50", 2],
+                    },
+                },
+                "40": {"class_type": "LoadImage", "inputs": {"image": "old.png"}},
+                "50": {"class_type": "VHS_LoadVideo", "inputs": {"video": "old.mp4"}},
+                "9": {"class_type": "SaveVideo", "inputs": {"filename_prefix": "output", "video": ["44", 0]}},
+            }
+            snapshot = {
+                "source": "custom",
+                "workflow_json": graph,
+                "field_mappings": {"prompt": {"node_id": "44", "input": "prompt"}},
+                "reference_mappings": [
+                    {"type": "image", "index": 1, "node_id": "44", "input": "ref_images", "slot": True, "required": True},
+                    {"type": "image", "index": 2, "node_id": "44", "input": "ref_images", "slot": True, "required": True},
+                    {"type": "video", "index": 1, "node_id": "44", "input": "ref_videos", "slot": True, "required": False},
+                ],
+                "static_inputs": {},
+                "result_node_id": "9",
+                "media_type": "video",
+            }
+            job = {
+                "id": "slot-job",
+                "workflow_snapshot": snapshot,
+                "request": {
+                    "prompt": "slot prompt",
+                    "references": [
+                        {"type": "image", "path": "a.png"},
+                        {"type": "image", "path": "b.png"},
+                        {"type": "image", "path": "c.png"},
+                        {"type": "video", "path": "d.mp4"},
+                    ],
+                },
+                "input_paths": [],
+            }
+            engine = ComfyUIH3Engine(settings, ComfyNodeConfig("node", "Node", "http://comfy.test:8188"))
+            built = engine._build_workflow(job, ["h3_ref_a.png", "h3_ref_b.png", "h3_ref_c.png", "h3_ref_d.mp4"])
+            inputs = built["44"]["inputs"]
+            first = inputs["ref_images.ref_image_0"]
+            second = inputs["ref_images.ref_image_1"]
+            extra = inputs["ref_images.ref_image_2"]
+            video = inputs["ref_videos.ref_video_0"]
+            self.assertEqual(len({first[0], second[0], extra[0], video[0]}), 4)
+            self.assertEqual(built[extra[0]]["class_type"], "LoadImage")
+            self.assertEqual(built[extra[0]]["inputs"]["image"], "h3_ref_c.png")
+            self.assertNotEqual(first[0], second[0])
+            self.assertEqual(built[first[0]]["class_type"], "LoadImage")
+            self.assertEqual(built[first[0]]["inputs"]["image"], "h3_ref_a.png")
+            self.assertEqual(built[second[0]]["inputs"]["image"], "h3_ref_b.png")
+            self.assertEqual(built[video[0]]["class_type"], "VHS_LoadVideo")
+            self.assertEqual(built[video[0]]["inputs"]["video"], "h3_ref_d.mp4")
+            self.assertEqual(inputs["ref_video_audios.ref_video_audio_0"], [video[0], 2])
+            self.assertEqual(built["40"]["inputs"]["image"], "old.png")
+            self.assertEqual(graph["44"]["inputs"]["ref_images.ref_image_0"], ["40", 0])
+
+
 class WorkflowRouteTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()

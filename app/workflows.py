@@ -37,6 +37,14 @@ PRESETS: tuple[dict[str, Any], ...] = (
 FIELD_NAMES = {"prompt", "lyrics", "width", "height", "duration", "num_frames", "steps", "seed"}
 MEDIA_TYPES = {"image", "video", "audio"}
 REFERENCE_TYPES = MEDIA_TYPES
+# Link-style reference inputs on conditioning nodes, e.g. "ref_images.ref_image_0".
+# A mapping flagged with "slot": true targets one of these families, so the engine
+# can create a fresh loader node and rewire the link for a variable number of files.
+REFERENCE_SLOT_FAMILIES = {
+    "ref_images": ("image", "ref_image"),
+    "ref_videos": ("video", "ref_video"),
+    "ref_audios": ("audio", "ref_audio"),
+}
 MAX_WORKFLOW_BYTES = 5 * 1024 * 1024
 
 
@@ -130,6 +138,25 @@ def validate_workflow_config(
         if reference_key in reference_keys:
             raise ValueError(f"参考素材映射重复：{kind} {index}")
         reference_keys.add(reference_key)
+        if mapping.get("slot"):
+            family = str(mapping.get("input") or "")
+            if family not in REFERENCE_SLOT_FAMILIES:
+                raise ValueError(f"参考素材槽位无效：{family}")
+            slot_kind, _ = REFERENCE_SLOT_FAMILIES[family]
+            if slot_kind != kind:
+                raise ValueError(f"槽位 {family} 只接受 {slot_kind} 类型的参考素材")
+            slot_node_id = str(mapping.get("node_id") or "")
+            if not workflow_json.get(slot_node_id):
+                raise ValueError(f"参考素材槽位节点不存在：{slot_node_id}")
+            normalized_references.append({
+                "type": kind,
+                "index": index,
+                "node_id": slot_node_id,
+                "input": family,
+                "slot": True,
+                "required": bool(mapping.get("required", True)),
+            })
+            continue
         node_id, input_name = target(mapping.get("node_id"), mapping.get("input"))
         normalized_references.append({
             "type": kind,

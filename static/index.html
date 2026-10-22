@@ -23,13 +23,13 @@
         document.documentElement.dataset.theme = mode;
       })();
     </script>
-    <link rel="stylesheet" href="/assets/styles.css?v=57&rev=67">
-    <link rel="stylesheet" href="/assets/design.css?v=36">
-    <link rel="stylesheet" href="/assets/skins/skins.css?v=7">
+    <link rel="stylesheet" href="/assets/styles.css?v=60&rev=70">
+    <link rel="stylesheet" href="/assets/design.css?v=41">
+    <link rel="stylesheet" href="/assets/skins/skins.css?v=8">
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
     <script src="/assets/dropdown.js?v=4" defer></script>
-    <script src="/assets/app.js?v=91&rev=102&upscale=1" defer></script>
+    <script src="/assets/app.js?v=98&rev=110&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -95,7 +95,7 @@
           <div class="header-actions">
             <button class="icon-button ops-trigger" id="openOps" type="button" title="运行日志" aria-label="运行日志"><i data-lucide="activity"></i><b id="opsQueueBadge" hidden>0</b></button>
             <button class="icon-button node-manager-trigger" id="openNodeManager" type="button" title="管理推理节点" aria-label="管理推理节点"><i data-lucide="server-cog"></i></button>
-            <button class="workflow-manager-trigger" id="openWorkflowManager" type="button" title="管理工作流" aria-label="管理工作流"><i data-lucide="workflow"></i><span>工作流</span></button>
+            <button class="icon-button" id="openWorkflowManager" type="button" title="管理工作流" aria-label="管理工作流"><i data-lucide="workflow"></i></button>
             <button class="icon-button" id="openPeering" type="button" title="多端互联" aria-label="多端互联"><i data-lucide="key-round"></i></button>
             <button class="icon-button" id="androidServerSettings" type="button" title="服务器连接" aria-label="服务器连接" hidden><i data-lucide="network"></i></button>
             <button class="icon-button" id="openGlobalSettings" type="button" title="设置" aria-label="设置"><i data-lucide="settings-2"></i></button>
@@ -300,6 +300,11 @@
           <input id="nodeName" name="name" type="text" maxlength="120" autocomplete="off" required>
           <label for="nodeUrl" id="nodeUrlLabel">API 地址</label>
           <input id="nodeUrl" name="url" type="url" maxlength="500" placeholder="http://127.0.0.1:8188" autocomplete="off" required>
+          <div class="node-provider-field" data-node-provider="comfyui" id="nodeLaunchPathField" hidden>
+            <label for="nodeLaunchPath" id="nodeLaunchPathLabel">ComfyUI 启动路径</label>
+            <input id="nodeLaunchPath" name="launch_path" type="text" maxlength="1000" autocomplete="off" placeholder="ComfyUI 目录或 main.py 路径">
+            <small class="node-field-hint" id="nodeLaunchPathHint">填写 ComfyUI 目录或 main.py 路径，用于在本机接管启动与关闭</small>
+          </div>
           <label for="nodeApiKey">API Key</label>
           <input id="nodeApiKey" name="api_key" type="password" maxlength="2000" autocomplete="new-password" placeholder="ComfyUI 可留空">
           <small class="node-field-hint" id="nodeApiKeyHint">ComfyUI 未启用鉴权时可留空</small>
@@ -481,6 +486,7 @@
           <button class="settings-tab" id="settingsTabAppearance" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelAppearance" data-settings-tab="appearance">外观</button>
           <button class="settings-tab" id="settingsTabSystem" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelSystem" data-settings-tab="system">系统</button>
           <button class="settings-tab" id="settingsTabUpload" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelUpload" data-settings-tab="upload">上传</button>
+          <button class="settings-tab" id="settingsTabExperimental" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelExperimental" data-settings-tab="experimental">实验性功能</button>
         </nav>
         <form id="globalSettingsForm" class="settings-body settings-tab-panels">
           <div hidden aria-hidden="true">
@@ -546,6 +552,11 @@
           <section class="settings-tab-panel" id="settingsPanelUpload" role="tabpanel" aria-labelledby="settingsTabUpload" data-settings-panel="upload" hidden>
             <label class="switch-row"><span>大尺寸图片自动压缩</span><input id="autoCompressLargeImages" type="checkbox"><span class="switch"></span></label>
             <p class="settings-help">参考图片超过 1 MB 时在本地压缩后再上传。</p>
+          </section>
+          <section class="settings-tab-panel" id="settingsPanelExperimental" role="tabpanel" aria-labelledby="settingsTabExperimental" data-settings-panel="experimental" hidden>
+            <label class="switch-row"><span>绑定本地 ComfyUI 服务</span><input id="bindLocalComfyui" type="checkbox"><span class="switch"></span></label>
+            <p class="settings-help" id="bindLocalComfyuiHelp">开启后，本机环境的 ComfyUI 节点会显示「可接管」标签；在节点编辑中填写启动路径后，可在推理节点面板直接开启或关闭该 ComfyUI 服务。</p>
+            <p class="settings-help" id="bindLocalComfyuiEnvHelp">启动时优先使用节点目录中的私有环境（如 venv、.venv、env），找不到时回退到全局 Python 环境。启动失败会在「实时日志」中记录失败原因和原始报错。</p>
           </section>
           <p class="settings-error" id="globalSettingsError" role="alert"></p>
           <div class="settings-actions settings-form-actions"><button class="primary" type="submit"><i data-lucide="save"></i><span>保存设置</span></button></div>

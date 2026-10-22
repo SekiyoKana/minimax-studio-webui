@@ -523,13 +523,39 @@ class ComfyUIH3Engine:
                 (str(item["type"]), int(item["index"])): item
                 for item in workflow_snapshot.get("reference_mappings") or []
             }
+            # Slot families accept any number of files, even beyond the declared
+            # indexes, so a single slot binding keeps the count flexible.
+            slot_families = {
+                str(item["type"]): (str(item["node_id"]), str(item["input"]))
+                for item in workflow_snapshot.get("reference_mappings") or []
+                if item.get("slot")
+            }
             for index, reference in enumerate(request.get("references") or []):
                 kind = str(reference.get("type") or "")
                 reference_indexes[kind] = reference_indexes.get(kind, 0) + 1
-                binding = reference_bindings.get((kind, reference_indexes[kind]))
+                position = reference_indexes[kind]
+                binding = reference_bindings.get((kind, position))
+                if binding is None and kind in slot_families:
+                    binding = {"node_id": slot_families[kind][0], "input": slot_families[kind][1], "slot": True}
                 if not binding:
-                    raise ValueError(f"缺少参考素材映射：{kind} {reference_indexes[kind]}")
-                workflow[str(binding["node_id"])]["inputs"][str(binding["input"])] = input_names[index]
+                    raise ValueError(f"缺少参考素材映射：{kind} {position}")
+                node_id = str(binding["node_id"])
+                target_node = workflow.get(node_id)
+                if target_node is None:
+                    raise ValueError(f"参考素材映射节点不存在：{node_id}")
+                if binding.get("slot"):
+                    # Link-style slot: build a loader node and rewire this reference.
+                    slot_node = self._build_reference_slot_node(
+                        workflow, kind, position, input_names[index]
+                    )
+                    field = f"{binding['input']}.{self._SLOT_SUFFIXES[kind]}_{position - 1}"
+                    target_node["inputs"][field] = [slot_node, 0]
+                    if kind == "video":
+                        audio_field = f"ref_video_audios.ref_video_audio_{position - 1}"
+                        if audio_field in target_node["inputs"]:
+                            target_node["inputs"][audio_field] = [slot_node, 2]
+                else:
+                    target_node["inputs"][str(binding["input"])] = input_names[index]
             result_node_id = str(workflow_snapshot["result_node_id"])
             workflow[result_node_id]["inputs"]["filename_prefix"] = f"minimax-studio-webui/{job['id']}"
             return workflow
@@ -899,6 +925,53 @@ class ComfyUIH3Engine:
         else:
             workflow["136"]["inputs"].pop("last_frame", None)
         return workflow
+
+    _SLOT_SUFFIXES = {"image": "ref_image", "video": "ref_video", "audio": "ref_audio"}
+
+    @staticmethod
+    def _next_workflow_node_id(workflow: dict[str, Any]) -> str:
+        numeric = [int(key) for key in workflow if str(key).isdigit()]
+        candidate = max(numeric) + 1 if numeric else 1
+        while str(candidate) in workflow:
+            candidate += 1
+        return str(candidate)
+
+    @classmethod
+    def _build_reference_slot_node(
+        cls,
+        workflow: dict[str, Any],
+        kind: str,
+        index: int,
+        input_name: str,
+    ) -> str:
+        node_id = cls._next_workflow_node_id(workflow)
+        if kind == "image":
+            workflow[node_id] = {
+                "class_type": "LoadImage",
+                "inputs": {"image": input_name},
+                "_meta": {"title": f"Load Picture {index}"},
+            }
+        elif kind == "video":
+            workflow[node_id] = {
+                "class_type": "VHS_LoadVideo",
+                "inputs": {
+                    "video": input_name,
+                    "force_rate": 24,
+                    "custom_width": 0,
+                    "custom_height": 0,
+                    "frame_load_cap": 360,
+                    "skip_first_frames": 0,
+                    "select_every_nth": 1,
+                },
+                "_meta": {"title": f"Load Video {index} at 24 fps"},
+            }
+        else:
+            workflow[node_id] = {
+                "class_type": "LoadAudio",
+                "inputs": {"audio": input_name},
+                "_meta": {"title": f"Load Audio {index}"},
+            }
+        return node_id
 
     @staticmethod
     def _build_dual_sampling_references(

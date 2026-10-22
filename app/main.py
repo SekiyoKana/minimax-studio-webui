@@ -4,10 +4,12 @@ import asyncio
 import json
 import math
 import mimetypes
+import os
 import re
 import secrets
 import shutil
 import subprocess
+import sys
 import time
 from contextlib import asynccontextmanager
 from copy import deepcopy
@@ -28,6 +30,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .engine import create_engine, probe_node
 from .i18n import translate_api_detail
 from .jobs import JobManager, JobStore, ROOT_FOLDER_ID, TERMINAL_STATES, UNFILED_FOLDER_ID, create_video_preview, output_file_name, output_file_stem, utc_now
+from .local_comfy import LocalComfySupervisor
 from .local_state import LocalStateStore
 from .music_prompts import MUSIC3_ARRANGEMENT_SYSTEM_PROMPT, MUSIC3_LYRICS_SYSTEM_PROMPT
 from .nodes import NodeRegistry
@@ -49,6 +52,10 @@ UpscaleScale = int
 
 settings.ensure_directories()
 store = JobStore(settings.jobs_dir)
+local_comfy = LocalComfySupervisor(
+    settings.data_dir / "local-comfy",
+    event_sink=store.system_log,
+)
 node_registry = NodeRegistry(settings.data_dir / "config.db")
 local_state = LocalStateStore(settings.data_dir / "config.db")
 workflow_registry = WorkflowRegistry(
@@ -86,6 +93,7 @@ async def lifespan(_: FastAPI):
             await asyncio.gather(*tasks, return_exceptions=True)
         proxy_poll_tasks.clear()
         manager.stop()
+        local_comfy.shutdown()
 
 
 app = FastAPI(
@@ -205,6 +213,7 @@ class ComfyNodeCreate(BaseModel):
     api_key: str = Field(default="", max_length=2000)
     workflow_url: str = Field(default="", max_length=500)
     max_concurrency: int = Field(default=1, ge=1, le=64)
+    launch_path: str = Field(default="", max_length=1000)
 
 
 class ComfyNodeUpdate(BaseModel):
@@ -215,6 +224,7 @@ class ComfyNodeUpdate(BaseModel):
     api_key: str | None = Field(default=None, max_length=2000)
     workflow_url: str | None = Field(default=None, max_length=500)
     max_concurrency: int | None = Field(default=None, ge=1, le=64)
+    launch_path: str | None = Field(default=None, max_length=1000)
 
 
 class ComfySettingsUpdate(BaseModel):
@@ -274,6 +284,7 @@ class GeneralSettingsUpdate(BaseModel):
     exclude_runninghub_auto: bool | None = None
     remote_disconnect_policy: Literal["encrypt", "delete"] | None = None
     remote_records_key: str | None = Field(default=None, min_length=8, max_length=256)
+    bind_local_comfyui: bool | None = None
 
 
 class AssetArtifactsDeleteRequest(BaseModel):
@@ -660,6 +671,7 @@ async def health():
         "parallel_capacity": manager.parallel_capacity,
         "health_interval_seconds": manager.health_interval,
         "revision": store.revision,
+        "platform": "macos" if sys.platform == "darwin" else "windows" if os.name == "nt" else "linux",
     }
 
 
@@ -763,20 +775,67 @@ def node_url_is_local(url: str) -> bool:
 @app.get("/api/v1/comfy/nodes", dependencies=[Depends(authorize)])
 async def list_comfy_nodes():
     statuses = {item["id"]: item for item in manager.nodes_public()}
+    bind_local = bool(local_state.general_settings(include_secret=False)["bind_local_comfyui"])
     nodes = []
     for row in node_registry.list(enabled_only=False):
         status_data = statuses.get(row["id"], {})
-        nodes.append(
-            {
-                **row,
-                **status_data,
-                "local": node_url_is_local(str(row.get("url") or "")),
-            }
-        )
+        is_local = node_url_is_local(str(row.get("url") or ""))
+        item = {
+            **row,
+            **status_data,
+            "local": is_local,
+        }
+        if bind_local and is_local and row.get("provider") == "comfyui":
+            item["takeover"] = True
+            item["local_runtime"] = local_comfy.status(row["id"])
+        nodes.append(item)
     return {
         "data": nodes,
         "health_interval_seconds": node_registry.health_interval(),
+        "bind_local_comfyui": bind_local,
     }
+
+
+def _local_comfy_node(node_id: str) -> dict[str, Any]:
+    node = node_registry.get(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="推理节点不存在")
+    if not local_state.general_settings(include_secret=False)["bind_local_comfyui"]:
+        raise HTTPException(status_code=422, detail="实验性功能「绑定本地 ComfyUI 服务」未开启")
+    if node.get("provider") != "comfyui":
+        raise HTTPException(status_code=422, detail="仅本机 ComfyUI 节点支持本地启动和关闭")
+    if not node_url_is_local(str(node.get("url") or "")):
+        raise HTTPException(status_code=422, detail="仅本机环境的 ComfyUI 节点支持接管")
+    return node
+
+
+@app.post("/api/v1/comfy/nodes/{node_id}/local-comfy/start", dependencies=[Depends(authorize)])
+async def start_local_comfy_node(node_id: str):
+    node = _local_comfy_node(node_id)
+    try:
+        runtime = await asyncio.to_thread(
+            local_comfy.start,
+            node_id,
+            str(node.get("name") or node_id),
+            str(node.get("url") or ""),
+            str(node.get("launch_path") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if runtime.get("status") == "running":
+        manager.wake_health_check()
+    return {"node_id": node_id, "local_runtime": runtime}
+
+
+@app.post("/api/v1/comfy/nodes/{node_id}/local-comfy/stop", dependencies=[Depends(authorize)])
+async def stop_local_comfy_node(node_id: str):
+    node = _local_comfy_node(node_id)
+    try:
+        runtime = await asyncio.to_thread(local_comfy.stop, node_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    manager.wake_health_check()
+    return {"node_id": node_id, "local_runtime": runtime}
 
 
 @app.post("/api/v1/comfy/nodes", status_code=201, dependencies=[Depends(authorize)])
@@ -809,6 +868,7 @@ async def create_comfy_node(payload: ComfyNodeCreate):
             profile.get("runninghub_schema")
             if isinstance(profile.get("runninghub_schema"), dict)
             else None,
+            payload.launch_path,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -883,6 +943,7 @@ async def update_comfy_node(node_id: str, payload: ComfyNodeUpdate):
             profile.get("runninghub_schema")
             if isinstance(profile.get("runninghub_schema"), dict)
             else None,
+            payload.launch_path,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -922,6 +983,13 @@ async def delete_comfy_node(node_id: str):
         raise HTTPException(status_code=404, detail="推理节点不存在")
     if manager.node_in_use(node_id):
         raise HTTPException(status_code=409, detail="节点正在执行任务或存在定向排队任务")
+    runtime = local_comfy.status(node_id)
+    if runtime.get("managed") and runtime.get("status") in {"running", "starting", "failed"}:
+        try:
+            await asyncio.to_thread(local_comfy.stop, node_id)
+        except ValueError:
+            pass
+    local_comfy.forget(node_id)
     workflow_registry.invalidate_node_sync(node_id)
     node_registry.delete(node_id)
     reload_comfy_nodes()
@@ -2591,6 +2659,12 @@ def validate_custom_reference_mappings(workflow: dict[str, Any], kinds: list[str
         (str(item["type"]), int(item["index"])): item
         for item in workflow.get("reference_mappings") or []
     }
+    # A slot family accepts any number of files, so extra references are fine.
+    slot_kinds = {
+        str(item["type"])
+        for item in workflow.get("reference_mappings") or []
+        if item.get("slot")
+    }
     for kind, index in mappings:
         if index <= counts.get(kind, 0):
             continue
@@ -2599,8 +2673,9 @@ def validate_custom_reference_mappings(workflow: dict[str, Any], kinds: list[str
             raise HTTPException(status_code=422, detail=f"请上传第 {index} 个 {kind} 参考素材")
     for kind, count in counts.items():
         for index in range(1, count + 1):
-            if (kind, index) not in mappings:
-                raise HTTPException(status_code=422, detail=f"工作流没有配置第 {index} 个 {kind} 参考素材映射")
+            if (kind, index) in mappings or kind in slot_kinds:
+                continue
+            raise HTTPException(status_code=422, detail=f"工作流没有配置第 {index} 个 {kind} 参考素材映射")
 
 
 @app.post("/api/v1/generations", status_code=202, dependencies=[Depends(authorize)])

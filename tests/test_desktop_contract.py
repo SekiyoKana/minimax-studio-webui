@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import sqlite3
+from contextlib import closing
 import tempfile
 import zipfile
 from datetime import UTC, datetime, timedelta
@@ -91,7 +92,7 @@ class DesktopContractTests(TestCase):
             self.assertTrue(result["has_api_key"])
             self.assertNotIn("api_key", result)
             self.assertNotIn("api_key", store.ai_config())
-            with sqlite3.connect(database) as connection:
+            with closing(sqlite3.connect(database)) as connection, connection:
                 row = connection.execute(
                     "SELECT value FROM desktop_settings WHERE key = 'ai_api_key'"
                 ).fetchone()
@@ -189,7 +190,7 @@ class DesktopContractTests(TestCase):
                 encrypted=False,
             )
             store.protect_remote_records("peer-1")
-            with sqlite3.connect(Path(temp) / "config.db") as connection:
+            with closing(sqlite3.connect(Path(temp) / "config.db")) as connection, connection:
                 encrypted = connection.execute(
                     "SELECT encrypted FROM remote_records WHERE record_id = 'record-1'"
                 ).fetchone()[0]
@@ -535,8 +536,10 @@ class DesktopContractTests(TestCase):
         self.assertIn('id="localAssetPreviewBody"', index)
         self.assertIn('function openLocalAssetPreview(asset)', app_js)
         self.assertIn('function closeLocalAssetPreview()', app_js)
-        self.assertIn('<video src="${url}" controls playsinline autoplay preload="metadata"', app_js)
-        self.assertIn('<audio src="${url}" controls autoplay preload="metadata"', app_js)
+        self.assertIn("function assetPreviewMarkup(asset)", app_js)
+        self.assertIn("function assetPreviewKind(url, declaredType)", app_js)
+        self.assertIn('<video src="${safeUrl}" controls playsinline autoplay preload="metadata"', app_js)
+        self.assertIn('<audio src="${safeUrl}" controls autoplay preload="metadata"', app_js)
         self.assertNotIn('function openLocalAssetDetail(asset)', app_js)
         self.assertIn('conversationRevisionSignature', app_js)
         self.assertIn('conversationDeviceIds: new Set()', app_js)

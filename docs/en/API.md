@@ -82,6 +82,21 @@ Read field keys from `runninghub_schema` returned by `GET /api/v1/comfy/nodes`. 
 
 Delete a node with `DELETE /api/v1/comfy/nodes/{node_id}`. The service rejects disabling or deleting a node that is running a job, has manually targeted queued jobs, or is the final enabled node.
 
+### Local ComfyUI takeover (experimental)
+
+Closing the app stops the local ComfyUI processes it started; services on the same address that this app did not start are left running.
+
+The `bind_local_comfyui` switch under Settings → Experimental is off by default. When enabled, nodes whose address resolves to this machine and whose provider is `comfyui` expose `takeover: true` and `local_runtime` in `GET /api/v1/comfy/nodes`, and the node editor accepts a `launch_path` (ComfyUI directory or `main.py`; Windows and macOS/Linux path styles both work, `~` expands to the user home, and separators are converted for the current platform).
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes/gpu-2/local-comfy/start
+curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes/gpu-2/local-comfy/stop
+```
+
+Launching prefers the private environment inside the launch directory (`venv`, `.venv`, `env` → `Scripts/python.exe`) and falls back to the global Python. The service starts `main.py` with `--listen 127.0.0.1 --port <node port>`. Startup failures, a disabled feature, a node that is not a local ComfyUI endpoint, and attempts to stop a process this app did not start all return 422 with the reason in `detail` (startup failures include the raw log tail). Logs are written to `local-comfy/<node_id>.log` inside the data directory and also appear in the live log.
+
+`local_runtime` contains `status` (`stopped`, `starting`, `running`, `stopping`, `failed`), `managed`, `pid`, `started_at`, `ready_at`, `error`, `python`, `launch_dir`, and `log_path`.
+
 ## ComfyUI Workflow Configurations
 
 Workflow configurations are stored in `data/config.db`. Built-in presets are seeded from `workflows/` and can only change `visible_in_composer`; custom workflows support full CRUD:
@@ -112,7 +127,7 @@ curl -X POST http://127.0.0.1:8193/api/v1/workflows \
   }'
 ```
 
-The workflow JSON must use ComfyUI API format (each node ID maps to an object containing `class_type` and `inputs`); a UI editor export is not directly usable. `field_mappings` supports `prompt`, `lyrics`, `width`, `height`, `duration`, `num_frames`, `steps` and `seed`; each value is `{"node_id": "...", "input": "..."}`. `reference_mappings` binds uploaded media by `type`, one-based `index`, `node_id` and `input`. `result_node_id` must point to a node with a `filename_prefix` input.
+The workflow JSON must use ComfyUI API format (each node ID maps to an object containing `class_type` and `inputs`); a UI editor export is not directly usable. `field_mappings` supports `prompt`, `lyrics`, `width`, `height`, `duration`, `num_frames`, `steps` and `seed`; each value is `{"node_id": "...", "input": "..."}`. `reference_mappings` binds uploaded media by `type`, one-based `index`, `node_id` and `input`. Setting `input` to `ref_images`, `ref_videos` or `ref_audios` with `"slot": true` makes the binding dynamic: the engine creates `LoadImage`, `VHS_LoadVideo` or `LoadAudio` nodes on demand and wires them to `ref_image_N` / `ref_video_N` / `ref_audio_N`, so a workflow accepts any number of files of that kind (more than the declared slots is allowed). `result_node_id` must point to a node with a `filename_prefix` input.
 
 Select the configuration with `workflow_id` when creating a generation. The service stores a snapshot of the graph, mappings, version and target nodes with the job. Saving or syncing uploads `workflows/h3studio-{workflow_id}.json` to each target ComfyUI through `/userdata/{file}` and verifies its SHA-256; per-node state is `synced`, `pending` or `failed`. The service stores the configuration only. Confirm that the target ComfyUI server already contains every required custom node, model, and resource. Workflows created in private mode are visible only with a valid `X-H3-Incognito-Code` header.
 

@@ -82,6 +82,21 @@ curl -X POST http://127.0.0.1:8193/api/v1/generations \
 
 删除节点使用 `DELETE /api/v1/comfy/nodes/{node_id}`。正在执行任务、存在定向排队任务或属于最后一个启用节点时，服务拒绝停用或删除。
 
+### 本地 ComfyUI 接管（实验性）
+
+关闭应用（Studio）时，会自动结束由本应用启动的本地 ComfyUI 进程；非本应用启动的同地址服务不会被关闭。
+
+设置弹框 →「实验性功能」中的 `bind_local_comfyui` 默认为 `false`。开启后，地址判定为本机、提供方为 `comfyui` 的节点会在 `GET /api/v1/comfy/nodes` 中带有 `takeover: true` 和 `local_runtime`，并可在编辑节点时填写 `launch_path`（ComfyUI 目录或 `main.py` 路径，Windows 与 macOS/Linux 写法均可，`~` 展开为用户目录，斜杠与反斜杠会按当前系统自动转换）。
+
+```bash
+curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes/gpu-2/local-comfy/start
+curl -X POST http://127.0.0.1:8193/api/v1/comfy/nodes/gpu-2/local-comfy/stop
+```
+
+启动时优先使用启动目录中的私有环境（`venv`、`.venv`、`env` 的 `Scripts/python.exe`），找不到则回退全局 Python；服务以 `--listen 127.0.0.1 --port <节点端口>` 启动 `main.py`。启动失败、功能未开启、节点不是本机 ComfyUI，以及尝试关闭非本应用启动的进程都返回 422，`detail` 中附带原因（启动失败时含日志原始报错）。日志写入数据目录 `local-comfy/<node_id>.log`，同时进入「实时日志」。
+
+`local_runtime` 字段包含 `status`（`stopped`、`starting`、`running`、`stopping`、`failed`）、`managed`、`pid`、`started_at`、`ready_at`、`error`、`python`、`launch_dir`、`log_path`。
+
 ## 工作流配置
 
 工作流配置保存在 `data/config.db`。内置预设由 `workflows/` 中的 JSON 文件补录，包含随界面语言切换的 `description` 和 `description_en`，预设只能修改 `visible_in_composer`；自定义工作流支持完整 CRUD，并可选填写最多 500 字符的 `description`。
@@ -97,7 +112,7 @@ DELETE /api/v1/workflows/{workflow_id}
 POST   /api/v1/workflows/{workflow_id}/sync
 ```
 
-自定义工作流的 `workflow_json` 必须是 ComfyUI API 格式。`field_mappings` 使用 `{字段: {"node_id": "节点 ID", "input": "输入名"}}`，支持 `prompt`、`lyrics`、`width`、`height`、`duration`、`num_frames`、`steps` 和 `seed`。`reference_mappings` 使用 `type`、`index`、`node_id`、`input` 和 `required` 绑定参考素材，`index` 是按媒体类型从 1 开始的序号。`result_node_id` 必须指向包含 `filename_prefix` 输入的结果节点。
+自定义工作流的 `workflow_json` 必须是 ComfyUI API 格式。`field_mappings` 使用 `{字段: {"node_id": "节点 ID", "input": "输入名"}}`，支持 `prompt`、`lyrics`、`width`、`height`、`duration`、`num_frames`、`steps` 和 `seed`。`reference_mappings` 使用 `type`、`index`、`node_id`、`input` 和 `required` 绑定参考素材，`index` 是按媒体类型从 1 开始的序号；`input` 也可以填 `ref_images` / `ref_videos` / `ref_audios` 并附加 `"slot": true`，此时按 `index` 动态创建 `LoadImage` / `VHS_LoadVideo` / `LoadAudio` 节点并接到 `ref_image_N` / `ref_video_N` / `ref_audio_N` 上，参考素材数量不再受固定节点数量限制（同类素材可超过已声明的槽位数量）。`result_node_id` 必须指向包含 `filename_prefix` 输入的结果节点。
 
 创建任务时提交 `workflow_id`。服务保存工作流图、映射、版本和目标节点快照，任务执行使用该快照。自定义工作流只能调度到已同步且在线的目标 ComfyUI 节点；RunningHub 和互联代理继续使用原有接口。
 

@@ -148,6 +148,8 @@ curl -H "Authorization: Bearer $H3_API_KEY" "$BASE_URL/api/v1/comfy/nodes"
 
 `/api/v1/comfy/nodes` 返回节点配置和运行状态。节点提供方为 `comfyui` 或 `runninghub`。创建和修改节点需要管理员级别的服务访问权限，RunningHub 节点还需要 `api_key` 和 `workflow_url`。查询节点时不会返回密钥内容，只返回 `has_api_key`。
 
+开启设置中的实验性功能 `bind_local_comfyui` 后，本机 ComfyUI 节点可用 `POST /api/v1/comfy/nodes/{node_id}/local-comfy/start` 与 `/stop` 由服务托管启动和关闭，节点响应携带 `takeover` 和 `local_runtime`；节点编辑接口可传 `launch_path` 指定 ComfyUI 目录或 `main.py`。应用退出（含窗口关闭）时由 `LocalComfySupervisor.shutdown()` 结束本应用启动的进程，Windows 下另用 kill-on-close Job 对象兜底强制退出场景。详见 `docs/API.md` 的「本地 ComfyUI 接管（实验性）」。
+
 创建 ComfyUI 节点：
 
 ```bash
@@ -179,6 +181,8 @@ curl -X POST "$BASE_URL/api/v1/comfy/nodes" \
 在私密模式中创建的自定义工作流及 H3 NSFW · NaughtyTimes LoRA 预设仅对携带有效 `X-H3-Incognito-Code` 请求头的工作流接口可见或可操作。提交私密工作流任务还必须设置 `incognito=true`；普通模式不能提交或重新生成私密工作流任务。
 
 自定义工作流执行必须提交 `workflow_id`，并将 `comfy_node` 指定为已同步的目标 ComfyUI 节点，或使用 `auto` 让调度器从已同步且在线的目标节点中选择。运行任务使用创建时保存的工作流快照。省略 `workflow_id` 时继续使用 `model_variant` 与 `execution_mode` 的原有请求方式。
+
+自定义工作流的 `reference_mappings` 支持“槽位”绑定：把 `input` 写成 `ref_images`、`ref_videos` 或 `ref_audios` 并附加 `"slot": true`，引擎会按媒体类型和从 1 开始的 `index` 动态创建 `LoadImage`、`VHS_LoadVideo`、`LoadAudio` 节点并接到 `ref_image_N`、`ref_video_N`、`ref_audio_N` 上，因此参考素材数量不受固定节点数量限制。工作流导入、校验和同步失败的原始报错会同时写入「实时日志」（`GET /api/v1/logs`），不再占用工作流列表上方的提示位。
 
 ## 5. 创建生成任务
 

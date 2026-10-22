@@ -247,6 +247,7 @@ class LocalStateStore:
             "remote_disconnect_policy": self.get_setting(
                 "remote_disconnect_policy", "encrypt"
             ),
+            "bind_local_comfyui": self.get_setting("bind_local_comfyui", "0") == "1",
         }
         if include_secret:
             result["remote_records_key"] = self.get_setting("remote_records_key")
@@ -263,6 +264,7 @@ class LocalStateStore:
         exclude_runninghub_auto: bool | None = None,
         remote_disconnect_policy: str | None = None,
         remote_records_key: str | None = None,
+        bind_local_comfyui: bool | None = None,
     ) -> dict[str, Any]:
         bool_values = {
             "show_runtime_logs": show_runtime_logs,
@@ -271,6 +273,7 @@ class LocalStateStore:
             "auto_compress_large_images": auto_compress_large_images,
             "runninghub_enabled": runninghub_enabled,
             "exclude_runninghub_auto": exclude_runninghub_auto,
+            "bind_local_comfyui": bind_local_comfyui,
         }
         for key, value in bool_values.items():
             if value is not None:
