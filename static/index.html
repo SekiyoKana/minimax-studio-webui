@@ -24,9 +24,11 @@
       })();
     </script>
     <link rel="stylesheet" href="/assets/styles.css?v=57&rev=67">
-    <link rel="stylesheet" href="/assets/design.css?v=24">
+    <link rel="stylesheet" href="/assets/design.css?v=25">
     <link rel="stylesheet" href="/assets/skins/skins.css?v=7">
+    <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
+    <script src="/assets/dropdown.js?v=3" defer></script>
     <script src="/assets/app.js?v=80&rev=91&upscale=1" defer></script>
   </head>
   <body>
@@ -371,7 +373,7 @@
     <div class="asset-detail-layer asset-detail-modal" id="assetDetailModal" hidden aria-live="polite"></div>
     <div class="modal-overlay video-upscale-modal" id="videoUpscaleModal" hidden>
       <form class="settings-dialog video-upscale-dialog" id="videoUpscaleForm" role="dialog" aria-modal="true" aria-labelledby="videoUpscaleTitle">
-        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="expand"></i></span><div><h2 id="videoUpscaleTitle">视频超分</h2><p id="videoUpscaleSubtitle">选择超分类型与倍率；使用独立超分工作流，不改变当前选中的工作流。</p></div></div><button class="icon-button" id="closeVideoUpscale" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
+        <header class="settings-header"><div><span class="settings-mark"><i data-lucide="expand"></i></span><div><h2 id="videoUpscaleTitle">视频超分</h2><p id="videoUpscaleSubtitle">选择超分类型与倍率</p></div></div><button class="icon-button" id="closeVideoUpscale" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
         <div class="settings-body">
           <label id="videoUpscaleCategoryField">超分类型<select id="videoUpscaleCategory"><option value="real">真人</option><option value="anime">动画</option><option value="3d">3D</option></select></label>
           <label id="videoUpscaleScaleField">超分倍率<select id="videoUpscaleScale"><option value="2">2x</option><option value="4">4x</option></select></label>
@@ -533,7 +535,7 @@
           </section>
           <section class="settings-tab-panel" id="settingsPanelUpload" role="tabpanel" aria-labelledby="settingsTabUpload" data-settings-panel="upload" hidden>
             <label class="switch-row"><span>大尺寸图片自动压缩</span><input id="autoCompressLargeImages" type="checkbox"><span class="switch"></span></label>
-            <p class="settings-help">参考图片超过 1 MB 时在浏览器本地压缩后再上传。</p>
+            <p class="settings-help">参考图片超过 1 MB 时在本地压缩后再上传。</p>
           </section>
           <p class="settings-error" id="globalSettingsError" role="alert"></p>
           <div class="settings-actions settings-form-actions"><button class="primary" type="submit"><i data-lucide="save"></i><span>保存设置</span></button></div>

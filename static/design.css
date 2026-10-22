@@ -48,7 +48,7 @@ body {
 .library-heading span { font-size: var(--text-small); }
 
 .library-tools {
-  grid-template-columns: minmax(0, 1fr) 100px;
+  grid-template-columns: minmax(0, 1fr) 120px;
   gap: 8px;
   padding: 0 18px 16px;
 }
@@ -1048,3 +1048,6 @@ button { appearance: none; -webkit-appearance: none; }
   border-color: var(--line-strong);
   background: var(--fill-tertiary);
 }
+
+
+.library-tools select { font-size: var(--text-small); }
