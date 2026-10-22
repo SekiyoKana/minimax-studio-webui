@@ -328,6 +328,12 @@ function applyStaticLocale() {
   setText("#settingsTabAppearance", "Appearance");
   setText("#settingsTabSystem", "System");
   setText("#settingsTabUpload", "Upload");
+  setText("#videoUpscaleTitle", "Video upscale");
+  setText("#videoUpscaleSubtitle", "Choose the upscale type and scale. This runs an independent upscale workflow without changing your current selection.");
+  setLeadingText("#videoUpscaleCategoryField", "Upscale type");
+  setLeadingText("#videoUpscaleScaleField", "Upscale scale");
+  setText("#cancelVideoUpscale", "Cancel");
+  setText("#submitVideoUpscale span", "Start upscale");
   document.querySelector(".settings-tabs")?.setAttribute("aria-label", "Settings categories");
   setText("#settingsPanelUpload .switch-row > span:first-child", "Compress large reference images");
   setText("#settingsUploadHelp", "Images over 1 MB are compressed locally before upload.");
@@ -2640,12 +2646,12 @@ function canVideoUpscale(job) {
 function videoUpscaleAction(job) {
   if (!canVideoUpscale(job)) return "";
   const jobId = escapeHtml(job.id);
-  return `<button type="button" data-job-action="video-upscale" data-job-id="${jobId}" title="${t("videoUpscale")}" aria-label="${t("videoUpscale")}">${icon("scan-up")}</button>`;
+  return `<button type="button" data-job-action="video-upscale" data-job-id="${jobId}" title="${t("videoUpscale")}" aria-label="${t("videoUpscale")}">${icon("wand-sparkles")}</button>`;
 }
 
 function videoUpscaleMessageAction(job) {
   if (!canVideoUpscale(job)) return "";
-  return `<button type="button" data-job-action="video-upscale" data-job-id="${escapeHtml(job.id)}">${icon("scan-up")}<span>${t("videoUpscale")}</span></button>`;
+  return `<button type="button" data-job-action="video-upscale" data-job-id="${escapeHtml(job.id)}">${icon("wand-sparkles")}<span>${t("videoUpscale")}</span></button>`;
 }
 
 function assetAction(job) {
@@ -3454,11 +3460,34 @@ async function useGeneratedOutputAsInput(jobId) {
   if (detailOpen) closeAssetDetail(detailRecord.id);
 }
 
-async function startVideoUpscaleFromJob(jobId) {
-  const detailRecord = activeAssetDetailRecord();
-  const detailOpen = Boolean(detailRecord);
-  const target = detailOpen ? detailElement(detailRecord, "assetDetailError") : el("formError");
-  target.textContent = t("fillLoading");
+function openVideoUpscaleDialog(jobId) {
+  const form = el("videoUpscaleForm");
+  form.dataset.jobId = jobId;
+  el("videoUpscaleCategory").value = "real";
+  el("videoUpscaleScale").value = "2";
+  el("videoUpscaleError").textContent = "";
+  el("videoUpscaleModal").hidden = false;
+  document.body.classList.add("modal-open");
+  refreshIcons();
+  setTimeout(() => el("videoUpscaleCategory")?.focus(), 0);
+}
+
+function closeVideoUpscaleDialog() {
+  el("videoUpscaleModal").hidden = true;
+  el("videoUpscaleForm").dataset.jobId = "";
+  if (document.activeElement?.closest("#videoUpscaleModal")) document.activeElement.blur();
+  if (el("assetDetailModal").hidden) document.body.classList.remove("modal-open");
+}
+
+async function submitVideoUpscale(event) {
+  event.preventDefault();
+  const form = el("videoUpscaleForm");
+  const jobId = form.dataset.jobId;
+  if (!jobId) return;
+  const errorTarget = el("videoUpscaleError");
+  const button = el("submitVideoUpscale");
+  errorTarget.textContent = "";
+  button.disabled = true;
   try {
     const job = await fetchAssetDetail(jobId);
     if (!canVideoUpscale(job)) throw new Error(t("outputUnavailable"));
@@ -3467,17 +3496,39 @@ async function startVideoUpscaleFromJob(jobId) {
     const blob = await response.blob();
     const basename = String(job.title || job.id).replace(/[^\w\u4e00-\u9fff.-]+/g, "_").slice(0, 64) || job.id;
     const file = new File([blob], `${basename}.mp4`, { type: blob.type || "video/mp4" });
-    resetComposer();
-    el("executionMode").value = "video-upscale";
-    el("upscaleCategory").value = "real";
-    el("upscaleScale").value = "2";
-    updateModelUi();
-    if (!(await addFiles([file]))) throw new Error(el("formError").textContent || t("outputUnavailable"));
-    updateModelUi();
-    target.textContent = "";
-    if (detailOpen) closeAssetDetail(detailRecord.id);
+    const request = job.request || {};
+    const category = el("videoUpscaleCategory").value;
+    const scale = Number(el("videoUpscaleScale").value) === 4 ? 4 : 2;
+    const data = new FormData();
+    data.append("prompt", "");
+    data.append("lyrics", "");
+    data.append("width", String(request.width || 864));
+    data.append("height", String(request.height || 480));
+    data.append("duration", String(request.duration || 5));
+    data.append("steps", "1");
+    data.append("seed", "");
+    data.append("model_variant", "fl2va-fp8");
+    data.append("execution_mode", "native");
+    data.append("workflow_id", "preset-upscale-video");
+    data.append("task_type", "upscale");
+    data.append("upscale_category", category);
+    data.append("upscale_scale", String(scale));
+    data.append("auto_upscale", "false");
+    data.append("comfy_node", "auto");
+    if (job.folder_id) data.append("folder_id", job.folder_id);
+    data.append("incognito", state.incognito ? "true" : "false");
+    data.append("reference_manifest", JSON.stringify([{ type: "video" }]));
+    data.append("references", file, file.name);
+    const headers = state.incognito ? { "X-H3-Incognito-Code": state.incognitoCode } : {};
+    const created = await api("/api/v1/generations", { method: "POST", headers, body: data });
+    applyJobUpsert(created);
+    closeVideoUpscaleDialog();
+    showToast(`${t("videoUpscale")} · ${localized("任务已提交", "job submitted")}`);
+    el("conversationFeed").scrollTop = el("conversationFeed").scrollHeight;
   } catch (error) {
-    target.textContent = error.message;
+    errorTarget.textContent = error.message;
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -3707,7 +3758,7 @@ async function regenerateJob(jobId) {
 async function handleJobAction(action, jobId) {
   if (action === "reuse") return backfillJob(jobId);
   if (action === "input") return useGeneratedOutputAsInput(jobId).catch((error) => showError(error.message));
-  if (action === "video-upscale") return startVideoUpscaleFromJob(jobId);
+  if (action === "video-upscale") return openVideoUpscaleDialog(jobId);
   if (action === "regenerate") return regenerateJob(jobId);
   if (action === "edit") return startEdit(jobId);
   if (action === "cancel") return cancelJob(jobId);
@@ -5094,7 +5145,7 @@ el("assetDetailModal").addEventListener("click", (event) => {
   const jobId = record.job.id;
   if (action.dataset.detailAction === "reuse") backfillJob(jobId);
   if (action.dataset.detailAction === "input") useGeneratedOutputAsInput(jobId).catch((error) => { detailElement(record, "assetDetailError").textContent = error.message; });
-  if (action.dataset.detailAction === "video-upscale") startVideoUpscaleFromJob(jobId);
+  if (action.dataset.detailAction === "video-upscale") openVideoUpscaleDialog(jobId);
   if (action.dataset.detailAction === "regenerate") regenerateJob(jobId);
   if (action.dataset.detailAction === "rename") renameJobOutput(jobId);
   if (action.dataset.detailAction === "delete") deleteJob(jobId).then((deleted) => {
@@ -5313,6 +5364,12 @@ el("autoUpscaleConfirmForm").addEventListener("submit", (event) => {
   el("upscaleScale").value = el("autoUpscaleConfirmScale").value;
   closeAutoUpscaleConfirm(true);
 });
+el("closeVideoUpscale").addEventListener("click", closeVideoUpscaleDialog);
+el("cancelVideoUpscale").addEventListener("click", closeVideoUpscaleDialog);
+el("videoUpscaleModal").addEventListener("click", (event) => {
+  if (event.target === el("videoUpscaleModal")) closeVideoUpscaleDialog();
+});
+el("videoUpscaleForm").addEventListener("submit", submitVideoUpscale);
 el("duration").closest(".duration-control").addEventListener("mouseenter", positionDurationTooltip);
 el("duration").closest(".duration-control").addEventListener("focusin", positionDurationTooltip);
 
@@ -5407,6 +5464,10 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "Escape" && !el("localAssetPreviewModal").hidden) {
     closeLocalAssetPreview();
+    return;
+  }
+  if (event.key === "Escape" && !el("videoUpscaleModal").hidden) {
+    closeVideoUpscaleDialog();
     return;
   }
   if (event.key === "Escape" && !el("secretOverlay").hidden) closeSecretDialog();

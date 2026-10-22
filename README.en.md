@@ -124,6 +124,12 @@ Persistent data is stored under `data/`:
 
 ## Update log
 
+### 2026-10-22: Standalone video upscale entry
+
+- Added an icon to the video upscale action and replaced the composer hand-off with a type/scale dialog.
+- Confirming submits an independent upscale job without switching or resetting the current workflow, composer or references.
+- Supports real, anime and 3D sources at 2x or 4x, and keeps the source job's folder.
+
 ### 2026-10-22: Light / Dark / System appearance
 
 - Replaced the skin list with three appearance modes: Light, Dark and System.
