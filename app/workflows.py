@@ -329,6 +329,13 @@ class WorkflowRegistry:
                         preset["id"],
                     ),
                 )
+                # Older databases may have been seeded while a workflow file was
+                # missing. Fill only empty preset graphs; never overwrite data.
+                connection.execute(
+                    "UPDATE workflow_configs SET workflow_json = ?, updated_at = ? "
+                    "WHERE id = ? AND source = 'preset' AND (workflow_json = '' OR workflow_json = '{}')",
+                    (serialize_json(workflow), now, preset["id"]),
+                )
 
     @staticmethod
     def _decode(row: sqlite3.Row) -> dict[str, Any]:

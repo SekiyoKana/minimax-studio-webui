@@ -187,6 +187,7 @@ flowchart LR
 - 槽位映射不再受已配置序号限制，按官方模型上限区分媒体类型：图片最多 9 张、视频 3 段、音频 3 段；新增映射行会自动选择下一个未占用序号，切换素材类型时也会重新选择。
 - 自定义工作流字段映射新增 `ratio` 与 `megapixels`：可把画面比例和 MP 直接映射到节点，编辑器按映射显示比例/分辨率控件；FL2VA 等内部按 ratio + MP 决定分辨率的图可直接使用。
 - 自定义工作流不再沿用 Music3 的歌词占位提示、优化歌词按钮以及固定 30 步/音乐时长等控件提示。
+- 内置工作流改为数据库驱动：首次创建 `data/config.db` 时从 `workflows/` 写入预设，引擎运行时读取数据库，不再读取 `H3_COMFY_*_WORKFLOW` 环境变量。
 - 工作流导入、校验、同步的报错改由右侧「运行日志」弹框展示并记录原始错误，工作流列表不再被提示文本挤占。
 - 推理节点列表的本机 ComfyUI 标签区分状态：未运行显示黄色的「可接管」，托管服务运行后变为绿色的「已接管」。
 - 修复新增工作流同步失败：ComfyUI 的 `/userdata/{file}` 只匹配单段路径，同步改为把目录分隔符编码成 `%2F` 写入 `workflows/`，不再返回 405。
@@ -467,7 +468,7 @@ API 格式工作流位于 [`workflows/`](workflows/)，固定版本节点包和 
 - `minimax_h3_ref2va_fp8_tts_api.json`
 - `minimax_music3_int8_api.json`
 
-服务提交前会注入提示词、参考文件、分辨率、帧数、步数、随机种子、文件夹名称前缀和输出路径。
+服务首次创建 `data/config.db` 时会把 `workflows/` 下的内置预设写入 `workflow_configs`，运行时直接读取数据库；这些工作流不再通过 `H3_COMFY_*_WORKFLOW` 环境变量声明，旧的 `.env` 配置可以删除。服务提交前会注入提示词、参考文件、分辨率、帧数、步数、随机种子、文件夹名称前缀和输出路径。
 
 Linux 和 Windows PC 使用同一套安装逻辑及配套资源包。Linux 使用 Python 安装脚本和资源 ZIP；Windows 使用 PowerShell 脚本和资源 ZIP，BAT 文件提供双击入口。运行后输入目标 ComfyUI 目录，无需将安装文件迁移到目标目录。安装器会检查目标路径，复用有效的 ComfyUI 安装，或在空目录/新目录中安装 ComfyUI 本体，然后自动导入资源并下载匹配显存的模型。节点包、工作流、补丁和 Windows 所需的 Python 安装核心均在 ZIP 中，不会从 GitHub 下载安装脚本或项目资源。模型权重、PyTorch 和 Python 依赖仍需联网下载；安装器会测速 ModelScope、Hugging Face 和 HF-Mirror 后选择下载源。详见 [Agent ComfyUI 安装指南](AGENT_HOW_TO_INSTALL.md)。
 

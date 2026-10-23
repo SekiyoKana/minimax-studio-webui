@@ -27,6 +27,19 @@ def sample_workflow():
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_engine_loads_preset_from_database_before_files(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            settings = Settings(root=root, comfy_workflow=root / "missing.json")
+            registry = WorkflowRegistry(
+                root / "data" / "config.db",
+                Path(__file__).resolve().parents[1] / "workflows",
+            )
+            engine = ComfyUIH3Engine(settings, workflow_registry=registry)
+            workflow = engine._load_workflow("fl2va-fp8", "native")
+            self.assertIn("92", workflow)
+            self.assertEqual(workflow, registry.get("preset-fl2va-native")["workflow_json"])
+
     def test_slot_reference_limits_follow_media_type(self):
         workflow = {
             "reference_mappings": [

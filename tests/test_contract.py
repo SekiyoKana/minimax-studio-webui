@@ -1510,10 +1510,10 @@ class ContractTests(unittest.TestCase):
         self.assertIn('accelerated ? "8"', app_js)
         self.assertIn('music3 || accelerated || digitalHuman || h3Sa', app_js)
         self.assertIn('selectedExecutionMode() === "turbo-lora" || isH3SA() ? 8', app_js)
-        self.assertIn("H3_COMFY_TURBO_WORKFLOW", deployment)
-        self.assertIn("H3_COMFY_REF2VA_TURBO_WORKFLOW", deployment)
-        self.assertIn("H3_COMFY_SA_WORKFLOW", deployment)
-        self.assertIn("H3_COMFY_REF2VA_SA_WORKFLOW", deployment)
+        self.assertNotIn("H3_COMFY_TURBO_WORKFLOW", deployment)
+        self.assertNotIn("H3_COMFY_REF2VA_TURBO_WORKFLOW", deployment)
+        self.assertNotIn("H3_COMFY_SA_WORKFLOW", deployment)
+        self.assertNotIn("H3_COMFY_REF2VA_SA_WORKFLOW", deployment)
 
     def test_digital_human_frontend_contract(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -1531,7 +1531,7 @@ class ContractTests(unittest.TestCase):
         self.assertIn('class="control-tooltip"', index)
         self.assertIn('el("durationHint").hidden = !digitalHuman;', app_js)
         self.assertIn('music3 || accelerated || digitalHuman || h3Sa', app_js)
-        self.assertIn("H3_COMFY_DIGITAL_HUMAN_WORKFLOW", environment)
+        self.assertNotIn("H3_COMFY_DIGITAL_HUMAN_WORKFLOW", environment)
 
     def test_tts_frontend_and_prompt_contract(self):
         project_root = Path(__file__).resolve().parents[1]

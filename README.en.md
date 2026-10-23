@@ -187,6 +187,7 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 - Slot mappings are no longer capped by configured indexes; per-media official limits apply (9 images, 3 videos, 3 audio clips). New mapping rows pick the next unused index and re-pick when the media type changes.
 - Custom workflow field mappings now support `ratio` and `megapixels`, so graphs that derive resolution from aspect ratio + MP can map them directly; the composer shows the ratio/resolution controls accordingly.
 - Custom workflows no longer reuse Music3's lyrics placeholder, optimize-lyrics action, or fixed 30-step/music-duration hints.
+- Built-in workflows are database-driven: `workflows/` files seed presets into `data/config.db` on first start, and the engine reads the database instead of `H3_COMFY_*_WORKFLOW` environment variables.
 - Workflow import, validation and sync errors now appear in the run log dialog with the original upstream error, so the workflow grid is no longer pushed down by hint text.
 - Local ComfyUI badges in the node list now show state: a yellow "Manageable" while the service is stopped, and a green "Managed" once the supervised service is running.
 - Fixed workflow sync failing with HTTP 405: ComfyUI's `/userdata/{file}` route matches a single path segment, so the sync call now percent-encodes the directory separator (`%2F`) when writing into `workflows/`.

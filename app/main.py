@@ -64,7 +64,7 @@ workflow_registry = WorkflowRegistry(
 )
 manager = JobManager(
     store,
-    lambda node: create_engine(settings, node),
+    lambda node: create_engine(settings, node, workflow_registry=workflow_registry),
     nodes=node_registry.configs(),
     health_probe=(
         probe_node

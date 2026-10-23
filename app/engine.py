@@ -382,8 +382,14 @@ class ComfyUIH3Engine:
         "92": (97, "保存 MP4 产物"),
     }
 
-    def __init__(self, settings: Settings, node: ComfyNodeConfig | None = None):
+    def __init__(
+        self,
+        settings: Settings,
+        node: ComfyNodeConfig | None = None,
+        workflow_registry: Any | None = None,
+    ):
         self.settings = settings
+        self.workflow_registry = workflow_registry
         self.node = node or ComfyNodeConfig("default", settings.gpu_label, settings.comfy_url)
         self.comfy_url = self.node.url.rstrip("/")
         self.api_headers = (
@@ -421,9 +427,15 @@ class ComfyUIH3Engine:
             workflow_path = workflow_paths[(variant, execution_mode)]
         except KeyError as exc:
             raise ValueError(f"不支持的执行方案：{variant}/{execution_mode}") from exc
-        if not workflow_path.exists():
-            raise FileNotFoundError(f"ComfyUI 工作流不存在：{workflow_path}")
-        workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+        workflow = None
+        if self.workflow_registry is not None:
+            preset = self.workflow_registry.preset_for(variant, execution_mode, "generation")
+            if preset and isinstance(preset.get("workflow_json"), dict) and preset["workflow_json"]:
+                workflow = deepcopy(preset["workflow_json"])
+        if workflow is None:
+            if not workflow_path.exists():
+                raise FileNotFoundError(f"ComfyUI 工作流不存在：{workflow_path}")
+            workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
         if variant == "music3-int8":
             required = {"3", "6", "7", "9", "10", "13", "15", "42", "92"}
             missing = sorted(required.difference(workflow))
@@ -1712,9 +1724,16 @@ class ComfyUIUpscaleEngine(ComfyUIH3Engine):
             if media_type == "video"
             else self.settings.comfy_upscale_image_workflow
         )
-        if not workflow_path.exists():
-            raise FileNotFoundError(f"ComfyUI 超分工作流不存在：{workflow_path}")
-        workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+        workflow = None
+        if self.workflow_registry is not None:
+            preset_id = "preset-upscale-video" if media_type == "video" else "preset-upscale-image"
+            preset = self.workflow_registry.get(preset_id)
+            if preset and isinstance(preset.get("workflow_json"), dict) and preset["workflow_json"]:
+                workflow = deepcopy(preset["workflow_json"])
+        if workflow is None:
+            if not workflow_path.exists():
+                raise FileNotFoundError(f"ComfyUI 超分工作流不存在：{workflow_path}")
+            workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
         model_name, post_scale = self.model_spec(
             str(request.get("upscale_category") or "real"),
             int(request.get("upscale_scale") or 2),
@@ -3029,7 +3048,11 @@ def probe_node(node: ComfyNodeConfig) -> dict[str, Any] | None:
     return None
 
 
-def create_engine(settings: Settings, node: ComfyNodeConfig | None = None):
+def create_engine(
+    settings: Settings,
+    node: ComfyNodeConfig | None = None,
+    workflow_registry: Any | None = None,
+):
     if settings.fake_engine:
         return FakeEngine(settings)
     if node and node.provider == "runninghub":
@@ -3037,5 +3060,5 @@ def create_engine(settings: Settings, node: ComfyNodeConfig | None = None):
     if settings.engine_backend == "sglang":
         return SGLangH3Engine(settings)
     if settings.engine_backend == "comfyui":
-        return ComfyUIH3Engine(settings, node)
+        return ComfyUIH3Engine(settings, node, workflow_registry=workflow_registry)
     return MiniMaxH3Engine(settings)

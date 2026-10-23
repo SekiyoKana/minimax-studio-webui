@@ -26,96 +26,21 @@ class Settings:
     default_comfy_url: str = os.getenv("H3_DEFAULT_COMFY_URL", comfy_url)
     default_comfy_name: str = os.getenv("H3_DEFAULT_COMFY_NAME", "Local ComfyUI")
     default_comfy_api_key: str = os.getenv("H3_DEFAULT_COMFY_API_KEY", "")
-    comfy_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_fl2va_fp8_720p_15s_api.json"),
-        )
-    )
-    comfy_ref2va_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_REF2VA_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_scaled_api.json"),
-        )
-    )
-    comfy_turbo_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_TURBO_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_fl2va_fp8_turbo_lora_api.json"),
-        )
-    )
-    comfy_ref2va_turbo_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_REF2VA_TURBO_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_turbo_lora_api.json"),
-        )
-    )
-    comfy_nsfw_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_NSFW_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_nsfw_lora_api.json"),
-        )
-    )
-    comfy_digital_human_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_DIGITAL_HUMAN_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_digital_human_api.json"),
-        )
-    )
-    comfy_tts_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_TTS_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_tts_api.json"),
-        )
-    )
-    comfy_music3_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_MUSIC3_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "minimax_music3_int8_api.json"),
-        )
-    )
-    comfy_dual_sampling_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_DUAL_SAMPLING_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json"),
-        )
-    )
-    comfy_sa_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_SA_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_fl2va_fp8_sa_api.json"),
-        )
-    )
-    comfy_ref2va_sa_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_REF2VA_SA_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_sa_api.json"),
-        )
-    )
-    comfy_vdn_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_VDN_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_fl2va_vdn_api.json"),
-        )
-    )
-    comfy_ref2va_vdn_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_REF2VA_VDN_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_vdn_api.json"),
-        )
-    )
-    comfy_upscale_image_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_UPSCALE_IMAGE_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "comfy_upscale_image_api.json"),
-        )
-    )
-    comfy_upscale_video_workflow: Path = Path(
-        os.getenv(
-            "H3_COMFY_UPSCALE_VIDEO_WORKFLOW",
-            str(DEFAULT_WORKFLOW_ROOT / "comfy_upscale_video_api.json"),
-        )
-    )
+    comfy_workflow: Path = DEFAULT_WORKFLOW_ROOT / "minimax_h3_fl2va_fp8_720p_15s_api.json"
+    comfy_ref2va_workflow: Path = DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_scaled_api.json"
+    comfy_turbo_workflow: Path = DEFAULT_WORKFLOW_ROOT / "minimax_h3_fl2va_fp8_turbo_lora_api.json"
+    comfy_ref2va_turbo_workflow: Path = DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_turbo_lora_api.json"
+    comfy_nsfw_workflow: Path = DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_nsfw_lora_api.json"
+    comfy_digital_human_workflow: Path = DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_digital_human_api.json"
+    comfy_tts_workflow: Path = DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_tts_api.json"
+    comfy_music3_workflow: Path = DEFAULT_WORKFLOW_ROOT / "minimax_music3_int8_api.json"
+    comfy_dual_sampling_workflow: Path = DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json"
+    comfy_sa_workflow: Path = DEFAULT_WORKFLOW_ROOT / "minimax_h3_fl2va_fp8_sa_api.json"
+    comfy_ref2va_sa_workflow: Path = DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_fp8_sa_api.json"
+    comfy_vdn_workflow: Path = DEFAULT_WORKFLOW_ROOT / "minimax_h3_fl2va_vdn_api.json"
+    comfy_ref2va_vdn_workflow: Path = DEFAULT_WORKFLOW_ROOT / "minimax_h3_ref2va_vdn_api.json"
+    comfy_upscale_image_workflow: Path = DEFAULT_WORKFLOW_ROOT / "comfy_upscale_image_api.json"
+    comfy_upscale_video_workflow: Path = DEFAULT_WORKFLOW_ROOT / "comfy_upscale_video_api.json"
     comfy_output_dir: Path = Path(
         os.getenv("H3_COMFY_OUTPUT_DIR", str(DEFAULT_COMFY_ROOT / "output"))
     )
