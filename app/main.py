@@ -47,7 +47,7 @@ ExecutionMode = Literal["native", "turbo-lora", "dual-sampling", "h3-sa", "vdn-h
 ModelVariant = Literal["fl2va-fp8", "ref2va-fp8", "music3-int8"]
 TaskType = Literal["generation", "upscale"]
 UpscaleCategory = Literal["real", "anime", "3d"]
-APP_VERSION = "6.0.0"
+APP_VERSION = "1.0.0"
 UpscaleScale = int
 
 
