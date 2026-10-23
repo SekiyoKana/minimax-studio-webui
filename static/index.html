@@ -23,7 +23,7 @@
         document.documentElement.dataset.theme = mode;
       })();
     </script>
-    <link rel="stylesheet" href="/assets/styles.css?v=65&rev=75">
+    <link rel="stylesheet" href="/assets/styles.css?v=66&rev=76">
     <link rel="stylesheet" href="/assets/design.css?v=51">
     <link rel="stylesheet" href="/assets/skins/skins.css?v=8">
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
@@ -597,9 +597,14 @@
     <div class="modal-overlay local-assets-modal" id="localAssetsModal" hidden>
       <section class="local-assets-dialog" role="dialog" aria-modal="true" aria-labelledby="localAssetsTitle">
         <header class="settings-header"><div><span class="settings-mark"><i data-lucide="folder-cog"></i></span><div><h2 id="localAssetsTitle">管理本地素材</h2><p id="localAssetsSubtitle">删除产物文件，保留任务与工作流记录</p></div></div><button class="icon-button" id="closeLocalAssets" type="button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
-        <div class="local-assets-toolbar"><label><input id="localAssetsSelectAll" type="checkbox"><span id="localAssetsSelectAllLabel">全选已加载素材</span></label><span id="localAssetsCount">0 项</span><span id="localAssetsSize">0 B</span><button type="button" id="clearOldVideos" title="清除 30 天前视频素材"><i data-lucide="calendar-minus"></i><span>清除 30 天前视频</span></button></div>
+        <div class="local-assets-toolbar">
+          <label><input id="localAssetsSelectAll" type="checkbox"><span id="localAssetsSelectAllLabel">全选已加载素材</span></label>
+          <span class="local-assets-stat" id="localAssetsCount">0 项</span>
+          <span class="local-assets-stat" id="localAssetsSize">0 B</span>
+          <div class="local-assets-actions"><button class="danger" id="deleteLocalArtifacts" type="button"><i data-lucide="trash-2"></i><span id="deleteLocalArtifactsLabel">删除选中产物</span></button><button type="button" id="clearOldVideos" title="清除 30 天前视频素材"><i data-lucide="calendar-minus"></i><span>清除 30 天前视频</span></button></div>
+        </div>
+        <p class="local-assets-error" id="localAssetsError" role="alert"></p>
         <div class="local-assets-grid" id="localAssetsList" tabindex="0"></div>
-        <footer class="local-assets-footer"><p id="localAssetsError" role="alert"></p><button class="danger" id="deleteLocalArtifacts" type="button"><i data-lucide="trash-2"></i><span id="deleteLocalArtifactsLabel">删除选中产物</span></button></footer>
       </section>
     </div>
 
