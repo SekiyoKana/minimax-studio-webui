@@ -214,6 +214,9 @@ def _translate_pattern(message: str) -> str | None:
     match = re.fullmatch(r"请上传第 ([0-9]+) 个 (\w+) 参考素材", message)
     if match:
         return f"Upload reference {_kind(match.group(2))} #{match.group(1)}"
+    match = re.fullmatch(r"请添加至少 1 个 (\w+) 参考素材", message)
+    if match:
+        return f"Add at least one {_kind(match.group(1))} reference"
     match = re.fullmatch(r"远程产物下载失败：(.+)", message)
     if match:
         return f"Failed to download the remote output: {match.group(1)}"

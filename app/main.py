@@ -2669,8 +2669,18 @@ def validate_custom_reference_mappings(workflow: dict[str, Any], kinds: list[str
         if index <= counts.get(kind, 0):
             continue
         binding = mappings[(kind, index)]
-        if binding.get("required", True):
-            raise HTTPException(status_code=422, detail=f"请上传第 {index} 个 {kind} 参考素材")
+        if not binding.get("required", True):
+            continue
+        # Slot bindings cover the whole family; one file of that kind is
+        # enough even when the binding index is greater than one.
+        if binding.get("slot") and counts.get(kind, 0) >= 1:
+            continue
+        message = (
+            f"请添加至少 1 个 {kind} 参考素材"
+            if binding.get("slot")
+            else f"请上传第 {index} 个 {kind} 参考素材"
+        )
+        raise HTTPException(status_code=422, detail=message)
     for kind, count in counts.items():
         for index in range(1, count + 1):
             if (kind, index) in mappings or kind in slot_kinds:

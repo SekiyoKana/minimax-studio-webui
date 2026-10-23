@@ -24,12 +24,12 @@
       })();
     </script>
     <link rel="stylesheet" href="/assets/styles.css?v=60&rev=70">
-    <link rel="stylesheet" href="/assets/design.css?v=41">
+    <link rel="stylesheet" href="/assets/design.css?v=42">
     <link rel="stylesheet" href="/assets/skins/skins.css?v=8">
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
     <script src="/assets/dropdown.js?v=4" defer></script>
-    <script src="/assets/app.js?v=98&rev=110&upscale=1" defer></script>
+    <script src="/assets/app.js?v=99&rev=111&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -360,6 +360,7 @@
             </section>
             <section class="workflow-config-section">
               <div class="workflow-config-heading"><h4>参考素材映射</h4><button class="icon-button" id="addWorkflowReferenceMapping" type="button" title="添加参考素材映射" aria-label="添加参考素材映射"><i data-lucide="plus"></i></button></div>
+              <p class="workflow-config-hint" id="workflowReferenceHint">使用 ref_images / ref_videos / ref_audios 槽位映射时，可为每份素材自动创建加载节点，支持任意数量。</p>
               <div class="workflow-mapping-list" id="workflowReferenceMappings"></div>
             </section>
             <label for="workflowStaticInputs">静态输入 JSON</label>

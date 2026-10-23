@@ -184,6 +184,7 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 
 - Asset clicks became dialog previews: reference thumbnails, message asset cards and the source file list no longer download or navigate. Images render, videos get a player, audio shows "file name + player", unknown files show an unknown-file icon; downloading stays on the explicit Download button.
 - Custom workflows accept a variable number of images, videos and audio clips: reference mappings can bind `ref_images` / `ref_videos` / `ref_audios` slots, the engine creates loader nodes by index, and the editor detects available slots after selecting a workflow.
+- Slot mappings are no longer capped by configured indexes (up to 15 per type); new mapping rows pick the next unused index and re-pick when the media type changes.
 - Workflow import, validation and sync errors now appear in the run log dialog with the original upstream error, so the workflow grid is no longer pushed down by hint text.
 - Local ComfyUI badges in the node list now show state: a yellow "Manageable" while the service is stopped, and a green "Managed" once the supervised service is running.
 - Fixed workflow sync failing with HTTP 405: ComfyUI's `/userdata/{file}` route matches a single path segment, so the sync call now percent-encodes the directory separator (`%2F`) when writing into `workflows/`.

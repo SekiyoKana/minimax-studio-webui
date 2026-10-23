@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
+from fastapi import HTTPException
 
 import app.main as main_module
 from app.engine import ComfyUIH3Engine
@@ -26,6 +27,17 @@ def sample_workflow():
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_slot_binding_requires_one_file_per_family(self):
+        workflow = {
+            "reference_mappings": [
+                {"type": "image", "index": 3, "node_id": "44", "input": "ref_images", "slot": True, "required": True}
+            ]
+        }
+        main_module.validate_custom_reference_mappings(workflow, ["image"])
+        with self.assertRaises(HTTPException) as ctx:
+            main_module.validate_custom_reference_mappings(workflow, [])
+        self.assertIn("至少 1 个 image", str(ctx.exception.detail))
+
     def test_mapping_validation_rejects_connected_inputs_and_accepts_static_values(self):
         graph = sample_workflow()
         config = validate_workflow_config(

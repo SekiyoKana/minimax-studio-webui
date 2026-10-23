@@ -437,6 +437,7 @@ function applyStaticLocale() {
   setText('label[for="workflowJsonFile"]', "API workflow JSON");
   setText(".workflow-config-section:first-of-type h4", "Common field mappings");
   setText(".workflow-config-section:nth-of-type(2) h4", "Reference mappings");
+  setText("#workflowReferenceHint", "Use ref_images / ref_videos / ref_audios slot mappings to create a loader for every file, with no fixed count.");
   setText('label[for="workflowStaticInputs"]', "Static inputs JSON");
   setText('label[for="workflowResultNode"]', "Result node");
   setText('label[for="workflowMediaType"]', "Media type");
@@ -1390,10 +1391,14 @@ function referenceSlotLabel(family) {
 function autoFillWorkflowReferenceMappings() {
   if (el("workflowReferenceMappings").children.length) return 0;
   const rows = [];
+  const seenFamilies = new Set();
   workflowSlotTargets(state.workflowDraftJson).forEach((slot) => {
-    slot.indexes.forEach((index) => {
-      rows.push({ type: slot.kind, index, node_id: slot.nodeId, input: slot.family, slot: true, required: true });
-    });
+    // One slot binding is enough for the whole family: the engine creates a
+    // loader per uploaded file and only needs the family target once.
+    const familyKey = `${slot.nodeId}:${slot.family}`;
+    if (seenFamilies.has(familyKey)) return;
+    seenFamilies.add(familyKey);
+    rows.push({ type: slot.kind, index: 1, node_id: slot.nodeId, input: slot.family, slot: true, required: true });
   });
   if (!rows.length) return 0;
   el("workflowReferenceMappings").replaceChildren(...rows.map((row) => renderWorkflowReferenceMapping(row)));
@@ -1453,16 +1458,34 @@ function defaultReferenceNodeId() {
   return keys.find((key) => /Reference/i.test(String(graph[key]?.class_type || ""))) || keys[0] || "";
 }
 
+function nextReferenceIndex(type, excludeRow = null) {
+  const used = new Set(
+    Array.from(el("workflowReferenceMappings").children).filter((row) => row !== excludeRow).map((row) => {
+      const rowType = row.querySelector("[data-ref-type]")?.value || "image";
+      const rowIndex = Number(row.querySelector("[data-ref-index]")?.value || 0);
+      return `${rowType}:${rowIndex}`;
+    }),
+  );
+  let index = 1;
+  while (used.has(`${type}:${index}`)) index += 1;
+  return index;
+}
+
 function renderWorkflowReferenceMapping(mapping = {}) {
   const nodeId = mapping.node_id || defaultReferenceNodeId();
   const row = document.createElement("div");
   row.className = "workflow-mapping-row reference-row";
   const type = mapping.type || "image";
   const typeOptions = ["image", "video", "audio"].map((value) => `<option value="${value}"${type === value ? " selected" : ""}>${value}</option>`).join("");
-  row.innerHTML = `<select data-ref-type aria-label="${localized("素材类型", "Reference type")}">${typeOptions}</select><input data-ref-index type="number" min="1" max="15" value="${Number(mapping.index || 1)}" aria-label="${localized("同类型序号", "Reference index")}">${workflowNodeSelect(state.workflowDraftJson, nodeId, "workflow-node-select")}<select data-workflow-input aria-label="${localized("节点输入", "Node input")}"></select><label class="workflow-required-option"><input data-ref-required type="checkbox"${mapping.required === false ? "" : " checked"}><span>${localized("必需", "Required")}</span></label><button type="button" data-remove-mapping title="${localized("移除映射", "Remove mapping")}" aria-label="${localized("移除映射", "Remove mapping")}">${icon("trash-2")}</button>`;
+  const index = mapping.index || nextReferenceIndex(type);
+  row.innerHTML = `<select data-ref-type aria-label="${localized("素材类型", "Reference type")}">${typeOptions}</select><input data-ref-index type="number" min="1" max="15" value="${Number(index)}" aria-label="${localized("同类型序号", "Reference index")}">${workflowNodeSelect(state.workflowDraftJson, nodeId, "workflow-node-select")}<select data-workflow-input aria-label="${localized("节点输入", "Node input")}"></select><label class="workflow-required-option"><input data-ref-required type="checkbox"${mapping.required === false ? "" : " checked"}><span>${localized("必需", "Required")}</span></label><button type="button" data-remove-mapping title="${localized("移除映射", "Remove mapping")}" aria-label="${localized("移除映射", "Remove mapping")}">${icon("trash-2")}</button>`;
   row.querySelector(".workflow-node-select").dataset.workflowNode = "";
   row.querySelector(".workflow-node-select").classList.remove("workflow-node-select");
   row.querySelector("[data-workflow-node]").addEventListener("change", () => updateWorkflowMappingInputOptions(row, { reference: true }));
+  row.querySelector("[data-ref-type]").addEventListener("change", (event) => {
+    const indexInput = row.querySelector("[data-ref-index]");
+    if (indexInput) indexInput.value = String(nextReferenceIndex(event.target.value, row));
+  });
   row.querySelector("[data-remove-mapping]").addEventListener("click", () => {
     row.remove();
     autoFillWorkflowReferenceMappings();
@@ -2090,9 +2113,14 @@ function referenceLimits(variant = selectedVariant()) {
   const workflow = selectedWorkflowRecord();
   if (workflow?.source === "custom") {
     const limits = { image: 0, video: 0, audio: 0 };
-    (workflow.reference_mappings || []).forEach((mapping) => {
+    const mappings = workflow.reference_mappings || [];
+    const slotKinds = new Set(mappings.filter((mapping) => mapping.slot).map((mapping) => mapping.type));
+    mappings.forEach((mapping) => {
       limits[mapping.type] = Math.max(limits[mapping.type] || 0, Number(mapping.index) || 0);
     });
+    // A slot family materialises loaders on demand, so one binding can take
+    // any number of files up to the per-type limit supported by the backend.
+    slotKinds.forEach((kind) => { limits[kind] = 15; });
     return limits;
   }
   if (isMusic3(variant)) return { image: 0, video: 0, audio: 0 };
@@ -2157,14 +2185,25 @@ function validateReferenceSet(references = state.references, variant = selectedV
     const counts = { image: 0, video: 0, audio: 0 };
     references.forEach((item) => { counts[item.kind || item.type] = (counts[item.kind || item.type] || 0) + 1; });
     const mappings = new Map((workflow.reference_mappings || []).map((item) => [`${item.type}:${item.index}`, item]));
+    const slotKinds = new Set((workflow.reference_mappings || []).filter((item) => item.slot).map((item) => item.type));
     for (const [key, mapping] of mappings) {
-      if (mapping.required && counts[mapping.type] < mapping.index) {
+      if (!mapping.required) continue;
+      // A slot binding covers the whole family; only one file of that kind is
+      // required, regardless of which index the binding uses.
+      if (mapping.slot && (counts[mapping.type] || 0) >= 1) continue;
+      if (!mapping.slot && counts[mapping.type] < mapping.index) {
         return localized(`请添加第 ${mapping.index} 个 ${mapping.type} 参考素材`, `Add reference ${mapping.index} for ${mapping.type}`);
+      }
+      if (mapping.slot) {
+        return localized(`请添加至少 1 个 ${mapping.type} 参考素材`, `Add at least one ${mapping.type} reference`);
       }
     }
     for (const [kind, count] of Object.entries(counts)) {
+      if (count > 15) return localized(`${kind} 参考素材最多添加 15 份`, `This workflow accepts up to 15 ${kind} references`);
       for (let index = 1; index <= count; index += 1) {
-        if (!mappings.has(`${kind}:${index}`)) return localized(`${kind} ${index} 没有配置到工作流输入`, `${kind} reference ${index} is not mapped`);
+        if (!mappings.has(`${kind}:${index}`) && !slotKinds.has(kind)) {
+          return localized(`${kind} ${index} 没有配置到工作流输入`, `${kind} reference ${index} is not mapped`);
+        }
       }
     }
     return "";

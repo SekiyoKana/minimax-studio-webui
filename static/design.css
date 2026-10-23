@@ -1351,3 +1351,11 @@ button { appearance: none; -webkit-appearance: none; }
   .ops-modal { padding: 8px; }
   .ops-modal .ops-window { width: calc(100vw - 16px); height: min(680px, calc(100dvh - 16px)); }
 }
+
+
+.workflow-config-hint {
+  margin: 2px 0 8px;
+  color: var(--quiet);
+  font-size: var(--text-micro);
+  line-height: 1.45;
+}
