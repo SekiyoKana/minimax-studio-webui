@@ -13,7 +13,7 @@ Unified control service for MiniMax H3 video, speech, Music3 and ComfyUI workflo
 
 [中文](README.md) | [English](README.en.md)
 
-[Features](#features) · [Interface](#interface) · [Workflows](#workflows) · [Local ComfyUI](#local-comfyui) · [Data flow](#data-flow) · [Update log](#update-log) · [Deployment](#deployment) · [API](#api) · [Validation](#validation)
+[Features](#features) · [Interface](#interface) · [Workflows](#workflows) · [Generation plans](#generation-plans) · [Local ComfyUI](#local-comfyui) · [Data flow](#data-flow) · [Update log](#update-log) · [Deployment](#deployment) · [Validation](#validation)
 
 </div>
 
@@ -38,106 +38,73 @@ MiniMax H3 Studio provides one web interface, HTTP API, desktop entry and Androi
 | Asset preview | Every asset opens in a preview dialog: images, a video player, audio as "file name + player", and unknown files with an unknown-file icon |
 | Folders | Single-level folders, double-click to open, bulk move, an ungrouped root and deletion guards |
 | Local assets | Capacity stats, 30-day video cleanup preview, ownership checks and artifact deletion |
-| Detail windows | No backdrop blur, window shadows, several windows at once, independent drag and a collapsible detail sidebar |
+| Detail windows | Several detail windows at once, independent drag and a collapsible sidebar |
 | Node management | ComfyUI and RunningHub nodes, health checks, start/stop, concurrency and local/remote detection |
-| Workflows | Built-in presets and custom ComfyUI workflows, field and reference mapping, result node selection, node sync and validation |
-| Reference slots | Custom workflows declare `ref_images` / `ref_videos` / `ref_audios` slots by type and index, so uploads are no longer limited by the workflow's fixed node count |
+| Workflows | Import ComfyUI API workflows, map fields, references, ratio and MP, select result nodes, sync and validate |
 | Run logs | Toolbar entry with a queue badge, a draggable dialog, live progress, and workflow sync/generation errors |
 | Local ComfyUI | Experimental: launch and supervise a local ComfyUI from the app, with launch paths, private environments and process shutdown on exit |
-| Themes | Switch between day, night and follow-system; themes only change visuals, never behaviour or data |
 | Multi-device | LAN or Tailscale pairing, authorization revocation, proxied jobs and read-only remote assets |
 | Android client | Phone and tablet remote client pinned to FL2VA FP8 + 8-step LoRA, supporting remote ComfyUI, RunningHub, multi-device, progress and downloads; Beta, not yet tested on devices |
-| Agent access | Swagger UI, OpenAPI JSON, a public `AGENT.md` and Skill authoring rules |
+| Agent access | A public `AGENT.md`, OpenAPI JSON and Skill authoring rules |
 
-The front end also supports asset library width dragging with `localStorage` persistence (capped at 50%), fixed card sizes, hidden scrollbars, page fill-in after resize, log artifact focusing and a tail-follow toggle for live logs.
 
 > [!WARNING]
 > The Android APK is Beta. It has only been built and statically checked; installation, connection, file picking and downloads have not been verified on a real phone or tablet.
 
 ## Interface
 
-| Workbench | Aurora Glass skin |
+| Workbench | Night workbench |
 |---|---|
-| ![Workbench](docs/images/h3-studio-overview.jpg) | ![Aurora Glass skin](docs/images/h3-studio-aurora.jpg) |
+| ![Workbench](docs/images/h3-studio-overview.jpg) | ![Night workbench](docs/images/h3-studio-aurora.jpg) |
 
 | Workflow manager | Inference nodes |
 |---|---|
 | ![Workflow manager](docs/images/h3-studio-workflows.jpg) | ![Inference nodes](docs/images/h3-studio-nodes.jpg) |
 
-| Run logs | Appearance and themes |
-|---|---|
-| ![Run logs](docs/images/h3-studio-ops.jpg) | ![Appearance and themes](docs/images/h3-studio-skins.jpg) |
+![Run logs](docs/images/h3-studio-ops.jpg)
 
-## Appearance and themes
+## Appearance
 
-Three appearance modes are available under Settings → Appearance and apply immediately:
-
-| Mode | Behaviour |
-|---|---|
-| Day | Fixed light appearance |
-| Night | Fixed dark appearance |
-| Follow system | Reads `prefers-color-scheme` and switches live (default) |
-
-The mode is stored in the browser's `h3-theme` key; an old `h3-skin` value migrates to day or night. Two skin styles keep implementing the visuals:
-
-| Mode | Base skin | Style |
-|---|---|---|
-| Day | Meadow (default) | Apple-style light: light grey canvas, a single Action Blue, hairline separators and pill controls |
-| Night | Aurora Glass | Dark glassmorphism: aurora backdrop, cyan and purple gradients, serif headings |
-| Follow system | Automatic | Aurora Glass when the OS is dark, otherwise Meadow |
-
-| Appearance settings | Night workbench |
-|---|---|
-| ![Appearance settings](docs/images/h3-studio-skins.jpg) | ![Night workbench](docs/images/h3-studio-aurora.jpg) |
-
-Themes are presentation only: CSS overrides design tokens and decorative properties, never DOM structure, order, visibility, copy or JavaScript behaviour. Generation, queueing, assets, workflows and the API behave identically in all three modes.
-
-### Type scale
-
-All interface text uses ten steps exposed as `:root` `--text-*` tokens. New modules must not hardcode `font-size`; extend the tokens instead.
-
-| Token | Size | Usage |
-|---|---:|---|
-| `--text-micro` | 10px | Uppercase section labels, badges |
-| `--text-caption` | 11px | Metadata, helper text |
-| `--text-small` | 12px | Secondary labels, control text |
-| `--text-ui` | 13px | Forms, buttons, lists |
-| `--text-body` | 14px | Body text |
-| `--text-lead` | 16px | Conversation text, emphasis |
-| `--text-heading-sm` | 20px | Section headings |
-| `--text-heading` | 24px | Dialog and sidebar titles |
-| `--text-display` | 28px | Page titles |
-| `--text-hero` | 32px | Empty-state headline |
-
-### Rules for new themes and skins
-
-Follow these rules when adding modules, appearance modes or skins so the three modes and existing skins stay intact:
-
-1. Use only `:root` design tokens (`--canvas`, `--surface`, `--ink`, `--line`, `--accent`, `--blue`, `--text-*`, …) for colours and font sizes; never hardcode colours or `font-size`.
-2. Skin styles belong in [`static/skins/skins.css`](static/skins/skins.css) and must be scoped under `html[data-skin="<id>"]`; never modify base rules for a single skin.
-3. A skin may only override colours, borders, shadows, radii, fonts and backgrounds; it must not change layout, sizes, element order, visibility or interaction logic.
-4. Skin assets live in `static/skins/<id>/` with a `preview.jpg` at 16:10.
-5. A new appearance mode must update `THEMES`, `resolveThemeSkin()` in [`static/app.js`](static/app.js) and the `data-theme-option` cards; `data-skin` still only resolves to `default` (day) or `aurora` (night).
-6. Modules that paint with canvas, WebGL or charts should listen for `h3:themechange` and read `event.detail.theme` / `event.detail.skin` before repainting; `h3:skinchange` still fires when the resolved skin changes.
-7. Run the full test suite before merging; the default mode must stay the visual baseline, and design changes must update documentation screenshots and static asset versions plus a manual pass over the key screens in all three modes.
+Day, night and follow-system appearance modes are available under Settings → Appearance. Follow-system is the default.
 
 ## Workflows
 
-Built-in presets and custom workflows are stored in `data/config.db`. The web workflow dialog uploads ComfyUI API-format JSON, configures generic fields and reference mappings, picks the result node, saves static inputs, and selects the target node and whether results show in the generation area.
+Built-in and imported workflows are stored in `data/config.db`. On first database creation, bundled JSON files under `workflows/` seed the built-in presets; runtime execution reads the database.
 
-```text
-GET    /api/v1/workflows
-POST   /api/v1/workflows
-GET    /api/v1/workflows/{workflow_id}
-PATCH  /api/v1/workflows/{workflow_id}
-DELETE /api/v1/workflows/{workflow_id}
-POST   /api/v1/workflows/{workflow_id}/sync
-```
+Every bundled workflow and every custom workflow synced to ComfyUI uses the `H3Studio_` prefix so users can identify Studio-owned files in ComfyUI's user workflow directory.
 
-- **Per-job snapshots**: submitting a `workflow_id` uses the graph, mapping, version and target node captured when the job was created; scheduling only picks nodes that are synced and online.
-- **Reference slots**: when a mapping sets `input` to `ref_images` / `ref_videos` / `ref_audios` with `"slot": true`, the engine creates `LoadImage`, `VHS_LoadVideo` and `LoadAudio` nodes by index and wires them to `ref_image_N` / `ref_video_N` / `ref_audio_N`. Extra uploads keep extending the slots, so the workflow's fixed node count no longer caps references.
-- **Errors go to run logs**: import, validation and sync failures no longer occupy the dialog header; they are written to the run log window with the upstream error preserved.
-- **Sync and validation**: after saving, the service pushes a copy of the workflow to the target node's ComfyUI user directory and records sync state per node.
+### Built-in workflows
+
+| File | Purpose |
+|---|---|
+| `H3Studio_minimax_h3_fl2va_fp8_720p_15s_api.json` | FL2VA native sampling |
+| `H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json` | FL2VA 8-step LoRA |
+| `H3Studio_minimax_h3_fl2va_fp8_sa_api.json` | FL2VA H3 SA |
+| `H3Studio_minimax_h3_fl2va_vdn_api.json` | FL2VA VDN-H3 |
+| `H3Studio_minimax_h3_ref2va_fp8_scaled_api.json` | Ref2VA native sampling |
+| `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA 8-step LoRA |
+| `H3Studio_minimax_h3_ref2va_fp8_sa_api.json` | Ref2VA H3 SA |
+| `H3Studio_minimax_h3_ref2va_vdn_api.json` | Ref2VA VDN-H3 |
+| `H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json` | Dual sampling |
+| `H3Studio_minimax_h3_ref2va_fp8_digital_human_api.json` | Digital human |
+| `H3Studio_minimax_h3_ref2va_fp8_tts_api.json` | H3 TTS |
+| `H3Studio_minimax_h3_ref2va_fp8_nsfw_lora_api.json` | H3 NSFW (private mode only) |
+| `H3Studio_minimax_music3_int8_api.json` | Music3 INT8 |
+| `H3Studio_comfy_upscale_image_api.json` | Image upscale |
+| `H3Studio_comfy_upscale_video_api.json` | Video upscale |
+
+Built-in presets only allow changing whether they appear in the composer; they cannot be edited or deleted.
+
+### Custom workflows
+
+The web workflow dialog imports ComfyUI API-format JSON and configures:
+
+- Generic field mappings: `prompt`, `lyrics`, `width`, `height`, `ratio`, `megapixels`, `duration`, `num_frames`, `steps`, `seed`
+- Reference mappings by image, video or audio type and index
+- Reference slots: `ref_images` / `ref_videos` / `ref_audios` create loader nodes for every uploaded file
+- Static inputs, result node, result media type, target ComfyUI nodes and composer visibility
+
+Jobs run from a snapshot of the graph, mappings, version and target nodes captured at submission. Scheduling only picks synced online nodes. Official reference limits are 9 images, 3 videos and 3 audio clips. After saving, the service syncs the workflow into each target ComfyUI user workflow directory as `H3Studio_{workflow_id}.json` and verifies its hash. Import, validation and sync errors appear in the run log.
 
 ## Local ComfyUI
 
@@ -182,25 +149,19 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 
 ### 2026-10-23
 
-- Asset clicks became dialog previews: reference thumbnails, message asset cards and the source file list no longer download or navigate. Images render, videos get a player, audio shows "file name + player", unknown files show an unknown-file icon; downloading stays on the explicit Download button.
-- Custom workflows accept a variable number of images, videos and audio clips: reference mappings can bind `ref_images` / `ref_videos` / `ref_audios` slots, the engine creates loader nodes by index, and the editor detects available slots after selecting a workflow.
-- Slot mappings are no longer capped by configured indexes; per-media official limits apply (9 images, 3 videos, 3 audio clips). New mapping rows pick the next unused index and re-pick when the media type changes.
-- Custom workflow field mappings now support `ratio` and `megapixels`, so graphs that derive resolution from aspect ratio + MP can map them directly; the composer shows the ratio/resolution controls accordingly.
-- Custom workflows no longer reuse Music3's lyrics placeholder, optimize-lyrics action, or fixed 30-step/music-duration hints.
-- Built-in workflows are database-driven: `workflows/` files seed presets into `data/config.db` on first start, and the engine reads the database instead of `H3_COMFY_*_WORKFLOW` environment variables.
-- Workflow import, validation and sync errors now appear in the run log dialog with the original upstream error, so the workflow grid is no longer pushed down by hint text.
-- Local ComfyUI badges in the node list now show state: a yellow "Manageable" while the service is stopped, and a green "Managed" once the supervised service is running.
-- Fixed workflow sync failing with HTTP 405: ComfyUI's `/userdata/{file}` route matches a single path segment, so the sync call now percent-encodes the directory separator (`%2F`) when writing into `workflows/`.
+- Custom workflows support variable references, `ratio` / `megapixels` mappings, result/target node configuration and ComfyUI sync.
+- Built-in workflows are seeded into the database on first start; runtime execution no longer depends on workflow environment variables.
+- Bundled workflows and synced custom workflows use the `H3Studio_` filename prefix.
+- Reference and asset files open in a unified preview dialog.
+- Local ComfyUI supervision: launch path, private environment, managed process and live logs.
 
 ### 2026-10-22
 
-- The interface was rebuilt around apple.com's language: light grey canvas, hairline separators, a single Action Blue, pill buttons and segmented controls, with type collapsed into ten `--text-*` tokens.
-- Appearance moved from a skin list to day / night / follow-system modes backed by the Meadow and Aurora Glass skins; follow-system listens to `prefers-color-scheme` live.
-- Run logs moved from a floating window into the top toolbar with a queue badge; the dialog has no backdrop, can be dragged, and closes from the entry, the close button or Esc.
-- Settings gained an Experimental tab: bind a local ComfyUI service with supervision badges, launch paths, private environments, live logs and process shutdown on exit.
-- Requests send `Accept-Language` and `HTTPException` responds in that language; missing English copy across settings, nodes, workflows, assets, upscaling and pairing dialogs was filled in.
-- Inference nodes detect local vs remote by address and render as fixed-size banner cards; add/edit moved into a separate dialog; RunningHub endpoint toggles and an auto-scheduling exclusion were added.
-- Music3 splits the input area into prompt and lyrics columns; video upscaling became a standalone action that asks for type and scale without resetting the workspace.
+- Rebuilt the interface around Apple-style design with day, night and follow-system appearance.
+- Moved the run log into the top action bar with a queue badge and draggable dialog.
+- Added banner cards, dedicated add/edit dialogs, RunningHub endpoints and auto-scheduling exclusions for inference nodes.
+- Split Music3 prompt and lyrics side by side; added a standalone video upscale entry.
+- Added bilingual frontend and backend error messages.
 
 ### 2026-10-21: Custom workflow management and reference compression
 
@@ -269,33 +230,11 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 
 The update log is newest first with one entry per day; the current state is 2026-10-23. The Android APK remains Beta and has not been verified on devices.
 
-### Release process
-
-Each update follows this process:
-
-1. Survey backend, front end, workflows, tests and docs for data and API impact.
-2. Change code and static assets, keeping SQLite migrations and legacy compatibility.
-3. Add API contract, static contract and behavioural regression tests.
-4. Run Python syntax checks, JavaScript syntax checks, the full unittest suite and a diff check.
-5. Bump static asset versions so browsers do not serve stale HTML, CSS or JavaScript.
-6. Check the cloud GPU queue, GPU state, disk space and ComfyUI health before release.
-7. Create a remote backup under `/home/tapcash/ssd2/backups/` excluding `data/`, models, virtualenvs and user artifacts.
-8. Sync source, static assets, workflows, tests and docs directory by directory and compare SHA-256 hashes.
-9. With jobs running, only hot-reloadable static assets are synced; confirm checkpoints are recoverable before restarting the API.
-10. After restarting, verify `/health`, `/AGENT.md`, `/docs`, `/openapi.json`, job recovery, ComfyUI and the full remote test suite.
-
 ## Generation plans
 
-| Plan | Reference input | Duration | Steps | Output |
-|---|---|---:|---:|---|
-| FL2VA | First frame, optional last frame | 1-15 s | 4-50 | MP4 |
-| Ref2VA | Up to 9 images, 3 videos, 3 audio clips | 1-15 s | 4-50 | MP4 |
-| H3 SA | FL2VA or Ref2VA references | 1-300 s | Fixed 8 | MP4 |
-| VDN H3 | FL2VA or Ref2VA references | 1-15 s | 8-50 | MP4 |
-| Digital human | Portrait and driving audio | Defined by audio | Fixed 20 | MP4 |
-| H3 TTS | Voice traits, dialogue and audio reference | 1-15 s | 4-50 | FLAC |
-| Music3 | Style prompt and optional lyrics | 1-300 s | Fixed 30 | FLAC |
-| RunningHub | Fields defined by the target workflow | Defined by workflow | Defined by workflow | Defined by workflow |
+- **Built-in ComfyUI workflows**: FL2VA, Ref2VA, H3 SA, VDN-H3, digital human, H3 TTS, Music3, and image/video upscaling presets that work out of the box.
+- **Custom ComfyUI workflows**: import any ComfyUI API-format JSON, map fields, references, ratio/MP and target nodes.
+- **RunningHub endpoints**: point a node at a RunningHub workflow or AI App and run through RunningHub with dynamic parameters and account/task information.
 
 ## Quick start
 
@@ -352,123 +291,19 @@ bash gradlew assembleDebug
 
 On Windows use `gradlew.bat assembleDebug`. The installable APK lands at `android/app/build/outputs/apk/debug/app-debug.apk`. The debug build can be sideloaded; public releases should be signed with your own key.
 
-### API entry points
+### API documentation
 
-| URL | Purpose |
-|---|---|
-| `/` | Web workbench |
-| `/health` | Service, node and queue status |
-| `/docs` | Swagger UI |
-| `/openapi.json` | OpenAPI JSON |
-| `/AGENT.md` | AI Agent and Skill integration guide |
-
-With `H3_API_KEY` set, API requests use:
-
-```http
-Authorization: Bearer YOUR_H3_API_KEY
-```
-
-## API
-
-Create a video job:
-
-```bash
-curl -X POST http://127.0.0.1:8193/api/v1/generations \
-  -F 'prompt=A locked-off shot of a person walking forward, keeping identity and environment consistent.' \
-  -F 'reference_manifest=[{"type":"image"}]' \
-  -F 'references=@first-frame.png;type=image/png' \
-  -F 'model_variant=fl2va-fp8' \
-  -F 'execution_mode=turbo-lora' \
-  -F 'width=864' \
-  -F 'height=480' \
-  -F 'duration=5' \
-  -F 'steps=8' \
-  -F 'comfy_node=auto'
-```
-
-Query the job and download the result:
-
-```bash
-curl http://127.0.0.1:8193/api/v1/generations/JOB_ID
-curl http://127.0.0.1:8193/api/v1/generations/JOB_ID/result -o output.mp4
-```
-
-Common endpoints:
-
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/health` | Service, node and queue status |
-| `GET` | `/api/v1/comfy/nodes` | List inference nodes |
-| `POST` | `/api/v1/comfy/nodes/{node_id}/local-comfy/start` | Start the supervised local ComfyUI |
-| `POST` | `/api/v1/comfy/nodes/{node_id}/local-comfy/stop` | Stop the supervised local ComfyUI |
-| `GET` | `/api/v1/workflows` | List presets and custom workflows |
-| `POST` | `/api/v1/workflows` | Create a workflow |
-| `PATCH` | `/api/v1/workflows/{workflow_id}` | Update a workflow or its visibility |
-| `DELETE` | `/api/v1/workflows/{workflow_id}` | Delete a custom workflow |
-| `POST` | `/api/v1/workflows/{workflow_id}/sync` | Sync and validate on the target node |
-| `POST` | `/api/v1/generations` | Create a job |
-| `GET` | `/api/v1/generations/{job_id}` | Read a job |
-| `POST` | `/api/v1/generations/{job_id}/cancel` | Cancel a job |
-| `POST` | `/api/v1/generations/{job_id}/regenerate` | Regenerate a job |
-| `GET` | `/api/v1/generations/{job_id}/result` | Download the artifact |
-| `GET` | `/api/v1/events` | SSE event stream |
-| `POST` | `/api/v1/prompts/optimize` | H3 prompt optimisation |
-| `POST` | `/api/v1/music/assist` | Music3 style or lyric assist |
-
-Pass `workflow_id` to pick a preset or custom workflow; without it the built-in plan is chosen from `model_variant` and `execution_mode`.
-
-Full fields, error codes, RunningHub dynamic parameters, multi-device and asset endpoints live in the [API reference](docs/API.md). Agent call order, tool wrapping and acceptance rules live in [`AGENT.md`](AGENT.md).
+After the service starts, open `/docs` for the FastAPI-generated Swagger UI and `/openapi.json` for the OpenAPI description. The API reference is no longer maintained in this README.
 
 ## Asset management
 
-### Preview and download
+- **Preview and download**: clicking a reference asset, a message asset or a detail source file opens a preview dialog. Images, videos, audio and unknown files each have a suitable view; downloads only happen from an explicit download button.
+- **Folders**: single-level folders with create, rename, delete, double-click open, bulk move and an ungrouped root. Deletion checks active tasks; remote assets are read-only.
+- **Local assets**: capacity and file counts, 30-day video cleanup preview, artifact deletion and ownership checks.
 
-Clicking an asset always previews it: reference thumbnails, asset cards in messages and the source file list in details all open the preview dialog. It renders images, a video player, an audio card with the file name, and an unknown-file icon for anything unrecognised. Downloads only happen from the explicit download buttons.
+## Node packs and installation assets
 
-### Folders and ownership
-
-Folders are single-level, names are 1-80 characters, and siblings are compared case-insensitively. New jobs may pass `folder_id`; the root or ungrouped choice stores the job as ungrouped.
-
-```text
-GET    /api/v1/asset-folders
-POST   /api/v1/asset-folders
-PATCH  /api/v1/asset-folders/{folder_id}
-POST   /api/v1/asset-folders/move
-DELETE /api/v1/asset-folders/{folder_id}
-```
-
-The outer asset list only shows ungrouped local jobs; double-clicking a folder shows its video assets. Moving changes job ownership and copies nothing. Remote assets stay read-only and reject move, rename and delete.
-
-Deleting a folder first checks for queued and running jobs, then removes finished job records, reference files, artifacts, sidecars, posters and logs.
-
-### Local assets
-
-```text
-GET  /api/v1/assets/local
-GET  /api/v1/assets/local/clear-old-video/preview
-POST /api/v1/assets/local/clear-old-video
-POST /api/v1/assets/local/delete
-```
-
-Before cleaning 30-day-old videos, show every item with its creation time and size plus the total, then confirm. Files and folders created elsewhere cannot be deleted.
-
-## Workflows and node packs
-
-API-format workflows live in [`workflows/`](workflows/), and pinned node packs with SHA-256 manifests live in [`comfyui_nodes/`](comfyui_nodes/). The main workflows are:
-
-- `minimax_h3_fl2va_fp8_720p_15s_api.json`
-- `minimax_h3_ref2va_fp8_scaled_api.json`
-- `minimax_h3_fl2va_fp8_turbo_lora_api.json`
-- `minimax_h3_ref2va_fp8_turbo_lora_api.json`
-- `minimax_h3_fl2va_fp8_sa_api.json`
-- `minimax_h3_ref2va_fp8_sa_api.json`
-- `minimax_h3_fl2va_vdn_api.json`
-- `minimax_h3_ref2va_vdn_api.json`
-- `minimax_h3_ref2va_fp8_digital_human_api.json`
-- `minimax_h3_ref2va_fp8_tts_api.json`
-- `minimax_music3_int8_api.json`
-
-Before submitting, the service injects the prompt, reference files, resolution, frame count, steps, seed, folder prefix and output path.
+Pinned node packs, patches and SHA-256 manifests live in [`comfyui_nodes/`](comfyui_nodes/). The installer deploys ComfyUI, node packs, workflows and models.
 
 Linux and Windows PCs share the same installer logic and resource bundle. Linux uses a Python installer with a resource ZIP; Windows uses a PowerShell script with the same ZIP and a double-clickable BAT entry. Run it and enter the target ComfyUI directory; the installer reuses a valid install or creates ComfyUI in an empty directory, then imports resources and downloads models that fit the GPU. Node packs, workflows, patches and the Windows Python core ship inside the ZIP, so no installer or project files are fetched from GitHub. Model weights, PyTorch and Python dependencies still download from the network, and the installer benchmarks ModelScope, Hugging Face and HF-Mirror before choosing a source. See the [Agent ComfyUI install guide](AGENT_HOW_TO_INSTALL.md).
 
@@ -528,9 +363,7 @@ INSTALL_ROOT=/data/minimax-h3-stack bash scripts/verify_install.sh
 ```text
 app/                  FastAPI, job queue, workflow config, node scheduling, local ComfyUI supervision and inference clients
 static/               Bilingual responsive web UI
-static/design.css     Apple-style visual layer (canvas, type, surfaces, controls)
-static/skins/         Skin styles, previews and background assets
-workflows/            H3, H3 SA, VDN H3 and Music3 API workflows
+workflows/            Built-in API workflows with the H3Studio_ prefix
 comfyui_nodes/        Pinned node sources and manifest
 scripts/              Install, download, verify, desktop packaging and generation tests
 android/              Remote-only Android client (Beta)
@@ -550,6 +383,7 @@ AGENT_HOW_TO_INSTALL.md  ComfyUI and node pack install guide
 - [Operations](docs/en/OPERATIONS.md)
 - [Model list](docs/MODELS.md)
 - [Workflow list](docs/WORKFLOWS.md)
+- API: open `/docs` after the service starts
 - [Desktop app](docs/DESKTOP.md)
 - [ComfyUI node packs](comfyui_nodes/README.md)
 - [AI Agent guide](AGENT.md)

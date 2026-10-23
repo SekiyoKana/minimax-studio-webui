@@ -13,7 +13,7 @@ MiniMax H3 视频、语音、Music3 与 ComfyUI 工作流控制服务
 
 [中文](README.md) | [English](README.en.md)
 
-[功能](#功能) · [界面](#界面) · [工作流](#工作流) · [本地-comfyui](#本地-comfyui) · [数据流程](#数据流程) · [更新日志](#更新日志) · [部署](#部署) · [API](#api) · [验证](#验证)
+[功能](#功能) · [界面](#界面) · [工作流](#工作流) · [生成方案](#生成方案) · [本地-comfyui](#本地-comfyui) · [数据流程](#数据流程) · [更新日志](#更新日志) · [部署](#部署) · [验证](#验证)
 
 </div>
 
@@ -38,106 +38,73 @@ MiniMax H3 Studio 为 MiniMax H3、H3 TTS、数字人、Music3 和通用 Running
 | 素材预览 | 点击任意素材都在弹窗内预览：图片、视频播放器、音频「文件名 + 播放器」，无法识别的文件显示未知文件图标 |
 | 文件夹 | 单层文件夹、双击进入、批量移动、未分组根目录和删除保护 |
 | 本地素材管理 | 容量统计、30 天前视频预览清理、素材所有权校验和产物删除 |
-| 详情窗口 | 无背景模糊、窗口阴影、多个窗口同时打开、独立拖拽和详情侧栏收起 |
+| 详情窗口 | 多个详情窗口同时打开、独立拖拽和侧栏收起 |
 | 节点管理 | ComfyUI 与 RunningHub 节点配置、健康检查、启停、并发设置和本机/远程判定 |
-| 工作流管理 | 内置预设与自定义 ComfyUI 工作流、字段与素材映射、结果节点选择、节点同步和校验 |
-| 参考素材槽位 | 自定义工作流可按类型和序号声明 `ref_images` / `ref_videos` / `ref_audios` 槽位，上传数量不再受工作流固定节点数限制 |
+| 工作流管理 | 导入 ComfyUI API 工作流，配置字段、素材、比例和 MP 映射，选择结果节点并同步校验 |
 | 运行日志 | 顶部功能栏入口、队列数量角标、可拖动弹框、实时进度、工作流同步与生成报错 |
 | 本地 ComfyUI | 实验性功能：可直接从应用启动并托管本机 ComfyUI，支持启动路径、私有环境和退出时结束进程 |
-| 皮肤系统 | 设置内切换日间 / 夜间 / 跟随系统，皮肤仅改变视觉，不影响功能与数据 |
 | 多端互联 | 局域网或 Tailscale 配对、授权撤销、本机代理任务和远端素材只读访问 |
 | Android 客户端 | 手机和平板远程连接 Studio 服务，固定 FL2VA FP8 + 8 步 LoRA，支持远端 ComfyUI、RunningHub、多端互联、任务进度和结果下载；当前为 Beta，尚未完成实机测试 |
-| Agent 接入 | Swagger UI、OpenAPI JSON、公开 `AGENT.md` 和 Skill 创建规范 |
+| Agent 接入 | 公开 `AGENT.md`、OpenAPI JSON 和 Skill 创建规范 |
 
-前端还包括素材库宽度拖拽、宽度 `localStorage` 持久化、最大 50% 宽度、固定素材卡片尺寸、隐藏滚动条、调整宽度后的补页加载、日志产物定位和实时日志尾部跟随控制。
 
 > [!WARNING]
 > Android APK 当前处于 Beta 阶段，尚未经过真实 Android 手机或平板实机测试。目前仅完成 APK 构建和代码静态检查；安装、连接、文件选择、下载等设备行为尚未实机验证。
 
 ## 界面
 
-| 工作台 | 极光玻璃皮肤 |
+| 工作台 | 夜间工作台 |
 |---|---|
-| ![工作台](docs/images/h3-studio-overview.jpg) | ![极光玻璃皮肤](docs/images/h3-studio-aurora.jpg) |
+| ![工作台](docs/images/h3-studio-overview.jpg) | ![夜间工作台](docs/images/h3-studio-aurora.jpg) |
 
 | 工作流管理 | 推理节点 |
 |---|---|
 | ![工作流管理](docs/images/h3-studio-workflows.jpg) | ![推理节点](docs/images/h3-studio-nodes.jpg) |
 
-| 运行日志 | 外观与皮肤 |
-|---|---|
-| ![运行日志](docs/images/h3-studio-ops.jpg) | ![外观与皮肤](docs/images/h3-studio-skins.jpg) |
+![运行日志](docs/images/h3-studio-ops.jpg)
 
-## 外观与皮肤
+## 外观
 
-界面提供三种外观模式，在「设置 → 外观」中切换，立即生效：
-
-| 模式 | 行为 |
-|---|---|
-| 日间 | 固定浅色外观 |
-| 夜间 | 固定深色外观 |
-| 跟随系统 | 读取 `prefers-color-scheme`，系统深浅色变化时实时切换（默认） |
-
-模式保存在本机 `localStorage` 的 `h3-theme` 键；旧版本的 `h3-skin` 会自动迁移为日间或夜间。底层仍由两套皮肤样式实现：
-
-| 模式 | 底层皮肤 | 风格 |
-|---|---|---|
-| 日间 | 原野（默认） | Apple 风格浅色：浅灰画布、单一 Action Blue、发丝分隔与胶囊控件 |
-| 夜间 | 极光玻璃 Aurora Glass | 深色玻璃拟态：极光背景、青色与紫色渐变、衬线标题 |
-| 跟随系统 | 自动选择 | 系统深色时用极光玻璃，否则用原野 |
-
-| 外观设置 | 夜间工作台 |
-|---|---|
-| ![外观设置](docs/images/h3-studio-skins.jpg) | ![夜间工作台](docs/images/h3-studio-aurora.jpg) |
-
-外观是纯展示层：CSS 只覆盖设计令牌和装饰属性，不改变 DOM 结构、元素顺序、可见性、文案或任何 JavaScript 行为。生成、队列、素材、工作流和 API 在三种模式下完全一致。
-
-### 文字层级
-
-界面文字统一为 10 级，全部通过 `:root` 的 `--text-*` 令牌引用。新增模块不得写死 `font-size`，需要新字号时先扩展令牌。
-
-| 令牌 | 字号 | 用途 |
-|---|---:|---|
-| `--text-micro` | 10px | 大写分组标签、徽标 |
-| `--text-caption` | 11px | 元信息、辅助说明 |
-| `--text-small` | 12px | 次级标签、控件文字 |
-| `--text-ui` | 13px | 表单、按钮、列表 |
-| `--text-body` | 14px | 基础正文 |
-| `--text-lead` | 16px | 对话正文、强调 |
-| `--text-heading-sm` | 20px | 分区标题 |
-| `--text-heading` | 24px | 弹窗与侧栏标题 |
-| `--text-display` | 28px | 页面标题 |
-| `--text-hero` | 32px | 空状态主标题 |
-
-### 新增外观与皮肤的规则
-
-追加新模块、新外观模式或新皮肤时遵守以下约定，三种模式和既有皮肤都不会被破坏：
-
-1. 组件颜色与字号只使用 `:root` 设计令牌（`--canvas`、`--surface`、`--ink`、`--line`、`--accent`、`--blue`、`--text-*` 等），不要写死色值或 `font-size`。
-2. 皮肤样式写入 [`static/skins/skins.css`](static/skins/skins.css)，且必须限定在 `html[data-skin="<id>"]` 之下；不得为了某个皮肤修改基础规则。
-3. 皮肤只能覆盖颜色、边框、阴影、圆角、字体和背景；不得改变布局结构、尺寸、元素顺序、可见性或交互逻辑。
-4. 皮肤资源放在 `static/skins/<id>/`，预览图固定命名 `preview.jpg`（16:10）。
-5. 新增外观模式需要同时更新 [`static/app.js`](static/app.js) 的 `THEMES`、`resolveThemeSkin()` 和设置外观面板的 `data-theme-option` 卡片；`data-skin` 仍只取 `default`（日间）或 `aurora`（夜间）。
-6. 新模块若使用 Canvas、WebGL 或图表等无法被 CSS 换肤的绘制方式，监听 `h3:themechange` 事件读取 `event.detail.theme` / `event.detail.skin` 后重绘；`h3:skinchange` 仍会在解析后的皮肤变化时派发。
-7. 合并前运行完整测试；默认模式必须保持为当前视觉基线，调整基础设计时同步更新文档截图和静态资源版本号，并至少手动检查一次三种模式的关键页面。
+界面提供日间、夜间和跟随系统三种外观，在「设置 → 外观」中切换。默认跟随系统。
 
 ## 工作流
 
-内置预设与自定义工作流统一保存在 `data/config.db`。网页端「工作流」弹框可以上传 ComfyUI API 格式 JSON、配置通用字段与参考素材映射、选择结果节点、保存静态输入、指定目标节点和生成区显示。
+内置工作流和用户导入的工作流统一保存在 `data/config.db`。首次创建数据库时，`workflows/` 下的内置 JSON 会写入预设配置，运行时直接读取数据库；之后不会再用环境变量指定工作流文件。
 
-```text
-GET    /api/v1/workflows
-POST   /api/v1/workflows
-GET    /api/v1/workflows/{workflow_id}
-PATCH  /api/v1/workflows/{workflow_id}
-DELETE /api/v1/workflows/{workflow_id}
-POST   /api/v1/workflows/{workflow_id}/sync
-```
+所有本项目提供的工作流包，以及同步到 ComfyUI 的自定义工作流，文件名都以 `H3Studio_` 开头，方便在 ComfyUI 的用户工作流目录中识别。
 
-- **按任务快照执行**：提交 `workflow_id` 后使用创建时保存的工作流图、映射、版本和目标节点；调度只选择已同步且在线的目标节点。
-- **参考素材槽位**：映射里 `input` 填 `ref_images` / `ref_videos` / `ref_audios` 并带 `"slot": true` 时，引擎按素材序号动态创建 `LoadImage`、`VHS_LoadVideo`、`LoadAudio`，接到 `ref_image_N` / `ref_video_N` / `ref_audio_N`。上传更多参考素材时会继续扩展槽位，不再受工作流内固定节点数量限制。
-- **报错集中到运行日志**：导入、校验、同步失败不再占用弹框顶部的提示区域，而是写入右侧「运行日志」并保留上游原始报错。
-- **同步与校验**：保存后服务会尝试把工作流副本同步到目标节点的 ComfyUI 用户目录，并按节点记录同步状态。
+### 内置工作流
+
+| 文件 | 用途 |
+|---|---|
+| `H3Studio_minimax_h3_fl2va_fp8_720p_15s_api.json` | FL2VA 原生采样 |
+| `H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json` | FL2VA 8 步 LoRA |
+| `H3Studio_minimax_h3_fl2va_fp8_sa_api.json` | FL2VA H3 SA |
+| `H3Studio_minimax_h3_fl2va_vdn_api.json` | FL2VA VDN-H3 |
+| `H3Studio_minimax_h3_ref2va_fp8_scaled_api.json` | Ref2VA 原生采样 |
+| `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA 8 步 LoRA |
+| `H3Studio_minimax_h3_ref2va_fp8_sa_api.json` | Ref2VA H3 SA |
+| `H3Studio_minimax_h3_ref2va_vdn_api.json` | Ref2VA VDN-H3 |
+| `H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json` | 双阶段采样 |
+| `H3Studio_minimax_h3_ref2va_fp8_digital_human_api.json` | 数字人 |
+| `H3Studio_minimax_h3_ref2va_fp8_tts_api.json` | H3 TTS |
+| `H3Studio_minimax_h3_ref2va_fp8_nsfw_lora_api.json` | H3 NSFW（仅私密模式） |
+| `H3Studio_minimax_music3_int8_api.json` | Music3 INT8 |
+| `H3Studio_comfy_upscale_image_api.json` | 图片超分 |
+| `H3Studio_comfy_upscale_video_api.json` | 视频超分 |
+
+内置预设只能调整是否在生成区显示，不能修改或删除。
+
+### 自定义工作流
+
+网页端「工作流」弹框可以导入 ComfyUI API 格式 JSON，并配置：
+
+- 通用字段映射：`prompt`、`lyrics`、`width`、`height`、`ratio`、`megapixels`、`duration`、`num_frames`、`steps`、`seed`
+- 参考素材映射：按图片、视频、音频类型和序号绑定到节点输入
+- 参考素材槽位：使用 `ref_images` / `ref_videos` / `ref_audios` 时，引擎按上传数量动态创建加载节点
+- 静态输入、结果节点、结果媒体类型、目标 ComfyUI 节点和生成区显示
+
+提交任务后使用创建时的图、映射、版本和目标节点快照执行；调度只选择已同步且在线的目标节点。参考素材按官方模型上限限制为图片 9 张、视频 3 段、音频 3 段。保存后服务会把工作流同步到目标 ComfyUI 的用户工作流目录并校验哈希，远程文件名为 `H3Studio_{workflow_id}.json`。导入、校验和同步错误统一写入「运行日志」。
 
 ## 本地 ComfyUI
 
@@ -182,25 +149,19 @@ flowchart LR
 
 ### 2026-10-23
 
-- 素材点击统一改为弹窗预览：参考素材缩略图、消息素材卡片、详情源文件列表都不再触发浏览器下载或跳转，图片显示图片、视频显示播放器、音频显示「文件名 + 播放器」、无法识别的文件显示未知文件图标；下载能力保留在明确的「下载」按钮上。
-- 自定义工作流支持可变数量的图片、视频和音频：参考素材映射可绑定 `ref_images` / `ref_videos` / `ref_audios` 槽位，引擎按序号自动创建加载节点，编辑器选择工作流后会自动识别可用槽位。
-- 槽位映射不再受已配置序号限制，按官方模型上限区分媒体类型：图片最多 9 张、视频 3 段、音频 3 段；新增映射行会自动选择下一个未占用序号，切换素材类型时也会重新选择。
-- 自定义工作流字段映射新增 `ratio` 与 `megapixels`：可把画面比例和 MP 直接映射到节点，编辑器按映射显示比例/分辨率控件；FL2VA 等内部按 ratio + MP 决定分辨率的图可直接使用。
-- 自定义工作流不再沿用 Music3 的歌词占位提示、优化歌词按钮以及固定 30 步/音乐时长等控件提示。
-- 内置工作流改为数据库驱动：首次创建 `data/config.db` 时从 `workflows/` 写入预设，引擎运行时读取数据库，不再读取 `H3_COMFY_*_WORKFLOW` 环境变量。
-- 工作流导入、校验、同步的报错改由右侧「运行日志」弹框展示并记录原始错误，工作流列表不再被提示文本挤占。
-- 推理节点列表的本机 ComfyUI 标签区分状态：未运行显示黄色的「可接管」，托管服务运行后变为绿色的「已接管」。
-- 修复新增工作流同步失败：ComfyUI 的 `/userdata/{file}` 只匹配单段路径，同步改为把目录分隔符编码成 `%2F` 写入 `workflows/`，不再返回 405。
+- 自定义工作流支持可变数量参考素材、`ratio` / `megapixels` 映射、结果节点与目标节点配置，并可将工作流同步到 ComfyUI。
+- 内置工作流改为首次建库时从 `workflows/` 写入数据库，运行时不再依赖工作流环境变量。
+- 所有内置和同步到 ComfyUI 的工作流文件统一使用 `H3Studio_` 前缀。
+- 素材、参考文件和详情源文件支持统一弹窗预览。
+- 增加本地 ComfyUI 接管：启动路径、私有环境、托管进程和实时日志。
 
 ### 2026-10-22
 
-- 界面按 apple.com 的语言重做：浅灰画布、发丝分隔线、单一 Action Blue、胶囊按钮与分段控件，字号收敛为 10 级 `--text-*` 令牌。
-- 外观从皮肤列表改为「日间 / 夜间 / 跟随系统」三种模式，底层继续使用原野与极光玻璃两套皮肤；跟随系统监听 `prefers-color-scheme` 实时切换。
-- 运行日志从浮动窗口移入顶部功能栏，队列数量以角标显示；弹框不显示遮罩、可拖动、点击入口/关闭按钮或按 Esc 关闭。
-- 设置新增「实验性功能」页签：绑定本地 ComfyUI 服务，支持可接管判定、启动路径、私有环境、实时日志与退出时结束托管进程。
-- 前端请求统一发送 `Accept-Language`，后端 `HTTPException` 按语言返回错误；补齐设置、节点、工作流、素材、超分、互联等弹窗的中英文文案。
-- 推理节点按地址区分本机 / 远程，弹框改为固定尺寸的横幅卡片，新增 / 编辑改为独立弹窗；新增 RunningHub 端点开关与自动调度排除选项。
-- Music3 切换到该工作流时输入区改为提示词与歌词左右分栏；视频超分改为独立入口，先选择类型与倍率再提交，不重置当前工作区。
+- 界面按 Apple 风格重做，提供日间、夜间和跟随系统三种外观。
+- 运行日志移入顶部功能栏，支持队列角标和可拖动弹框。
+- 推理节点支持横幅卡片、新增/编辑弹窗、RunningHub 端点和自动调度排除。
+- Music3 输入区改为提示词与歌词左右分栏；视频超分改为独立入口。
+- 前端与后端错误信息支持中英文。
 
 ### 2026-10-21：自定义工作流管理与参考图压缩
 
@@ -269,33 +230,11 @@ flowchart LR
 
 更新日志按时间倒序排列，同一天的所有改动合并为一条，当前状态截至 2026-10-23。Android APK 仍处于 Beta，尚未完成实机验证。
 
-### 更新数据的发布流程
-
-每次更新遵循以下流程：
-
-1. 扫描后端、前端、工作流、测试和文档，确认数据结构与接口影响范围。
-2. 修改代码和静态资源，涉及 SQLite 时保留迁移和旧数据兼容逻辑。
-3. 增加后端接口契约、前端静态契约和行为回归测试。
-4. 执行 Python 语法检查、JavaScript 语法检查、完整 unittest 和差异检查。
-5. 更新静态资源版本参数，避免浏览器缓存旧的 HTML、CSS 和 JavaScript。
-6. 发布前检查云 GPU 的任务队列、GPU 状态、磁盘空间和 ComfyUI 健康状态。
-7. 在 `/home/tapcash/ssd2/backups/` 创建远端备份，排除 `data/`、模型、虚拟环境和用户产物。
-8. 分目录同步源码、静态资源、工作流、测试和文档，校验本地与远端 SHA-256。
-9. 有执行中任务时只同步可热加载的静态资源；API 重启前确认 checkpoint 可恢复，避免中断生成。
-10. 重启 API 后验证 `/health`、`/AGENT.md`、`/docs`、`/openapi.json`、任务恢复、ComfyUI 和完整远端测试。
-
 ## 生成方案
 
-| 方案 | 参考输入 | 时长 | 步数 | 产物 |
-|---|---|---:|---:|---|
-| FL2VA | 首帧图片，可选尾帧图片 | 1 至 15 秒 | 4 至 50 | MP4 |
-| Ref2VA | 最多 9 张图片、3 段视频、3 段音频 | 1 至 15 秒 | 4 至 50 | MP4 |
-| H3 SA | FL2VA 或 Ref2VA 参考素材 | 1 至 300 秒 | 固定 8 | MP4 |
-| VDN H3 | FL2VA 或 Ref2VA 参考素材 | 1 至 15 秒 | 8 至 50 | MP4 |
-| 数字人 | 人物图片和驱动音频 | 由音频决定 | 固定 20 | MP4 |
-| H3 TTS | 人物特征、对白和音频参考 | 1 至 15 秒 | 4 至 50 | FLAC |
-| Music3 | 曲风描述和可选歌词 | 1 至 300 秒 | 固定 30 | FLAC |
-| RunningHub | 目标工作流定义的字段 | 由工作流定义 | 由工作流定义 | 由工作流定义 |
+- **内置 ComfyUI 工作流**：项目自带 FL2VA、Ref2VA、H3 SA、VDN-H3、数字人、H3 TTS、Music3、图片/视频超分等预设，开箱即用。
+- **自定义 ComfyUI 工作流**：导入任意 ComfyUI API 格式 JSON，配置字段、素材、比例/MP 和目标节点后使用。
+- **RunningHub 端点**：配置工作流或 AI App 地址后，由 RunningHub 执行，支持动态参数和余额/任务信息。
 
 ## 快速开始
 
@@ -352,123 +291,19 @@ bash gradlew assembleDebug
 
 Windows 使用 `gradlew.bat assembleDebug`。可安装 APK 位于 `android/app/build/outputs/apk/debug/app-debug.apk`。该调试版 APK 可直接侧载；公开发布时应使用自己的签名密钥构建 release 版本。
 
-### API 入口
+### API 文档
 
-| 地址 | 作用 |
-|---|---|
-| `/` | Web 工作台 |
-| `/health` | 服务、节点和队列状态 |
-| `/docs` | Swagger UI |
-| `/openapi.json` | OpenAPI JSON |
-| `/AGENT.md` | AI Agent 和 Skill 接入说明 |
-
-设置 `H3_API_KEY` 后，普通 API 请求使用：
-
-```http
-Authorization: Bearer YOUR_H3_API_KEY
-```
-
-## API
-
-创建视频任务：
-
-```bash
-curl -X POST http://127.0.0.1:8193/api/v1/generations \
-  -F 'prompt=固定机位，人物持续向前行走，保持人物身份和环境连续。' \
-  -F 'reference_manifest=[{"type":"image"}]' \
-  -F 'references=@first-frame.png;type=image/png' \
-  -F 'model_variant=fl2va-fp8' \
-  -F 'execution_mode=turbo-lora' \
-  -F 'width=864' \
-  -F 'height=480' \
-  -F 'duration=5' \
-  -F 'steps=8' \
-  -F 'comfy_node=auto'
-```
-
-任务查询和产物下载：
-
-```bash
-curl http://127.0.0.1:8193/api/v1/generations/JOB_ID
-curl http://127.0.0.1:8193/api/v1/generations/JOB_ID/result -o output.mp4
-```
-
-常用接口：
-
-| 方法 | 路径 | 作用 |
-|---|---|---|
-| `GET` | `/health` | 服务、节点和队列状态 |
-| `GET` | `/api/v1/comfy/nodes` | 查询推理节点 |
-| `POST` | `/api/v1/comfy/nodes/{node_id}/local-comfy/start` | 启动托管的本机 ComfyUI |
-| `POST` | `/api/v1/comfy/nodes/{node_id}/local-comfy/stop` | 停止托管的本机 ComfyUI |
-| `GET` | `/api/v1/workflows` | 查询内置预设与自定义工作流 |
-| `POST` | `/api/v1/workflows` | 创建工作流 |
-| `PATCH` | `/api/v1/workflows/{workflow_id}` | 修改工作流或生成区显示 |
-| `DELETE` | `/api/v1/workflows/{workflow_id}` | 删除自定义工作流 |
-| `POST` | `/api/v1/workflows/{workflow_id}/sync` | 同步并校验目标节点工作流 |
-| `POST` | `/api/v1/generations` | 创建任务 |
-| `GET` | `/api/v1/generations/{job_id}` | 查询任务 |
-| `POST` | `/api/v1/generations/{job_id}/cancel` | 取消任务 |
-| `POST` | `/api/v1/generations/{job_id}/regenerate` | 重新生成 |
-| `GET` | `/api/v1/generations/{job_id}/result` | 下载产物 |
-| `GET` | `/api/v1/events` | SSE 事件流 |
-| `POST` | `/api/v1/prompts/optimize` | H3 提示词优化 |
-| `POST` | `/api/v1/music/assist` | Music3 曲风或歌词辅助 |
-
-提交任务时可传入 `workflow_id` 选择内置预设或自定义工作流；省略时继续按 `model_variant` 与 `execution_mode` 选择内置方案。
-
-完整字段、错误码、RunningHub 动态参数、多端互联和素材接口见 [API 参考](docs/API.md)。面向自动化 Agent 的调用顺序、工具封装和验收要求见 [`AGENT.md`](AGENT.md)。
+服务启动后访问 `/docs` 查看 FastAPI 自动生成的 Swagger UI，`/openapi.json` 获取 OpenAPI 描述。API 参考不再在主文档中维护。
 
 ## 素材管理
 
-### 预览与下载
+- **预览与下载**：点击参考素材、消息素材或详情源文件都会打开预览弹窗；图片、视频、音频和未知文件分别展示，下载只通过明确的下载按钮触发。
+- **文件夹**：单层文件夹，支持新建、重命名、删除、双击进入、批量移动和未分组根目录；删除前检查进行中任务，非本机素材只读。
+- **本地素材**：显示容量与文件数量，支持 30 天前视频预览清理、产物删除和所有权校验。
 
-素材的点击行为统一为预览：参考素材缩略图、消息中的素材卡片和详情里的源文件列表都会打开预览弹窗。弹窗按类型展示图片、视频播放器或「文件名 + 播放器」的音频卡片，无法识别的内容显示未知文件图标与提示。下载只发生在明确的下载按钮上。
+## 节点包与安装资源
 
-### 文件夹与归属
-
-文件夹为单层结构，名称长度为 1 至 80 个字符，同级名称按大小写折叠后判重。新任务可以指定 `folder_id`，选择根目录或未分组时归入未分组。
-
-```text
-GET    /api/v1/asset-folders
-POST   /api/v1/asset-folders
-PATCH  /api/v1/asset-folders/{folder_id}
-POST   /api/v1/asset-folders/move
-DELETE /api/v1/asset-folders/{folder_id}
-```
-
-外层素材列表只显示未分类本机任务。双击文件夹进入后显示其中的视频素材。移动使用任务归属关系，不复制文件。远端素材保持只读，不接受移动、重命名和删除。
-
-删除文件夹前会检查排队中和执行中的任务。检查通过后删除文件夹内已结束任务的记录、参考文件、生成产物、sidecar、封面和日志。
-
-### 本地素材管理
-
-```text
-GET  /api/v1/assets/local
-GET  /api/v1/assets/local/clear-old-video/preview
-POST /api/v1/assets/local/clear-old-video
-POST /api/v1/assets/local/delete
-```
-
-清理 30 天前视频前，客户端应展示所有项目、创建时间、单项大小和总大小，再执行确认。非本机创建的文件和文件夹不可删除。
-
-## 工作流与节点包
-
-API 格式工作流位于 [`workflows/`](workflows/)，固定版本节点包和 SHA-256 清单位于 [`comfyui_nodes/`](comfyui_nodes/)。主要工作流包括：
-
-- `minimax_h3_fl2va_fp8_720p_15s_api.json`
-- `minimax_h3_ref2va_fp8_scaled_api.json`
-- `minimax_h3_fl2va_fp8_turbo_lora_api.json`
-- `minimax_h3_ref2va_fp8_turbo_lora_api.json`
-- `minimax_h3_fl2va_fp8_sa_api.json`
-- `minimax_h3_ref2va_fp8_sa_api.json`
-- `minimax_h3_fl2va_vdn_api.json`
-- `minimax_h3_ref2va_vdn_api.json`
-- `minimax_h3_ref2va_fp8_digital_human_api.json`
-- `minimax_h3_ref2va_fp8_tts_api.json`
-- `minimax_music3_int8_api.json`
-
-服务首次创建 `data/config.db` 时会把 `workflows/` 下的内置预设写入 `workflow_configs`，运行时直接读取数据库；这些工作流不再通过 `H3_COMFY_*_WORKFLOW` 环境变量声明，旧的 `.env` 配置可以删除。服务提交前会注入提示词、参考文件、分辨率、帧数、步数、随机种子、文件夹名称前缀和输出路径。
+固定版本节点包、补丁和 SHA-256 校验清单位于 [`comfyui_nodes/`](comfyui_nodes/)。ComfyUI 本体、节点包、工作流和模型由安装器统一部署。
 
 Linux 和 Windows PC 使用同一套安装逻辑及配套资源包。Linux 使用 Python 安装脚本和资源 ZIP；Windows 使用 PowerShell 脚本和资源 ZIP，BAT 文件提供双击入口。运行后输入目标 ComfyUI 目录，无需将安装文件迁移到目标目录。安装器会检查目标路径，复用有效的 ComfyUI 安装，或在空目录/新目录中安装 ComfyUI 本体，然后自动导入资源并下载匹配显存的模型。节点包、工作流、补丁和 Windows 所需的 Python 安装核心均在 ZIP 中，不会从 GitHub 下载安装脚本或项目资源。模型权重、PyTorch 和 Python 依赖仍需联网下载；安装器会测速 ModelScope、Hugging Face 和 HF-Mirror 后选择下载源。详见 [Agent ComfyUI 安装指南](AGENT_HOW_TO_INSTALL.md)。
 
@@ -528,15 +363,13 @@ INSTALL_ROOT=/data/minimax-h3-stack bash scripts/verify_install.sh
 ```text
 app/                  FastAPI、任务队列、工作流配置、节点调度、本地 ComfyUI 托管和推理客户端
 static/               中英文响应式网页
-static/design.css     Apple 风格视觉层（画布、字号、表面、控件）
-static/skins/         皮肤样式、预览图与背景资源
-workflows/            H3、H3 SA、VDN H3 和 Music3 API 工作流
+workflows/            H3Studio_ 前缀的内置 API 工作流
 comfyui_nodes/        固定版本节点源码包和校验清单
 scripts/              安装、下载、验证、桌面打包和生成测试
 android/              纯远程 Android 客户端（Beta）
 deploy/               systemd 服务模板
 patches/              ComfyUI 兼容补丁
-docs/                 API、部署、模型、工作流和运维文档
+docs/                 部署、模型、工作流和运维文档
 data/                 SQLite 配置、任务状态、上传素材和产物
 tests/                API 契约、工作流和桌面功能测试
 AGENT.md              AI Agent 接口调用和 Skill 创建指南
@@ -545,11 +378,11 @@ AGENT_HOW_TO_INSTALL.md  ComfyUI 与节点包安装指南
 
 ## 文档
 
-- [API 参考](docs/API.md)
 - [云 GPU 部署](docs/DEPLOYMENT.md)
 - [运行维护](docs/OPERATIONS.md)
 - [模型清单](docs/MODELS.md)
 - [工作流清单](docs/WORKFLOWS.md)
+- API：服务启动后访问 `/docs`
 - [桌面应用](docs/DESKTOP.md)
 - [ComfyUI 节点包](comfyui_nodes/README.md)
 - [AI Agent 指南](AGENT.md)

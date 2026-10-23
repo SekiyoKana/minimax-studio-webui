@@ -12,18 +12,18 @@ See the [official ComfyUI MiniMax H3 tutorial](https://docs.comfy.org/tutorials/
 
 | File | Model | Mode | SHA-256 |
 |---|---|---|---|
-| `minimax_h3_fl2va_fp8_720p_15s_api.json` | FL2VA FP8 Scaled | Native | `b8fa94ef488d2b923e17562d79e23bde4bd997d2ec0d7ba158ece76d0b5a5b64` |
-| `minimax_h3_ref2va_fp8_scaled_api.json` | Ref2VA FP8 Scaled | Native | `dcd2db8828bb631abd6ff3707d545037047815dc54743d1fab2f98ac53749561` |
-| `minimax_h3_fl2va_fp8_turbo_lora_api.json` | FL2VA FP8 Scaled + FL2VA 8-step v1.0 768p LoRA | `res_multistep`, 8 steps, video shift 6 / audio shift 3 | `5e87d9516fd32d922258c14332a00724d99223633575c5f06d778fe6177afe6c` |
-| `minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA FP8 Scaled + Ref2VA 8-step v1.0 768p LoRA | `res_multistep`, 8 steps, video shift 6 / audio shift 3 | `be1cc430fe8274f18a4263620d2371e34e73d38c2464590e081be64e1d3e0a51` |
-| `minimax_h3_fl2va_fp8_sa_api.json` | FL2VA FP8 + FL2VA 8-step v1.0 768p LoRA + Sol-Attn + Latent 3D Upscaler | H3 SA, two 8-step stages | `8d6b3d4165877d1cf2046712c5f7b4ceb48d352e0dbade149a25406e7df68e6d` |
-| `minimax_h3_ref2va_fp8_sa_api.json` | Ref2VA FP8 + Ref2VA 8-step v1.0 768p LoRA + Sol-Attn + Latent 3D Upscaler | H3 SA, two 8-step stages | `fa5930a90671514e3b468927b6d5175c80cf36106db8a8282e90b12e1e3a4121` |
-| `minimax_h3_fl2va_vdn_api.json` | FL2VA FP8 + VDN-H3 Video Delta Net | VDN-H3, automatic stage selection for 8–50 steps | `42db673ea1927d17e43e0687017f1f33765e8d5da6446c74b717141314cfaa93` |
-| `minimax_h3_ref2va_vdn_api.json` | Ref2VA FP8 + VDN-H3 Video Delta Net | VDN-H3, automatic stage selection for 8–50 steps | `937d67a67c6c5d79b23a27650442e295559251eb6e8911c8ec6aa38628328919` |
-| `minimax_h3_ref2va_fp8_nsfw_lora_api.json` | Ref2VA FP8 Scaled | NaughtyTimes LoRA | `4fbdcb94d6014fedfd6af50d081feaae891ca97867f888a00673563891e9dad7` |
-| `minimax_h3_ref2va_fp8_digital_human_api.json` | Ref2VA FP8 Scaled | Single-image audio-driven digital human | `829babe98437529714c4608185be9a63cd5db3ea09544d813a060b6e47138c06` |
-| `minimax_music3_int8_api.json` | Music3 INT8 | Text and lyrics to music | `f3f3d2af89aadd9b25bd4d49628e28b13ba6e9e05e3afc551f4edd5177980fa5` |
-| `minimax_h3_ref2va_fp8_tts_api.json` | Ref2VA FP8 Scaled | Character voice references and dialogue to audio | `b80991825b1e959b4dc6eb7a8714458dcc1620eedce5bc36fc96b5bf66bb65b6` |
+| `H3Studio_minimax_h3_fl2va_fp8_720p_15s_api.json` | FL2VA FP8 Scaled | Native | `b8fa94ef488d2b923e17562d79e23bde4bd997d2ec0d7ba158ece76d0b5a5b64` |
+| `H3Studio_minimax_h3_ref2va_fp8_scaled_api.json` | Ref2VA FP8 Scaled | Native | `dcd2db8828bb631abd6ff3707d545037047815dc54743d1fab2f98ac53749561` |
+| `H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json` | FL2VA FP8 Scaled + FL2VA 8-step v1.0 768p LoRA | `res_multistep`, 8 steps, video shift 6 / audio shift 3 | `5e87d9516fd32d922258c14332a00724d99223633575c5f06d778fe6177afe6c` |
+| `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA FP8 Scaled + Ref2VA 8-step v1.0 768p LoRA | `res_multistep`, 8 steps, video shift 6 / audio shift 3 | `be1cc430fe8274f18a4263620d2371e34e73d38c2464590e081be64e1d3e0a51` |
+| `H3Studio_minimax_h3_fl2va_fp8_sa_api.json` | FL2VA FP8 + FL2VA 8-step v1.0 768p LoRA + Sol-Attn + Latent 3D Upscaler | H3 SA, two 8-step stages | `8d6b3d4165877d1cf2046712c5f7b4ceb48d352e0dbade149a25406e7df68e6d` |
+| `H3Studio_minimax_h3_ref2va_fp8_sa_api.json` | Ref2VA FP8 + Ref2VA 8-step v1.0 768p LoRA + Sol-Attn + Latent 3D Upscaler | H3 SA, two 8-step stages | `fa5930a90671514e3b468927b6d5175c80cf36106db8a8282e90b12e1e3a4121` |
+| `H3Studio_minimax_h3_fl2va_vdn_api.json` | FL2VA FP8 + VDN-H3 Video Delta Net | VDN-H3, automatic stage selection for 8–50 steps | `42db673ea1927d17e43e0687017f1f33765e8d5da6446c74b717141314cfaa93` |
+| `H3Studio_minimax_h3_ref2va_vdn_api.json` | Ref2VA FP8 + VDN-H3 Video Delta Net | VDN-H3, automatic stage selection for 8–50 steps | `937d67a67c6c5d79b23a27650442e295559251eb6e8911c8ec6aa38628328919` |
+| `H3Studio_minimax_h3_ref2va_fp8_nsfw_lora_api.json` | Ref2VA FP8 Scaled | NaughtyTimes LoRA | `4fbdcb94d6014fedfd6af50d081feaae891ca97867f888a00673563891e9dad7` |
+| `H3Studio_minimax_h3_ref2va_fp8_digital_human_api.json` | Ref2VA FP8 Scaled | Single-image audio-driven digital human | `829babe98437529714c4608185be9a63cd5db3ea09544d813a060b6e47138c06` |
+| `H3Studio_minimax_music3_int8_api.json` | Music3 INT8 | Text and lyrics to music | `f3f3d2af89aadd9b25bd4d49628e28b13ba6e9e05e3afc551f4edd5177980fa5` |
+| `H3Studio_minimax_h3_ref2va_fp8_tts_api.json` | Ref2VA FP8 Scaled | Character voice references and dialogue to audio | `b80991825b1e959b4dc6eb7a8714458dcc1620eedce5bc36fc96b5bf66bb65b6` |
 
 ## Dynamic Nodes
 

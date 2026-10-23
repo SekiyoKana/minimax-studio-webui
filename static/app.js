@@ -1744,7 +1744,7 @@ async function downloadWorkflow(workflowId) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `h3studio-${workflow.id}.json`;
+    anchor.download = `H3Studio_${workflow.id}.json`;
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (error) {

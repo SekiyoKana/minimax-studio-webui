@@ -9,7 +9,7 @@
       "model_variant": "fl2va-fp8",
       "execution_mode": "native",
       "steps": 8,
-      "workflow_file": "workflows/minimax_h3_fl2va_fp8_720p_15s_api.json",
+      "workflow_file": "workflows/H3Studio_minimax_h3_fl2va_fp8_720p_15s_api.json",
       "workflow_exists": true,
       "node_count": 16,
       "class_types": [
@@ -68,7 +68,7 @@
       "model_variant": "fl2va-fp8",
       "execution_mode": "turbo-lora",
       "steps": 8,
-      "workflow_file": "workflows/minimax_h3_fl2va_fp8_turbo_lora_api.json",
+      "workflow_file": "workflows/H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json",
       "workflow_exists": true,
       "node_count": 18,
       "class_types": [
@@ -145,7 +145,7 @@
       "model_variant": "ref2va-fp8",
       "execution_mode": "native",
       "steps": 8,
-      "workflow_file": "workflows/minimax_h3_ref2va_fp8_scaled_api.json",
+      "workflow_file": "workflows/H3Studio_minimax_h3_ref2va_fp8_scaled_api.json",
       "workflow_exists": true,
       "node_count": 17,
       "class_types": [
@@ -211,7 +211,7 @@
       "model_variant": "ref2va-fp8",
       "execution_mode": "turbo-lora",
       "steps": 8,
-      "workflow_file": "workflows/minimax_h3_ref2va_fp8_turbo_lora_api.json",
+      "workflow_file": "workflows/H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json",
       "workflow_exists": true,
       "node_count": 19,
       "class_types": [
@@ -295,7 +295,7 @@
       "model_variant": "ref2va-fp8",
       "execution_mode": "dual-sampling",
       "steps": 8,
-      "workflow_file": "workflows/minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json",
+      "workflow_file": "workflows/H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json",
       "workflow_exists": true,
       "node_count": 32,
       "class_types": [
@@ -399,7 +399,7 @@
       "model_variant": "fl2va-fp8",
       "execution_mode": "h3-sa",
       "steps": 8,
-      "workflow_file": "workflows/minimax_h3_fl2va_fp8_sa_api.json",
+      "workflow_file": "workflows/H3Studio_minimax_h3_fl2va_fp8_sa_api.json",
       "workflow_exists": true,
       "node_count": 30,
       "class_types": [
@@ -506,7 +506,7 @@
       "model_variant": "ref2va-fp8",
       "execution_mode": "h3-sa",
       "steps": 8,
-      "workflow_file": "workflows/minimax_h3_ref2va_fp8_sa_api.json",
+      "workflow_file": "workflows/H3Studio_minimax_h3_ref2va_fp8_sa_api.json",
       "workflow_exists": true,
       "node_count": 32,
       "class_types": [
@@ -620,7 +620,7 @@
       "model_variant": "fl2va-fp8",
       "execution_mode": "vdn-h3",
       "steps": 8,
-      "workflow_file": "workflows/minimax_h3_fl2va_vdn_api.json",
+      "workflow_file": "workflows/H3Studio_minimax_h3_fl2va_vdn_api.json",
       "workflow_exists": true,
       "node_count": 17,
       "class_types": [
@@ -688,7 +688,7 @@
       "model_variant": "fl2va-fp8",
       "execution_mode": "vdn-h3",
       "steps": 50,
-      "workflow_file": "workflows/minimax_h3_fl2va_vdn_api.json",
+      "workflow_file": "workflows/H3Studio_minimax_h3_fl2va_vdn_api.json",
       "workflow_exists": true,
       "node_count": 17,
       "class_types": [
@@ -756,7 +756,7 @@
       "model_variant": "ref2va-fp8",
       "execution_mode": "vdn-h3",
       "steps": 8,
-      "workflow_file": "workflows/minimax_h3_ref2va_vdn_api.json",
+      "workflow_file": "workflows/H3Studio_minimax_h3_ref2va_vdn_api.json",
       "workflow_exists": true,
       "node_count": 18,
       "class_types": [
@@ -831,7 +831,7 @@
       "model_variant": "ref2va-fp8",
       "execution_mode": "h3-nsfw",
       "steps": 8,
-      "workflow_file": "workflows/minimax_h3_ref2va_fp8_nsfw_lora_api.json",
+      "workflow_file": "workflows/H3Studio_minimax_h3_ref2va_fp8_nsfw_lora_api.json",
       "workflow_exists": true,
       "node_count": 18,
       "class_types": [
@@ -898,7 +898,7 @@
       "model_variant": "ref2va-fp8",
       "execution_mode": "digital-human",
       "steps": 20,
-      "workflow_file": "workflows/minimax_h3_ref2va_fp8_digital_human_api.json",
+      "workflow_file": "workflows/H3Studio_minimax_h3_ref2va_fp8_digital_human_api.json",
       "workflow_exists": true,
       "node_count": 16,
       "class_types": [
@@ -959,7 +959,7 @@
       "model_variant": "ref2va-fp8",
       "execution_mode": "tts",
       "steps": 20,
-      "workflow_file": "workflows/minimax_h3_ref2va_fp8_tts_api.json",
+      "workflow_file": "workflows/H3Studio_minimax_h3_ref2va_fp8_tts_api.json",
       "workflow_exists": true,
       "node_count": 14,
       "class_types": [
@@ -1020,7 +1020,7 @@
       "model_variant": "music3-int8",
       "execution_mode": "music3",
       "steps": 30,
-      "workflow_file": "workflows/minimax_music3_int8_api.json",
+      "workflow_file": "workflows/H3Studio_minimax_music3_int8_api.json",
       "workflow_exists": true,
       "node_count": 9,
       "class_types": [

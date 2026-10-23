@@ -1110,39 +1110,39 @@ class ContractTests(unittest.TestCase):
 
         settings = Settings(
             comfy_workflow=local_or_configured(
-                "minimax_h3_fl2va_fp8_720p_15s_api.json",
+                "H3Studio_minimax_h3_fl2va_fp8_720p_15s_api.json",
                 configured.comfy_workflow,
             ),
             comfy_ref2va_workflow=local_or_configured(
-                "minimax_h3_ref2va_fp8_scaled_api.json",
+                "H3Studio_minimax_h3_ref2va_fp8_scaled_api.json",
                 configured.comfy_ref2va_workflow,
             ),
             comfy_turbo_workflow=local_or_configured(
-                "minimax_h3_fl2va_fp8_turbo_lora_api.json",
+                "H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json",
                 configured.comfy_turbo_workflow,
             ),
             comfy_ref2va_turbo_workflow=local_or_configured(
-                "minimax_h3_ref2va_fp8_turbo_lora_api.json",
+                "H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json",
                 configured.comfy_ref2va_turbo_workflow,
             ),
             comfy_sa_workflow=local_or_configured(
-                "minimax_h3_fl2va_fp8_sa_api.json",
+                "H3Studio_minimax_h3_fl2va_fp8_sa_api.json",
                 configured.comfy_sa_workflow,
             ),
             comfy_ref2va_sa_workflow=local_or_configured(
-                "minimax_h3_ref2va_fp8_sa_api.json",
+                "H3Studio_minimax_h3_ref2va_fp8_sa_api.json",
                 configured.comfy_ref2va_sa_workflow,
             ),
             comfy_nsfw_workflow=local_or_configured(
-                "minimax_h3_ref2va_fp8_nsfw_lora_api.json",
+                "H3Studio_minimax_h3_ref2va_fp8_nsfw_lora_api.json",
                 configured.comfy_nsfw_workflow,
             ),
             comfy_digital_human_workflow=local_or_configured(
-                "minimax_h3_ref2va_fp8_digital_human_api.json",
+                "H3Studio_minimax_h3_ref2va_fp8_digital_human_api.json",
                 configured.comfy_digital_human_workflow,
             ),
             comfy_music3_workflow=local_or_configured(
-                "minimax_music3_int8_api.json",
+                "H3Studio_minimax_music3_int8_api.json",
                 configured.comfy_music3_workflow,
             ),
         )
@@ -1820,7 +1820,7 @@ class ContractTests(unittest.TestCase):
         local_workflow = (
             project_root.parent.parent
             / "minimax-h3-comfyui"
-            / "minimax_h3_fl2va_fp8_720p_15s_api.json"
+            / "H3Studio_minimax_h3_fl2va_fp8_720p_15s_api.json"
         )
         workflow_path = local_workflow if local_workflow.exists() else Settings().comfy_workflow
         engine = ComfyUIH3Engine(Settings(comfy_workflow=workflow_path))
@@ -1858,7 +1858,7 @@ class ContractTests(unittest.TestCase):
         local_workflow = (
             project_root.parent.parent
             / "minimax-h3-comfyui"
-            / "minimax_h3_ref2va_fp8_scaled_api.json"
+            / "H3Studio_minimax_h3_ref2va_fp8_scaled_api.json"
         )
         workflow_path = (
             local_workflow
@@ -1907,8 +1907,8 @@ class ContractTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         engine = ComfyUIH3Engine(
             Settings(
-                comfy_sa_workflow=root / "workflows/minimax_h3_fl2va_fp8_sa_api.json",
-                comfy_ref2va_sa_workflow=root / "workflows/minimax_h3_ref2va_fp8_sa_api.json",
+                comfy_sa_workflow=root / "workflows/H3Studio_minimax_h3_fl2va_fp8_sa_api.json",
+                comfy_ref2va_sa_workflow=root / "workflows/H3Studio_minimax_h3_ref2va_fp8_sa_api.json",
             )
         )
         base = {
@@ -1961,8 +1961,8 @@ class ContractTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         engine = ComfyUIH3Engine(
             Settings(
-                comfy_vdn_workflow=root / "workflows/minimax_h3_fl2va_vdn_api.json",
-                comfy_ref2va_vdn_workflow=root / "workflows/minimax_h3_ref2va_vdn_api.json",
+                comfy_vdn_workflow=root / "workflows/H3Studio_minimax_h3_fl2va_vdn_api.json",
+                comfy_ref2va_vdn_workflow=root / "workflows/H3Studio_minimax_h3_ref2va_vdn_api.json",
             )
         )
         base = {
@@ -2014,7 +2014,7 @@ class ContractTests(unittest.TestCase):
     def test_h3_sa_context_loop_keeps_sampler_latent_input_valid(self):
         root = Path(__file__).resolve().parents[1]
         engine = ComfyUIH3Engine(
-            Settings(comfy_sa_workflow=root / "workflows/minimax_h3_fl2va_fp8_sa_api.json")
+            Settings(comfy_sa_workflow=root / "workflows/H3Studio_minimax_h3_fl2va_fp8_sa_api.json")
         )
         job = {
             "id": "sa-context",
@@ -2048,7 +2048,7 @@ class ContractTests(unittest.TestCase):
             settings = Settings(
                 root=root,
                 comfy_sa_workflow=Path(__file__).resolve().parents[1]
-                / "workflows/minimax_h3_fl2va_fp8_sa_api.json",
+                / "workflows/H3Studio_minimax_h3_fl2va_fp8_sa_api.json",
             )
             settings.ensure_directories()
             engine = ComfyUIH3Engine(settings)

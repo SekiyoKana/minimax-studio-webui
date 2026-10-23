@@ -28,16 +28,16 @@ CHUNK_SIZE = 8 * 1024 * 1024
 PROBE_BYTES = 1024 * 1024
 
 WORKFLOW_SHA256 = {
-    "minimax_h3_fl2va_fp8_720p_15s_api.json": "c714b477a13072388d6fa7098b4d49d2336464904c005e00cc30a7226ad2c853",
-    "minimax_h3_fl2va_fp8_sa_api.json": "851333a7c07ca39c5094cadbd14d0b15e8609eef4b12ae71e664974f2650dcc0",
-    "minimax_h3_fl2va_fp8_turbo_lora_api.json": "4c513b996438c89e77bebdfbf4bceb492d98ef2658e88ec787e3b5609bf5a67d",
-    "minimax_h3_ref2va_fp8_digital_human_api.json": "aba8e1859dd57f8948c1d6da2be35daf198e15f6d2633da84e75a371fc471745",
-    "minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json": "dc2f8dbf18414d393daeaf895187c142df8633e4d1282bb8eb94133ad58e9b54",
-    "minimax_h3_ref2va_fp8_sa_api.json": "204eb6a760d28e4f592a0537ceda864bba02ac8b9f73a64e56f25b32800381e0",
-    "minimax_h3_ref2va_fp8_scaled_api.json": "f8d78113fbfc7175aaefd8f79dec060c508c05a78aec943135d7de0f43101892",
-    "minimax_h3_ref2va_fp8_tts_api.json": "7269c83bb995fdadb38ef3678be167e238de152cdd8586e33dc4ba384104bc98",
-    "minimax_h3_ref2va_fp8_turbo_lora_api.json": "1dab7ff0962e76cf8736f7637522644775b8ab9745b7d7db7afdb7610bbd4c5b",
-    "minimax_music3_int8_api.json": "87a5521ecb4f42abed454c1ee6caa674654e1fa716679e311271a0365503dd67",
+    "H3Studio_minimax_h3_fl2va_fp8_720p_15s_api.json": "c714b477a13072388d6fa7098b4d49d2336464904c005e00cc30a7226ad2c853",
+    "H3Studio_minimax_h3_fl2va_fp8_sa_api.json": "851333a7c07ca39c5094cadbd14d0b15e8609eef4b12ae71e664974f2650dcc0",
+    "H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json": "4c513b996438c89e77bebdfbf4bceb492d98ef2658e88ec787e3b5609bf5a67d",
+    "H3Studio_minimax_h3_ref2va_fp8_digital_human_api.json": "aba8e1859dd57f8948c1d6da2be35daf198e15f6d2633da84e75a371fc471745",
+    "H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json": "dc2f8dbf18414d393daeaf895187c142df8633e4d1282bb8eb94133ad58e9b54",
+    "H3Studio_minimax_h3_ref2va_fp8_sa_api.json": "204eb6a760d28e4f592a0537ceda864bba02ac8b9f73a64e56f25b32800381e0",
+    "H3Studio_minimax_h3_ref2va_fp8_scaled_api.json": "f8d78113fbfc7175aaefd8f79dec060c508c05a78aec943135d7de0f43101892",
+    "H3Studio_minimax_h3_ref2va_fp8_tts_api.json": "7269c83bb995fdadb38ef3678be167e238de152cdd8586e33dc4ba384104bc98",
+    "H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json": "1dab7ff0962e76cf8736f7637522644775b8ab9745b7d7db7afdb7610bbd4c5b",
+    "H3Studio_minimax_music3_int8_api.json": "87a5521ecb4f42abed454c1ee6caa674654e1fa716679e311271a0365503dd67",
 }
 
 PROFILE_MODEL_IDS = {
@@ -640,27 +640,27 @@ def apply_music3_patch(assets: Assets, comfy_root: Path) -> None:
 
 def selected_workflows(profile: str, linux_cuda: bool) -> list[str]:
     fl2va = [
-        "minimax_h3_fl2va_fp8_720p_15s_api.json",
-        "minimax_h3_fl2va_fp8_turbo_lora_api.json",
+        "H3Studio_minimax_h3_fl2va_fp8_720p_15s_api.json",
+        "H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json",
     ]
     ref2va = [
-        "minimax_h3_ref2va_fp8_scaled_api.json",
-        "minimax_h3_ref2va_fp8_turbo_lora_api.json",
-        "minimax_h3_ref2va_fp8_digital_human_api.json",
-        "minimax_h3_ref2va_fp8_tts_api.json",
-        "minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json",
+        "H3Studio_minimax_h3_ref2va_fp8_scaled_api.json",
+        "H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json",
+        "H3Studio_minimax_h3_ref2va_fp8_digital_human_api.json",
+        "H3Studio_minimax_h3_ref2va_fp8_tts_api.json",
+        "H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json",
     ]
     if linux_cuda:
-        fl2va.append("minimax_h3_fl2va_fp8_sa_api.json")
-        ref2va.append("minimax_h3_ref2va_fp8_sa_api.json")
+        fl2va.append("H3Studio_minimax_h3_fl2va_fp8_sa_api.json")
+        ref2va.append("H3Studio_minimax_h3_ref2va_fp8_sa_api.json")
     if profile == "h3-fl2va":
         return fl2va
     if profile == "h3-ref2va":
         return ref2va
     if profile == "music3":
-        return ["minimax_music3_int8_api.json"]
+        return ["H3Studio_minimax_music3_int8_api.json"]
     if profile in {"full", "none"}:
-        return fl2va + ref2va + ["minimax_music3_int8_api.json"]
+        return fl2va + ref2va + ["H3Studio_minimax_music3_int8_api.json"]
     return []
 
 

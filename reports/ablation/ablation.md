@@ -11,20 +11,20 @@
 
 | 案例 | 工作流 | 节点数 | 动态参考节点 | 组件 | 关键配置 |
 |---|---|---:|---:|---|---|
-| `fl2va-fp8/native/8steps` | `workflows/minimax_h3_fl2va_fp8_720p_15s_api.json` | 16 | 0 | video_output | steps=8 |
-| `fl2va-fp8/turbo-lora/8steps` | `workflows/minimax_h3_fl2va_fp8_turbo_lora_api.json` | 18 | 0 | turbo_lora, sigma_shift, video_output | steps=8 |
-| `ref2va-fp8/native/8steps` | `workflows/minimax_h3_ref2va_fp8_scaled_api.json` | 17 | 3 | video_output | steps=8 |
-| `ref2va-fp8/turbo-lora/8steps` | `workflows/minimax_h3_ref2va_fp8_turbo_lora_api.json` | 19 | 3 | turbo_lora, sigma_shift, video_output | steps=8 |
-| `ref2va-fp8/dual-sampling/8steps` | `workflows/minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json` | 32 | 2 | sigma_shift, sol_attn, latent_upscaler, sigma_refiner, video_output | steps=8 |
-| `fl2va-fp8/h3-sa/8steps` | `workflows/minimax_h3_fl2va_fp8_sa_api.json` | 30 | 0 | turbo_lora, sigma_shift, sol_attn, latent_upscaler, video_output | steps=8 |
-| `ref2va-fp8/h3-sa/8steps` | `workflows/minimax_h3_ref2va_fp8_sa_api.json` | 32 | 3 | turbo_lora, sigma_shift, sol_attn, latent_upscaler, video_output | steps=8 |
-| `fl2va-fp8/vdn-h3/8steps` | `workflows/minimax_h3_fl2va_vdn_api.json` | 17 | 0 | vdn, video_output | stage-dmd-step-250，turbo=True |
-| `fl2va-fp8/vdn-h3/50steps` | `workflows/minimax_h3_fl2va_vdn_api.json` | 17 | 0 | vdn, video_output | stage-b-step-2000，turbo=False |
-| `ref2va-fp8/vdn-h3/8steps` | `workflows/minimax_h3_ref2va_vdn_api.json` | 18 | 3 | vdn, video_output | stage-dmd-step-250，turbo=True |
-| `ref2va-fp8/h3-nsfw/8steps` | `workflows/minimax_h3_ref2va_fp8_nsfw_lora_api.json` | 18 | 3 | nsfw_lora, video_output | steps=8 |
-| `ref2va-fp8/digital-human/20steps` | `workflows/minimax_h3_ref2va_fp8_digital_human_api.json` | 16 | 0 | audio_drive, video_output | steps=20 |
-| `ref2va-fp8/tts/20steps` | `workflows/minimax_h3_ref2va_fp8_tts_api.json` | 14 | 2 | audio_output | steps=20 |
-| `music3-int8/music3/30steps` | `workflows/minimax_music3_int8_api.json` | 9 | 0 | audio_output | steps=30，force_duration=True |
+| `fl2va-fp8/native/8steps` | `workflows/H3Studio_minimax_h3_fl2va_fp8_720p_15s_api.json` | 16 | 0 | video_output | steps=8 |
+| `fl2va-fp8/turbo-lora/8steps` | `workflows/H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json` | 18 | 0 | turbo_lora, sigma_shift, video_output | steps=8 |
+| `ref2va-fp8/native/8steps` | `workflows/H3Studio_minimax_h3_ref2va_fp8_scaled_api.json` | 17 | 3 | video_output | steps=8 |
+| `ref2va-fp8/turbo-lora/8steps` | `workflows/H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json` | 19 | 3 | turbo_lora, sigma_shift, video_output | steps=8 |
+| `ref2va-fp8/dual-sampling/8steps` | `workflows/H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json` | 32 | 2 | sigma_shift, sol_attn, latent_upscaler, sigma_refiner, video_output | steps=8 |
+| `fl2va-fp8/h3-sa/8steps` | `workflows/H3Studio_minimax_h3_fl2va_fp8_sa_api.json` | 30 | 0 | turbo_lora, sigma_shift, sol_attn, latent_upscaler, video_output | steps=8 |
+| `ref2va-fp8/h3-sa/8steps` | `workflows/H3Studio_minimax_h3_ref2va_fp8_sa_api.json` | 32 | 3 | turbo_lora, sigma_shift, sol_attn, latent_upscaler, video_output | steps=8 |
+| `fl2va-fp8/vdn-h3/8steps` | `workflows/H3Studio_minimax_h3_fl2va_vdn_api.json` | 17 | 0 | vdn, video_output | stage-dmd-step-250，turbo=True |
+| `fl2va-fp8/vdn-h3/50steps` | `workflows/H3Studio_minimax_h3_fl2va_vdn_api.json` | 17 | 0 | vdn, video_output | stage-b-step-2000，turbo=False |
+| `ref2va-fp8/vdn-h3/8steps` | `workflows/H3Studio_minimax_h3_ref2va_vdn_api.json` | 18 | 3 | vdn, video_output | stage-dmd-step-250，turbo=True |
+| `ref2va-fp8/h3-nsfw/8steps` | `workflows/H3Studio_minimax_h3_ref2va_fp8_nsfw_lora_api.json` | 18 | 3 | nsfw_lora, video_output | steps=8 |
+| `ref2va-fp8/digital-human/20steps` | `workflows/H3Studio_minimax_h3_ref2va_fp8_digital_human_api.json` | 16 | 0 | audio_drive, video_output | steps=20 |
+| `ref2va-fp8/tts/20steps` | `workflows/H3Studio_minimax_h3_ref2va_fp8_tts_api.json` | 14 | 2 | audio_output | steps=20 |
+| `music3-int8/music3/30steps` | `workflows/H3Studio_minimax_music3_int8_api.json` | 9 | 0 | audio_output | steps=30，force_duration=True |
 
 ## 检查结果
 
