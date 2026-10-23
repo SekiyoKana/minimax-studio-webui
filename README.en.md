@@ -159,6 +159,7 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 - Dialogs and detail windows now animate in and out; top-right toasts use an icon + message layout with an exit animation.
 - The asset library now defaults to a width that shows exactly 3 columns; the redundant New generation button was removed.
 - Renamed the conversation title to Messages, added Markdown prompt rendering, zoomable asset previews, and Default / Minimal / Grid conversation styles.
+- Renamed the Appearance tab to Display and added an "Optimize Markdown in the conversation" switch, enabled by default.
 - The 4-step and 8-step LoRAs keep their default step counts, but sampling steps are editable.
 - Reference and asset files open in a unified preview dialog.
 - Local ComfyUI supervision: launch path, editable launch command, private environment, managed process and live logs.

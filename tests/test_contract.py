@@ -485,6 +485,8 @@ class ContractTests(unittest.TestCase):
         self.assertIn('/assets/design.css', index)
         self.assertIn('/assets/skins/skins.css', index)
         self.assertIn('id="settingsPanelAppearance"', index)
+        self.assertIn('data-settings-tab="appearance">显示', index)
+        self.assertIn('id="optimizeMarkdown"', index)
         self.assertIn('data-theme-option="light"', index)
         self.assertIn('data-theme-option="dark"', index)
         self.assertIn('data-theme-option="system"', index)

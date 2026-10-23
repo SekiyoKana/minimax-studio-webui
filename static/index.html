@@ -23,14 +23,14 @@
         document.documentElement.dataset.theme = mode;
       })();
     </script>
-    <link rel="stylesheet" href="/assets/styles.css?v=62&rev=72">
-    <link rel="stylesheet" href="/assets/design.css?v=48">
+    <link rel="stylesheet" href="/assets/styles.css?v=63&rev=73">
+    <link rel="stylesheet" href="/assets/design.css?v=49">
     <link rel="stylesheet" href="/assets/skins/skins.css?v=8">
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
     <script src="/assets/dropdown.js?v=4" defer></script>
     <script src="/assets/motion.js?v=4" defer></script>
-    <script src="/assets/app.js?v=109&rev=121&upscale=1" defer></script>
+    <script src="/assets/app.js?v=110&rev=122&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -485,7 +485,7 @@
         <header class="settings-header"><div><span class="settings-mark"><i data-lucide="settings-2"></i></span><div><h2 id="globalSettingsTitle">设置</h2><p id="globalSettingsSubtitle">本地应用与互联数据设置</p></div></div><button class="icon-button" id="closeGlobalSettings" type="button" title="关闭" aria-label="关闭设置"><i data-lucide="x"></i></button></header>
         <nav class="settings-tabs" role="tablist" aria-label="设置分类">
           <button class="settings-tab is-active" id="settingsTabModel" type="button" role="tab" aria-selected="true" aria-controls="settingsPanelModel" data-settings-tab="model">模型</button>
-          <button class="settings-tab" id="settingsTabAppearance" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelAppearance" data-settings-tab="appearance">外观</button>
+          <button class="settings-tab" id="settingsTabAppearance" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelAppearance" data-settings-tab="appearance">显示</button>
           <button class="settings-tab" id="settingsTabSystem" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelSystem" data-settings-tab="system">系统</button>
           <button class="settings-tab" id="settingsTabUpload" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelUpload" data-settings-tab="upload">上传</button>
           <button class="settings-tab" id="settingsTabExperimental" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelExperimental" data-settings-tab="experimental">实验性功能</button>
@@ -536,7 +536,9 @@
                 <span class="skin-card-copy"><strong>跟随系统</strong><small>随系统自动切换</small></span>
               </button>
             </div>
-            <p class="skin-help" id="skinHelp">外观只改变界面样式，不影响生成、队列、数据与接口。跟随系统时会随系统深浅色自动切换。</p>
+            <p class="skin-help" id="skinHelp">显示设置只改变界面样式，不影响生成、队列、数据与接口。跟随系统时会随系统深浅色自动切换。</p>
+            <label class="switch-row" id="markdownOptimizeRow"><span>在对话流中优化 Markdown 显示</span><input id="optimizeMarkdown" type="checkbox" checked><span class="switch"></span></label>
+            <p class="settings-help" id="markdownOptimizeHelp">关闭后提示词按原始纯文本显示，不再解析标题、列表、代码块和链接等 Markdown 语法。</p>
             <div class="settings-divider"></div>
             <div class="settings-subsection message-style-settings">
               <strong id="messageStyleTitle">对话消息样式</strong>

@@ -24,6 +24,7 @@ const state = {
   assetDetailActiveWindowId: null,
   assetDetailDrag: null,
   messageStyle: "default",
+  optimizeMarkdown: true,
   localAssets: [],
   localAssetPage: 0,
   localAssetPages: 1,
@@ -328,12 +329,14 @@ function renderThemeOptions() {
   const help = el("skinHelp");
   if (help) {
     help.textContent = localized(
-      "外观只改变界面样式，不影响生成、队列、数据与接口。跟随系统时会随系统深浅色自动切换。",
-      "Appearance only changes the interface; generation, queue, data and APIs are unaffected. System mode follows your OS light/dark setting."
+      "显示设置只改变界面样式，不影响生成、队列、数据与接口。跟随系统时会随系统深浅色自动切换。",
+      "Display settings only change the interface; generation, queue, data and APIs are unaffected. System mode follows your OS light/dark setting."
     );
   }
-  setText("#messageStyleTitle", "对话消息样式");
-  setText("#messageStyleHelp", "选择对话流的展示方式。默认保留完整预览，极简压缩为横幅，宫格使用瀑布流封面。");
+  setText("#markdownOptimizeRow span:first-child", localized("在对话流中优化 Markdown 显示", "Optimize Markdown in the conversation"));
+  setText("#markdownOptimizeHelp", localized("关闭后提示词按原始纯文本显示，不再解析标题、列表、代码块和链接等 Markdown 语法。", "When disabled, prompts are shown as raw plain text without parsing headings, lists, code blocks or links."));
+  setText("#messageStyleTitle", localized("对话消息样式", "Conversation style"));
+  setText("#messageStyleHelp", localized("选择对话流的展示方式。默认保留完整预览，极简压缩为横幅，宫格使用瀑布流封面。", "Choose how the conversation feed is displayed. Default keeps full previews, minimal uses compact banners, and grid uses a masonry cover layout."));
   document.querySelectorAll("[data-message-style]").forEach((button) => {
     const style = MESSAGE_STYLES.find((item) => item.id === button.dataset.messageStyle);
     if (!style) return;
@@ -405,7 +408,7 @@ function applyStaticLocale() {
   setText("#globalSettingsTitle", "Settings");
   setText("#globalSettingsSubtitle", "Model, appearance, system, and upload preferences");
   setText("#settingsTabModel", "Model");
-  setText("#settingsTabAppearance", "Appearance");
+  setText("#settingsTabAppearance", "Display");
   setText("#settingsTabSystem", "System");
   setText("#settingsTabUpload", "Upload");
   setText("#settingsTabExperimental", "Experimental");
@@ -544,7 +547,7 @@ function applyStaticLocale() {
   setTitle("#conversationDeviceFilter", "Conversation device filter");
   setText("#conversationFilters span", "Device filter");
   setText("#conversationFilterPanel label > span", "Show devices");
-  el("themeGrid").setAttribute("aria-label", "Appearance");
+  el("themeGrid").setAttribute("aria-label", "Display");
   document.querySelector(".local-asset-preview-dialog")?.setAttribute("aria-label", "Local asset preview");
   el("workflowSelect").setAttribute("aria-label", "Workflow");
   document.querySelectorAll("select").forEach((select) => select.dispatchEvent(new Event("cs:sync")));
@@ -3829,6 +3832,25 @@ function minimalOutputBanner(job, detail) {
   </button>`;
 }
 
+const OPTIMIZE_MARKDOWN_STORAGE_KEY = "h3-optimize-markdown";
+
+function renderMessageText(value) {
+  const text = String(value || "");
+  if (state.optimizeMarkdown !== false) return renderMarkdown(text);
+  return `<p>${escapeHtml(text).replace(/\n/g, "<br>")}</p>`;
+}
+
+function applyMarkdownOptimization(enabled, { persist = true, render = true } = {}) {
+  state.optimizeMarkdown = enabled !== false;
+  const checkbox = el("optimizeMarkdown");
+  if (checkbox) checkbox.checked = state.optimizeMarkdown;
+  document.body.dataset.optimizeMarkdown = state.optimizeMarkdown ? "on" : "off";
+  if (persist) {
+    try { localStorage.setItem(OPTIMIZE_MARKDOWN_STORAGE_KEY, state.optimizeMarkdown ? "1" : "0"); } catch (error) { /* storage disabled */ }
+  }
+  if (render) renderConversationFeed("preserve");
+}
+
 function renderJobExchange(job) {
   if (currentMessageStyle() === "grid") return renderGridJobCard(job);
   const minimal = currentMessageStyle() === "minimal";
@@ -3870,7 +3892,7 @@ function renderJobExchange(job) {
   return `<section class="exchange${minimal ? " minimal-exchange" : ""}" id="job-${job.id}" data-job-id="${job.id}">
     <article class="message user-message">
       <div class="message-avatar user-avatar">${t("you")}</div>
-      <div class="message-body">${referenceSummary(job)}<div class="message-text markdown">${renderMarkdown(request.prompt || request.runninghub_workflow_name || "")}${audio && request.lyrics ? renderMarkdown(request.lyrics) : ""}</div><div class="message-meta">${sourceLabel}${executionMode}<span>${modelLabel(job)}</span><span>${escapeHtml(nodeLabel(job))}</span>${runningHub || audio || request.task_type === "upscale" ? "" : `<span>${request.width} × ${request.height}</span>`}${runningHub || request.task_type === "upscale" ? "" : `<span>${request.duration}${t("seconds")}</span><span>${request.steps} ${t("steps")}</span><span>${t("seed")} ${request.seed}</span>`}${elapsed}${incognito}</div></div>
+      <div class="message-body">${referenceSummary(job)}<div class="message-text ${state.optimizeMarkdown !== false ? "markdown" : "plain-text"}">${renderMessageText(request.prompt || request.runninghub_workflow_name || "")}${audio && request.lyrics ? renderMessageText(request.lyrics) : ""}</div><div class="message-meta">${sourceLabel}${executionMode}<span>${modelLabel(job)}</span><span>${escapeHtml(nodeLabel(job))}</span>${runningHub || audio || request.task_type === "upscale" ? "" : `<span>${request.width} × ${request.height}</span>`}${runningHub || request.task_type === "upscale" ? "" : `<span>${request.duration}${t("seconds")}</span><span>${request.steps} ${t("steps")}</span><span>${t("seed")} ${request.seed}</span>`}${elapsed}${incognito}</div></div>
     </article>
     <article class="message assistant-message" data-output-job-id="${escapeHtml(job.id)}">
       <div class="message-avatar assistant-avatar">H3</div>
@@ -6117,6 +6139,7 @@ document.querySelectorAll("[data-settings-tab]").forEach((button) => {
 document.querySelectorAll("[data-message-style]").forEach((button) => {
   button.addEventListener("click", () => applyMessageStyle(button.dataset.messageStyle));
 });
+el("optimizeMarkdown").addEventListener("change", () => applyMarkdownOptimization(el("optimizeMarkdown").checked));
 el("themeGrid")?.addEventListener("click", (event) => {
   const card = event.target.closest("[data-theme-option]");
   if (!card) return;
@@ -6544,6 +6567,9 @@ window.addEventListener("resize", () => {
 async function initialize() {
   applyTheme(currentTheme(), { persist: false });
   applyMessageStyle(storedMessageStyle(), { persist: false, render: false });
+  let markdownEnabled = true;
+  try { markdownEnabled = localStorage.getItem(OPTIMIZE_MARKDOWN_STORAGE_KEY) !== "0"; } catch (error) { /* storage disabled */ }
+  applyMarkdownOptimization(markdownEnabled, { persist: false, render: false });
   watchSystemTheme();
   if (ANDROID_CLIENT) {
     document.body.classList.add("android-client");
