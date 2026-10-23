@@ -106,6 +106,14 @@ app = FastAPI(
 
 
 @app.middleware("http")
+async def asset_cache_control(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
+
+
+@app.middleware("http")
 async def desktop_network_boundary(request: Request, call_next):
     if settings.desktop_mode and not is_loopback_client(request.client.host if request.client else None):
         path = request.url.path

@@ -1599,15 +1599,19 @@ button { appearance: none; -webkit-appearance: none; }
 .minimal-exchange .message-actions { margin-top: 9px; }
 
 .conversation-feed.is-message-grid {
-  display: grid;
+  display: block;
   min-height: 0;
+  overflow-y: auto;
+  padding: 0;
+}
+.message-grid {
+  display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   align-content: start;
   gap: 16px 12px;
   padding: 20px 24px 36px;
-  overflow-y: auto;
 }
-.conversation-feed.is-message-grid .chat-empty { column-span: all; }
+.message-grid .chat-empty { grid-column: 1 / -1; }
 .grid-job-card {
   display: flex;
   width: 100%;
@@ -1752,13 +1756,13 @@ button { appearance: none; -webkit-appearance: none; }
 .asset-detail-preview img { display: block; max-width: 100%; max-height: min(600px, 60dvh); margin: auto; object-fit: contain; }
 
 @media (max-width: 1180px) {
-  .conversation-feed.is-message-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .message-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (max-width: 880px) {
-  .conversation-feed.is-message-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .message-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 720px) {
-  .conversation-feed.is-message-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px 14px 24px; gap: 10px; }
+  .message-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px 14px 24px; gap: 10px; }
   .grid-job-card { border-radius: 14px; }
   .grid-job-cover { border-radius: 13px 13px 0 0; }
   .message-style-grid { grid-template-columns: 1fr 1fr 1fr; }

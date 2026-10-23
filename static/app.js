@@ -3396,7 +3396,13 @@ function upsertConversation(job) {
     el("conversationFeed").querySelector(".chat-empty")?.remove();
     const card = elementFromHtml(renderJobExchange(job));
     if (currentMessageStyle() === "grid") {
-      el("conversationFeed").prepend(card);
+      let grid = el("conversationFeed").querySelector(".message-grid");
+      if (!grid) {
+        grid = document.createElement("div");
+        grid.className = "message-grid";
+        el("conversationFeed").append(grid);
+      }
+      grid.prepend(card);
       if (state.conversationScrollTop <= 24) el("conversationFeed").scrollTop = 0;
     } else {
       el("conversationFeed").append(card);
@@ -3789,8 +3795,6 @@ function jobCoverMarkup(job, { grid = false } = {}) {
 function renderGridJobCard(job) {
   const request = job.request || {};
   const active = isActive(job);
-  const detailRecord = state.assetDetailWindows.get(windowNode.dataset.detailWindowId);
-  const promptRaw = Boolean(detailRecord?.promptRaw);
   const progress = Math.max(0, Math.min(100, Math.round(Number(job.progress) || 0)));
   const title = job.error || job.stage || statusLabel(job.status);
   return `<article class="grid-job-card${active ? " is-loading" : ""}" data-job-id="${escapeHtml(job.id)}" data-grid-job="${escapeHtml(job.id)}" data-output-job-id="${escapeHtml(job.id)}" tabindex="0" role="button" aria-label="${escapeHtml(shortTitle(job))}">
@@ -3925,8 +3929,11 @@ function renderConversationFeed(mode = "preserve") {
     .map((job) => ({ type: "job", at: job.created_at, data: job }))
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   const orderedTimeline = messageStyle === "grid" ? [...timeline].reverse() : timeline;
-  const content = orderedTimeline.map((item) => renderJobExchange(item.data)).join("");
-  feed.innerHTML = content || `${chatEmptyMarkup()}`;
+  const cards = orderedTimeline.map((item) => renderJobExchange(item.data)).join("");
+  const content = messageStyle === "grid"
+    ? cards ? `<div class="message-grid">${cards}</div>` : chatEmptyMarkup()
+    : cards || chatEmptyMarkup();
+  feed.innerHTML = content;
   refreshIcons();
   requestAnimationFrame(() => {
     if (messageStyle === "grid") {
