@@ -27,6 +27,50 @@ def sample_workflow():
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_preset_snapshot_keeps_the_4step_graph(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            settings = Settings(root=root, comfy_output_dir=root / "remote-output")
+            settings.ensure_directories()
+            registry = WorkflowRegistry(
+                root / "data" / "config.db",
+                Path(__file__).resolve().parents[1] / "workflows",
+            )
+            preset = registry.get("preset-fl2va-turbo-4step")
+            snapshot = {
+                "source": "preset",
+                "workflow_json": deepcopy(preset["workflow_json"]),
+                "media_type": "video",
+            }
+            job = {
+                "id": "four-step-job",
+                "workflow_snapshot": snapshot,
+                "request": {
+                    "prompt": "four step",
+                    "model_variant": "fl2va-fp8",
+                    "execution_mode": "turbo-lora",
+                    "width": 608,
+                    "height": 352,
+                    "duration": 5,
+                    "num_frames": 124,
+                    "steps": 4,
+                    "seed": 1,
+                    "references": [],
+                },
+                "input_paths": [],
+            }
+            engine = ComfyUIH3Engine(
+                settings,
+                ComfyNodeConfig("node", "Node", "http://comfy.test:8188"),
+                workflow_registry=registry,
+            )
+            built = engine._build_workflow(job, ["first.png"])
+            self.assertEqual(built["124"]["inputs"]["steps"], 4)
+            self.assertEqual(
+                built["142"]["inputs"]["lora_name"],
+                "minimax_h3_fl2v_turbo_4step_v1.3_768p_comfyui_bf16.safetensors",
+            )
+
     def test_engine_loads_preset_from_database_before_files(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -99,7 +143,7 @@ class WorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             database = Path(temp) / "config.db"
             registry = WorkflowRegistry(database, Path(__file__).parents[1] / "workflows")
-            self.assertEqual(len(registry.list()), 15)
+            self.assertEqual(len(registry.list()), 17)
             created = registry.create(
                 validate_workflow_config(
                     name="自定义工作流",

@@ -1507,9 +1507,9 @@ class ContractTests(unittest.TestCase):
         self.assertIn('duration.max = String(maxDuration);', app_js)
         self.assertNotIn('const H3_SA_DURATIONS', app_js)
         self.assertIn('const accelerated = selectedExecutionMode() === "turbo-lora";', app_js)
-        self.assertIn('accelerated ? "8"', app_js)
+        self.assertIn('accelerated ? String(turboSteps)', app_js)
         self.assertIn('music3 || accelerated || digitalHuman || h3Sa', app_js)
-        self.assertIn('selectedExecutionMode() === "turbo-lora" || isH3SA() ? 8', app_js)
+        self.assertIn('selectedExecutionMode() === "turbo-lora" ? selectedTurboSteps()', app_js)
         self.assertNotIn("H3_COMFY_TURBO_WORKFLOW", deployment)
         self.assertNotIn("H3_COMFY_REF2VA_TURBO_WORKFLOW", deployment)
         self.assertNotIn("H3_COMFY_SA_WORKFLOW", deployment)
@@ -2187,8 +2187,9 @@ class ContractTests(unittest.TestCase):
         for steps in (3, 51):
             with self.assertRaises(HTTPException):
                 validate_generation(608, 352, 5, steps)
+        validate_generation(608, 352, 5, 4, "turbo-lora")
         validate_generation(608, 352, 5, 8, "turbo-lora")
-        for steps in (4, 10, 50):
+        for steps in (3, 5, 10, 50):
             with self.assertRaises(HTTPException):
                 validate_generation(608, 352, 5, steps, "turbo-lora")
         validate_generation(608, 352, 5, 20, "digital-human")

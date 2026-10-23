@@ -574,7 +574,13 @@ class ComfyUIH3Engine:
             workflow[result_node_id]["inputs"]["filename_prefix"] = f"minimax-studio-webui/{job['id']}"
             return workflow
 
-        workflow = self._load_workflow(variant, execution_mode)
+        workflow = None
+        if workflow_snapshot.get("source") == "preset":
+            snapshot_graph = workflow_snapshot.get("workflow_json")
+            if isinstance(snapshot_graph, dict) and snapshot_graph:
+                workflow = deepcopy(snapshot_graph)
+        if workflow is None:
+            workflow = self._load_workflow(variant, execution_mode)
         workflow["92"]["inputs"]["filename_prefix"] = f"minimax-studio-webui/{job['id']}"
         if variant == "music3-int8":
             if music3_device:

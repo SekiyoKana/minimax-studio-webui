@@ -83,6 +83,8 @@ MiniMax H3 Studio 为 MiniMax H3、H3 TTS、数字人、Music3 和通用 Running
 | `H3Studio_minimax_h3_fl2va_vdn_api.json` | FL2VA VDN-H3 |
 | `H3Studio_minimax_h3_ref2va_fp8_scaled_api.json` | Ref2VA 原生采样 |
 | `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA 8 步 LoRA |
+| `H3Studio_minimax_h3_fl2va_fp8_turbo_lora_4step_api.json` | FL2VA 4 步 LoRA |
+| `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_4step_api.json` | Ref2VA 4 步 LoRA |
 | `H3Studio_minimax_h3_ref2va_fp8_sa_api.json` | Ref2VA H3 SA |
 | `H3Studio_minimax_h3_ref2va_vdn_api.json` | Ref2VA VDN-H3 |
 | `H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json` | 双阶段采样 |
@@ -153,7 +155,7 @@ flowchart LR
 - 自定义工作流支持可变数量参考素材、`ratio` / `megapixels` 映射、结果节点与目标节点配置，并可将工作流同步到 ComfyUI。
 - 内置工作流改为首次建库时从 `workflows/` 写入数据库，运行时不再依赖工作流环境变量。
 - 所有内置和同步到 ComfyUI 的工作流文件统一使用 `H3Studio_` 前缀。
-- 8 步 FL2VA / Ref2VA LoRA 升级到 lightx2v Minimax-h3-Turbo v1.1 768p，H3 SA 工作流同步更新 LoRA 引用。
+- 8 步 FL2VA / Ref2VA LoRA 升级到 lightx2v Minimax-h3-Turbo v1.1 768p，并新增 4 步 LoRA 工作流（FL2VA v1.3 / Ref2VA v1.0）；H3 SA 工作流同步更新 LoRA 引用。
 - 素材、参考文件和详情源文件支持统一弹窗预览。
 - 增加本地 ComfyUI 接管：启动路径、可编辑启动命令、私有环境、托管进程和实时日志。
 

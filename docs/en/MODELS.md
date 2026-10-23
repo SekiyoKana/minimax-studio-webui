@@ -26,13 +26,15 @@ Core model pages:
 |---|---:|---|---|
 | `minimax_h3_fl2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors` | 1,956,193,000 | `fb4c00361c94bad47f878d5e096c6cab2f45063b0968bd5756dcb7da6936f53e` | [Pinned Hugging Face revision](https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/30f485ed874aa44c8183348ad361c5eabad318da/minimax_h3_fl2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors) |
 | `minimax_h3_ref2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors` | 1,956,193,000 | `e56863a7524e0300729cbb7b64cc8b548d90698c1abbf7d83898b0122fbe1e81` | [Pinned Hugging Face revision](https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/30f485ed874aa44c8183348ad361c5eabad318da/minimax_h3_ref2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors) |
+| `minimax_h3_fl2v_turbo_4step_v1.3_768p_comfyui_bf16.safetensors` | 1,956,193,000 | `70103fd0d80a947ed4e7fe6f88915863d54ef22c5cab03bd5d2fd649385ffe1e` | [Pinned Hugging Face revision](https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/30f485ed874aa44c8183348ad361c5eabad318da/minimax_h3_fl2v_turbo_4step_v1.3_768p_comfyui_bf16.safetensors) |
+| `minimax_h3_ref2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors` | 1,956,193,000 | `b4da466e43588004097dfbcde245ccc439c34a26bc997cb76a0b53a1d549ea0d` | [Pinned Hugging Face revision](https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/30f485ed874aa44c8183348ad361c5eabad318da/minimax_h3_ref2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors) |
 
 Author resources:
 
 1. [LightX2V MiniMax H3 Turbo LoRA model card](https://huggingface.co/lightx2v/Minimax-h3-Turbo)
 2. [ModelTC MiniMax H3 Turbo](https://github.com/ModelTC/Minimax-H3-Turbo)
 
-The FL2VA and Ref2VA workflows use their corresponding 768p 8-step v1.1 LoRAs. Both use LoRA strength 1.0, the `res_multistep` sampler, eight steps, video shift 6.0, and audio shift 3.0.
+Both 8-step and 4-step workflows are available: 8-step uses v1.1, while 4-step uses FL2VA v1.3 / Ref2VA v1.0. LoRA strength is 1.0, the `res_multistep` sampler runs 8 or 4 steps, and shifts are video 6.0 / audio 3.0.
 
 ## Super-resolution models
 

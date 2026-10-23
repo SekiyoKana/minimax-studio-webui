@@ -83,6 +83,8 @@ Every bundled workflow and every custom workflow synced to ComfyUI uses the `H3S
 | `H3Studio_minimax_h3_fl2va_vdn_api.json` | FL2VA VDN-H3 |
 | `H3Studio_minimax_h3_ref2va_fp8_scaled_api.json` | Ref2VA native sampling |
 | `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA 8-step LoRA |
+| `H3Studio_minimax_h3_fl2va_fp8_turbo_lora_4step_api.json` | FL2VA 4-step LoRA |
+| `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_4step_api.json` | Ref2VA 4-step LoRA |
 | `H3Studio_minimax_h3_ref2va_fp8_sa_api.json` | Ref2VA H3 SA |
 | `H3Studio_minimax_h3_ref2va_vdn_api.json` | Ref2VA VDN-H3 |
 | `H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json` | Dual sampling |
@@ -153,7 +155,7 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 - Custom workflows support variable references, `ratio` / `megapixels` mappings, result/target node configuration and ComfyUI sync.
 - Built-in workflows are seeded into the database on first start; runtime execution no longer depends on workflow environment variables.
 - Bundled workflows and synced custom workflows use the `H3Studio_` filename prefix.
-- Upgraded the 8-step FL2VA / Ref2VA LoRAs to lightx2v Minimax-h3-Turbo v1.1 768p and updated the SA workflows to reference them.
+- Upgraded the 8-step FL2VA / Ref2VA LoRAs to lightx2v Minimax-h3-Turbo v1.1 768p, added 4-step workflows (FL2VA v1.3 / Ref2VA v1.0), and updated the SA workflows to reference the new LoRAs.
 - Reference and asset files open in a unified preview dialog.
 - Local ComfyUI supervision: launch path, editable launch command, private environment, managed process and live logs.
 

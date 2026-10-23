@@ -31,18 +31,20 @@ WORKFLOW_SHA256 = {
     "H3Studio_minimax_h3_fl2va_fp8_720p_15s_api.json": "b8fa94ef488d2b923e17562d79e23bde4bd997d2ec0d7ba158ece76d0b5a5b64",
     "H3Studio_minimax_h3_fl2va_fp8_sa_api.json": "a34613e039da0674afdbea382ea6a8ff5b9bb92ffd986df7459eeb95126c9e87",
     "H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json": "bce319075406e69f241135a5beba03cd5c3524515dcae8d38f7eaf1464c4f5b0",
+    "H3Studio_minimax_h3_fl2va_fp8_turbo_lora_4step_api.json": "bd5bdbadb0ef7daab6c621359aa429c24824e8244da5ecc79869d807674c29a5",
     "H3Studio_minimax_h3_ref2va_fp8_digital_human_api.json": "829babe98437529714c4608185be9a63cd5db3ea09544d813a060b6e47138c06",
     "H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json": "f95ba15e1d775535292f6baae25a87cb393d52ab4763780993830b90848ecd76",
     "H3Studio_minimax_h3_ref2va_fp8_sa_api.json": "f79d53fea723eb0f4fdde03efd4c212a73d1096084172c0259cec428efaa23ef",
     "H3Studio_minimax_h3_ref2va_fp8_scaled_api.json": "dcd2db8828bb631abd6ff3707d545037047815dc54743d1fab2f98ac53749561",
     "H3Studio_minimax_h3_ref2va_fp8_tts_api.json": "e5dd94e0e21e6b614ff1ba5837c8be211726793627d23dbe6b642a4d08bb7baf",
     "H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json": "8100999f681895992d471e2f08c2c070b7c67fbf87e40f983968b88859829dcc",
+    "H3Studio_minimax_h3_ref2va_fp8_turbo_lora_4step_api.json": "c60cb2b0ac6c64bcb88a53feb18e3db73c46b9cd1555740ce53f5e7947656325",
     "H3Studio_minimax_music3_int8_api.json": "d3915167d6fd0077066705a48070f933705a4fa8dde51154a4ee1be23c881ed9",
 }
 
 PROFILE_MODEL_IDS = {
-    "h3-fl2va": {"fl2va-fp8", "qwen3vl-text-encoder", "audio-vae", "video-vae", "turbo-lora"},
-    "h3-ref2va": {"ref2va-fp8", "qwen3vl-text-encoder", "audio-vae", "video-vae", "ref2va-turbo-lora"},
+    "h3-fl2va": {"fl2va-fp8", "qwen3vl-text-encoder", "audio-vae", "video-vae", "turbo-lora", "turbo-lora-4step"},
+    "h3-ref2va": {"ref2va-fp8", "qwen3vl-text-encoder", "audio-vae", "video-vae", "ref2va-turbo-lora", "ref2va-turbo-lora-4step"},
     "music3": {"music3-dit-int8", "music3-text-encoder-int8", "music3-dav"},
 }
 
@@ -642,10 +644,12 @@ def selected_workflows(profile: str, linux_cuda: bool) -> list[str]:
     fl2va = [
         "H3Studio_minimax_h3_fl2va_fp8_720p_15s_api.json",
         "H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json",
+        "H3Studio_minimax_h3_fl2va_fp8_turbo_lora_4step_api.json",
     ]
     ref2va = [
         "H3Studio_minimax_h3_ref2va_fp8_scaled_api.json",
         "H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json",
+        "H3Studio_minimax_h3_ref2va_fp8_turbo_lora_4step_api.json",
         "H3Studio_minimax_h3_ref2va_fp8_digital_human_api.json",
         "H3Studio_minimax_h3_ref2va_fp8_tts_api.json",
         "H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json",

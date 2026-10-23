@@ -47,6 +47,7 @@ ENGLISH_ERRORS: dict[str, str] = {
     "不支持的执行方案": "Unsupported execution mode",
     "ComfyUI 启动命令不能为空": "The ComfyUI launch command cannot be empty",
     "ComfyUI 启动命令长度必须为 1 至 2000 个字符，且不能包含换行": "The ComfyUI launch command must be 1 to 2000 characters and cannot contain newlines",
+    "4-step LoRA 使用 4 步，8-step LoRA 使用 8 步": "Use 4 steps for the 4-step LoRA and 8 steps for the 8-step LoRA",
     "互联设备不存在": "Paired device not found",
     "互联设备授权无效": "Invalid paired-device authorization",
     "仅已完成且存在产物的任务支持重命名": "Only completed tasks with outputs can be renamed",
@@ -225,6 +226,9 @@ def _translate_pattern(message: str) -> str | None:
     match = re.fullmatch(r"ComfyUI 启动命令格式无效：(.+)", message)
     if match:
         return f"Invalid ComfyUI launch command: {match.group(1)}"
+    match = re.fullmatch(r"该 LoRA 使用 ([0-9]+) 步采样", message)
+    if match:
+        return f"This LoRA uses {match.group(1)} sampling steps"
     match = re.fullmatch(r"远程产物下载失败：(.+)", message)
     if match:
         return f"Failed to download the remote output: {match.group(1)}"

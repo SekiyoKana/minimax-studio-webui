@@ -109,7 +109,7 @@ const COPY = {
     connectEngine: "连接推理节点", offline: "服务离线", autoSchedule: "自动调度", nodePending: "节点待分配", online: "在线", available: "可用", nodeOffline: "离线", disabled: "已停用", busy: "执行中",
     balance: "余额", credits: "点数", recentCost: "最近调用消耗", accountUnavailable: "账户信息不可用", workflowUnavailable: "工作流信息不可用", balancePending: "余额读取中", accountTasks: "账户任务", balanceUpdated: "余额更新", balanceFailed: "余额读取失败",
     noAssets: "暂无素材", loading: "加载中", allLoaded: "已加载全部", loadFailed: "加载失败", startCreating: "开始创作", you: "你", allAssets: "全部素材", unfiled: "未分组", folders: "文件夹", editAssets: "编辑素材", exitAssetEdit: "退出编辑", selectedAssets: "已选择", newFolder: "新建文件夹", renameFolder: "重命名文件夹", deleteFolder: "删除文件夹", moveTo: "移动到", noSelection: "未选择素材", folderName: "文件夹名称", folderPurpose: "用于归类短剧生成任务", folderDeleteConfirm: "删除文件夹后，其中的任务记录、参考文件和生成产物都会被删除。确认继续？", activeFolderDelete: "文件夹包含进行中任务，请先取消或等待任务结束", regenerateFolder: "选择重新生成任务的文件夹",
-    native: "普通流 · 原生 H3", turbo: "8-step LoRA · 强度 1.0", dualSampling: "双采 · Sigma + 潜空间放大", h3Sa: "MiniMax H3 SA · Sol-Attn", vdnH3: "VDN-H3 · Video Delta Net", digitalHuman: "数字人 · 音频驱动", tts: "H3 TTS · 人物语音", videoUpscale: "视频超分", upscale2x: "2x 超分", upscale4x: "4x 超分", music3: "Music3 · 30 步", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache（已停用）",
+    native: "普通流 · 原生 H3", turbo: "8-step LoRA · 强度 1.0", turbo4: "4-step LoRA", dualSampling: "双采 · Sigma + 潜空间放大", h3Sa: "MiniMax H3 SA · Sol-Attn", vdnH3: "VDN-H3 · Video Delta Net", digitalHuman: "数字人 · 音频驱动", tts: "H3 TTS · 人物语音", videoUpscale: "视频超分", upscale2x: "2x 超分", upscale4x: "4x 超分", music3: "Music3 · 30 步", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache（已停用）",
     reuse: "回填到发送区", useAsInput: "作为输入", regenerate: "重新生成", edit: "修改", cancel: "取消", delete: "删除", deleteRecord: "删除记录", downloadVideo: "下载视频", downloadAudio: "下载音频", downloadImage: "下载图片", downloadFile: "下载文件", videoReady: "视频已生成", musicReady: "音频已生成", imageReady: "图片已生成", fileReady: "文件已生成", peering: "多端互联", peerConnected: "已连接设备", peerRevoked: "已撤销设备访问", peerConnectNotice: "设备已完成互联", localPeerKey: "本机互联密钥",
     aiKeySaved: "API Key 已保存到本机数据库", aiKeyEmpty: "尚未保存 API Key", aiKeyReplace: "输入新值可覆盖已保存密钥", noPeers: "暂无已连接设备", revokeAccess: "撤销访问", owner: "归属方", pairingRefresh: "秒后刷新", connectPeer: "建立互联",
     assetDetail: "素材详情", prompt: "关键词与提示词", lyrics: "歌词", sourceFiles: "使用的文件", parameters: "生成参数", noSourceFiles: "未使用参考文件", outputUnavailable: "当前没有可预览的生成产物", assetDeleted: "该资产已删除", deviceFilter: "设备筛选",
@@ -122,7 +122,7 @@ const COPY = {
     connectEngine: "Connecting to inference nodes", offline: "Service offline", autoSchedule: "Auto", nodePending: "Awaiting node", online: "Online", available: "available", nodeOffline: "Offline", disabled: "Disabled", busy: "Running",
     balance: "Balance", credits: "credits", recentCost: "Recent call cost", accountUnavailable: "Account unavailable", workflowUnavailable: "Workflow information unavailable", balancePending: "Loading balance", accountTasks: "Account tasks", balanceUpdated: "balance updated", balanceFailed: "balance read failed",
     noAssets: "No assets", loading: "Loading", allLoaded: "All assets loaded", loadFailed: "Load failed", startCreating: "Start creating", you: "You", allAssets: "All assets", unfiled: "Unfiled", folders: "Folders", editAssets: "Edit assets", exitAssetEdit: "Exit editing", selectedAssets: "Selected", newFolder: "New folder", renameFolder: "Rename folder", deleteFolder: "Delete folder", moveTo: "Move to", noSelection: "No assets selected", folderName: "Folder name", folderPurpose: "Organize short-drama generation tasks", folderDeleteConfirm: "Deleting this folder also deletes its task records, source files, and generated outputs. Continue?", activeFolderDelete: "This folder contains active tasks. Cancel or wait for them first.", regenerateFolder: "Choose a folder for the regenerated task",
-    native: "Native H3", turbo: "8-step LoRA · 1.0", dualSampling: "Dual sampling · Sigma + latent upscale", h3Sa: "MiniMax H3 SA · Sol-Attn", vdnH3: "VDN-H3 · Video Delta Net", digitalHuman: "Digital human · audio driven", tts: "H3 TTS · Character voice", videoUpscale: "Video super-resolution", upscale2x: "2x super-resolution", upscale4x: "4x super-resolution", music3: "Music3 · 30 steps", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache (disabled)",
+    native: "Native H3", turbo: "8-step LoRA · 1.0", turbo4: "4-step LoRA", dualSampling: "Dual sampling · Sigma + latent upscale", h3Sa: "MiniMax H3 SA · Sol-Attn", vdnH3: "VDN-H3 · Video Delta Net", digitalHuman: "Digital human · audio driven", tts: "H3 TTS · Character voice", videoUpscale: "Video super-resolution", upscale2x: "2x super-resolution", upscale4x: "4x super-resolution", music3: "Music3 · 30 steps", nsfw: "H3 NSFW · NaughtyTimes LoRA", speedCache: "Speed Cache (disabled)",
     reuse: "Fill composer", useAsInput: "Use as input", regenerate: "Regenerate", edit: "Edit", cancel: "Cancel", delete: "Delete", deleteRecord: "Delete record", downloadVideo: "Download video", downloadAudio: "Download audio", downloadImage: "Download image", downloadFile: "Download file", videoReady: "Video generated", musicReady: "Audio generated", imageReady: "Image generated", fileReady: "File generated", peering: "Device sharing", peerConnected: "Connected device", peerRevoked: "Device access revoked", peerConnectNotice: "Device pairing completed", localPeerKey: "Local pairing key",
     aiKeySaved: "API Key saved in the local database", aiKeyEmpty: "No API Key saved", aiKeyReplace: "Enter a new value to replace the saved key", noPeers: "No connected devices", revokeAccess: "Revoke access", owner: "Owner", pairingRefresh: "s until refresh", connectPeer: "Connect",
     assetDetail: "Asset details", prompt: "Keywords and prompt", lyrics: "Lyrics", sourceFiles: "Source files", parameters: "Parameters", noSourceFiles: "No reference files", outputUnavailable: "No generated output is available for preview", assetDeleted: "This asset has been deleted", deviceFilter: "Device filter",
@@ -720,7 +720,9 @@ function executionModeLabel(job) {
   if (job.request?.execution_mode === "h3-nsfw") return t("nsfw");
   if (job.request?.execution_mode === "h3-sa") return t("h3Sa");
   if (job.request?.execution_mode === "vdn-h3") return t("vdnH3");
-  if (job.request?.execution_mode === "turbo-lora") return t("turbo");
+  if (job.request?.execution_mode === "turbo-lora") {
+    return String(job.request?.workflow_id || "").includes("4step") ? t("turbo4") : t("turbo");
+  }
   if (job.request?.execution_mode === "dual-sampling") return t("dualSampling");
   if (job.request?.execution_mode === "speed-cache") return t("speedCache");
   return t("native");
@@ -1826,6 +1828,11 @@ function selectedExecutionMode() {
   return ANDROID_CLIENT ? "turbo-lora" : el("executionMode").value;
 }
 
+function selectedTurboSteps() {
+  const id = selectedWorkflowRecord()?.id || "";
+  return id.includes("4step") ? 4 : 8;
+}
+
 function isUpscale(executionMode = selectedExecutionMode()) {
   return executionMode === "video-upscale" || Boolean(selectedWorkflowRecord()?.id?.startsWith("preset-upscale-"));
 }
@@ -2398,8 +2405,9 @@ function updateModelUi() {
   el("modelVariant").disabled = digitalHuman || tts || dualSampling;
   const ref2va = isRef2VA();
   const accelerated = selectedExecutionMode() === "turbo-lora";
+  const turboSteps = selectedTurboSteps();
   const stepsMode = el("steps").dataset.mode;
-  const nextStepsMode = upscale ? "upscale" : music3 ? "music3" : vdnH3 ? "vdn-h3" : "h3";
+  const nextStepsMode = upscale ? "upscale" : music3 ? "music3" : vdnH3 ? "vdn-h3" : accelerated ? `turbo-${turboSteps}` : "h3";
   if (stepsMode !== nextStepsMode) {
     el("steps").value = upscale ? "1" : music3 ? "30" : vdnH3 ? "50" : "10";
     el("steps").dataset.mode = nextStepsMode;
@@ -2417,7 +2425,7 @@ function updateModelUi() {
     ? String(currentDuration)
     : String(defaultDuration);
   if (upscale || music3 || accelerated || digitalHuman || h3Sa) {
-    el("steps").value = upscale ? "1" : music3 ? "30" : accelerated ? "8" : digitalHuman ? "20" : "8";
+    el("steps").value = upscale ? "1" : music3 ? "30" : accelerated ? String(turboSteps) : digitalHuman ? "20" : "8";
   } else if (vdnH3) {
     const vdnSteps = Number(el("steps").value);
     if (!Number.isInteger(vdnSteps) || vdnSteps < 8 || vdnSteps > 50) el("steps").value = "50";
@@ -4301,7 +4309,7 @@ form.addEventListener("submit", async (event) => {
   const upscale = isUpscale();
   const minimumPromptLength = upscale ? 0 : isMusic3() ? 2 : 8;
   if (!runningHub && prompt.length < minimumPromptLength) return showError(localized(`请填写至少 ${minimumPromptLength} 个字符的提示词`, `Enter a prompt with at least ${minimumPromptLength} characters`));
-  const steps = upscale ? 1 : isMusic3() ? 30 : selectedExecutionMode() === "turbo-lora" || isH3SA() ? 8 : isVDNH3() ? Number(el("steps").value) : isDigitalHuman() ? 20 : Number(el("steps").value);
+  const steps = upscale ? 1 : isMusic3() ? 30 : selectedExecutionMode() === "turbo-lora" ? selectedTurboSteps() : isH3SA() ? 8 : isVDNH3() ? Number(el("steps").value) : isDigitalHuman() ? 20 : Number(el("steps").value);
   if (!runningHub && !upscale && (!Number.isInteger(steps) || steps < 4 || steps > 50)) return showError(localized("采样步数请输入 4–50 的整数", "Sampling steps must be an integer from 4 to 50"));
   const [width, height] = isTTS() ? [32, 32] : getDimensions();
   const button = el("generateButton");

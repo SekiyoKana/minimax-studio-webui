@@ -381,8 +381,8 @@ def validate_generation(
     if not 1 <= duration <= max_duration:
         duration_label = "H3 SA" if execution_mode == "h3-sa" else "VDN-H3" if execution_mode == "vdn-h3" else "H3"
         raise HTTPException(status_code=422, detail=f"{duration_label} 时长范围为 1–{max_duration:g} 秒")
-    if execution_mode == "turbo-lora" and steps != 8:
-        raise HTTPException(status_code=422, detail="8-step LoRA 加速模式固定使用 8 步")
+    if execution_mode == "turbo-lora" and steps not in {4, 8}:
+        raise HTTPException(status_code=422, detail="4-step LoRA 使用 4 步，8-step LoRA 使用 8 步")
     if execution_mode == "digital-human" and steps != 20:
         raise HTTPException(status_code=422, detail="数字人模式固定使用 20 步")
     if execution_mode not in {"turbo-lora", "digital-human"} and not 4 <= steps <= 50:
@@ -2761,6 +2761,21 @@ async def create_generation(
         model_variant = selected_workflow["model_variant"]
         execution_mode = selected_workflow["execution_mode"]
         task_type = selected_workflow["task_type"]
+        workflow_snapshot = {
+            "id": selected_workflow["id"],
+            "name": selected_workflow["name"],
+            "source": "preset",
+            "version": selected_workflow["version"],
+            "workflow_json": deepcopy(selected_workflow["workflow_json"]),
+            "media_type": selected_workflow["media_type"],
+        }
+        if execution_mode == "turbo-lora":
+            expected_steps = 4 if "4step" in selected_workflow["id"] else 8
+            if steps != expected_steps:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"该 LoRA 使用 {expected_steps} 步采样",
+                )
     elif is_custom_workflow:
         if task_type == "upscale":
             raise HTTPException(status_code=422, detail="自定义工作流不能用于超分任务")
@@ -3745,7 +3760,7 @@ async def regenerate_generation(
         "created_at": created_at,
         "updated_at": created_at,
         "cancel_requested": False,
-        **({"workflow_snapshot": workflow_snapshot} if is_custom_workflow else {}),
+        **({"workflow_snapshot": workflow_snapshot} if workflow_snapshot else {}),
         "request": request_data,
         "input_paths": cloned_paths,
     }
