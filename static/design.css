@@ -1761,3 +1761,8 @@ button { appearance: none; -webkit-appearance: none; }
 .message-text.plain-text p { margin: 0 0 .65em; }
 .message-text.plain-text > :first-child { margin-top: 0; }
 .message-text.plain-text > :last-child { margin-bottom: 0; }
+
+.display-block { display: grid; gap: 12px; }
+.display-block-switch { gap: 6px; }
+.display-block-title { color: var(--ink); font-size: var(--text-ui); font-weight: 600; }
+.display-block .skin-grid { margin-top: 1px; }

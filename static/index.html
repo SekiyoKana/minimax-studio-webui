@@ -24,13 +24,13 @@
       })();
     </script>
     <link rel="stylesheet" href="/assets/styles.css?v=63&rev=73">
-    <link rel="stylesheet" href="/assets/design.css?v=49">
+    <link rel="stylesheet" href="/assets/design.css?v=50">
     <link rel="stylesheet" href="/assets/skins/skins.css?v=8">
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
     <script src="/assets/dropdown.js?v=4" defer></script>
     <script src="/assets/motion.js?v=4" defer></script>
-    <script src="/assets/app.js?v=110&rev=122&upscale=1" defer></script>
+    <script src="/assets/app.js?v=111&rev=123&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -519,26 +519,32 @@
             <label>API Key<input id="aiApiKey" type="password" autocomplete="new-password" placeholder="sk-…"><small class="secret-field-status" id="aiApiKeyStatus"></small></label>
           </section>
           <section class="settings-tab-panel" id="settingsPanelAppearance" role="tabpanel" aria-labelledby="settingsTabAppearance" data-settings-panel="appearance" hidden>
-            <div class="skin-grid" id="themeGrid" role="radiogroup" aria-label="界面外观">
-              <button class="skin-card" type="button" data-theme-option="light" role="radio" aria-checked="false">
-                <span class="skin-card-preview skin-preview-default" aria-hidden="true"><i class="skin-preview-side"></i><i class="skin-preview-main"></i><i class="skin-preview-bar"></i><i class="skin-preview-dot"></i></span>
-                <span class="skin-card-copy"><strong>日间</strong><small>浅色外观</small></span>
-              </button>
-              <button class="skin-card" type="button" data-theme-option="dark" role="radio" aria-checked="false">
-                <span class="skin-card-preview"><img src="/assets/skins/aurora/preview.jpg" alt="" loading="lazy"></span>
-                <span class="skin-card-copy"><strong>夜间</strong><small>深色外观</small></span>
-              </button>
-              <button class="skin-card is-active" type="button" data-theme-option="system" role="radio" aria-checked="true">
-                <span class="skin-card-preview theme-preview-system" aria-hidden="true">
-                  <span class="theme-half theme-light"></span>
-                  <span class="theme-half theme-dark"></span>
-                </span>
-                <span class="skin-card-copy"><strong>跟随系统</strong><small>随系统自动切换</small></span>
-              </button>
+            <div class="display-block display-block-switch">
+              <label class="switch-row" id="markdownOptimizeRow"><span>在对话流中优化 Markdown 显示</span><input id="optimizeMarkdown" type="checkbox" checked><span class="switch"></span></label>
+              <p class="settings-help" id="markdownOptimizeHelp">关闭后提示词按原始纯文本显示，不再解析标题、列表、代码块和链接等 Markdown 语法。</p>
             </div>
-            <p class="skin-help" id="skinHelp">显示设置只改变界面样式，不影响生成、队列、数据与接口。跟随系统时会随系统深浅色自动切换。</p>
-            <label class="switch-row" id="markdownOptimizeRow"><span>在对话流中优化 Markdown 显示</span><input id="optimizeMarkdown" type="checkbox" checked><span class="switch"></span></label>
-            <p class="settings-help" id="markdownOptimizeHelp">关闭后提示词按原始纯文本显示，不再解析标题、列表、代码块和链接等 Markdown 语法。</p>
+            <div class="settings-divider"></div>
+            <div class="display-block">
+              <strong class="display-block-title" id="themeTitle">界面主题</strong>
+              <div class="skin-grid" id="themeGrid" role="radiogroup" aria-label="界面主题">
+                <button class="skin-card" type="button" data-theme-option="light" role="radio" aria-checked="false">
+                  <span class="skin-card-preview skin-preview-default" aria-hidden="true"><i class="skin-preview-side"></i><i class="skin-preview-main"></i><i class="skin-preview-bar"></i><i class="skin-preview-dot"></i></span>
+                  <span class="skin-card-copy"><strong>日间</strong><small>浅色外观</small></span>
+                </button>
+                <button class="skin-card" type="button" data-theme-option="dark" role="radio" aria-checked="false">
+                  <span class="skin-card-preview"><img src="/assets/skins/aurora/preview.jpg" alt="" loading="lazy"></span>
+                  <span class="skin-card-copy"><strong>夜间</strong><small>深色外观</small></span>
+                </button>
+                <button class="skin-card is-active" type="button" data-theme-option="system" role="radio" aria-checked="true">
+                  <span class="skin-card-preview theme-preview-system" aria-hidden="true">
+                    <span class="theme-half theme-light"></span>
+                    <span class="theme-half theme-dark"></span>
+                  </span>
+                  <span class="skin-card-copy"><strong>跟随系统</strong><small>随系统自动切换</small></span>
+                </button>
+              </div>
+              <p class="skin-help" id="skinHelp">显示设置只改变界面样式，不影响生成、队列、数据与接口。跟随系统时会随系统深浅色自动切换。</p>
+            </div>
             <div class="settings-divider"></div>
             <div class="settings-subsection message-style-settings">
               <strong id="messageStyleTitle">对话消息样式</strong>

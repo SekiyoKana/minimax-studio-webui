@@ -335,6 +335,7 @@ function renderThemeOptions() {
   }
   setText("#markdownOptimizeRow span:first-child", localized("在对话流中优化 Markdown 显示", "Optimize Markdown in the conversation"));
   setText("#markdownOptimizeHelp", localized("关闭后提示词按原始纯文本显示，不再解析标题、列表、代码块和链接等 Markdown 语法。", "When disabled, prompts are shown as raw plain text without parsing headings, lists, code blocks or links."));
+  setText("#themeTitle", localized("界面主题", "Theme"));
   setText("#messageStyleTitle", localized("对话消息样式", "Conversation style"));
   setText("#messageStyleHelp", localized("选择对话流的展示方式。默认保留完整预览，极简压缩为横幅，宫格使用瀑布流封面。", "Choose how the conversation feed is displayed. Default keeps full previews, minimal uses compact banners, and grid uses a masonry cover layout."));
   document.querySelectorAll("[data-message-style]").forEach((button) => {
@@ -548,6 +549,7 @@ function applyStaticLocale() {
   setText("#conversationFilters span", "Device filter");
   setText("#conversationFilterPanel label > span", "Show devices");
   el("themeGrid").setAttribute("aria-label", "Display");
+  setText("#themeTitle", "Theme");
   document.querySelector(".local-asset-preview-dialog")?.setAttribute("aria-label", "Local asset preview");
   el("workflowSelect").setAttribute("aria-label", "Workflow");
   document.querySelectorAll("select").forEach((select) => select.dispatchEvent(new Event("cs:sync")));
