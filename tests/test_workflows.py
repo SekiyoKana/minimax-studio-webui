@@ -253,7 +253,12 @@ class WorkflowTests(unittest.TestCase):
             snapshot = {
                 "source": "custom",
                 "workflow_json": graph,
-                "field_mappings": {"prompt": {"node_id": "1", "input": "text"}, "steps": {"node_id": "1", "input": "steps"}},
+                "field_mappings": {
+                    "prompt": {"node_id": "1", "input": "text"},
+                    "steps": {"node_id": "1", "input": "steps"},
+                    "ratio": {"node_id": "1", "input": "ratio"},
+                    "megapixels": {"node_id": "1", "input": "megapixels"},
+                },
                 "reference_mappings": [],
                 "static_inputs": {"1": {"preset": "fixed"}},
                 "result_node_id": "2",
@@ -263,12 +268,21 @@ class WorkflowTests(unittest.TestCase):
             job = {
                 "id": "custom-job",
                 "workflow_snapshot": snapshot,
-                "request": {"prompt": "custom prompt", "steps": 24, "references": [], "media_type": "video"},
+                "request": {
+                    "prompt": "custom prompt",
+                    "steps": 24,
+                    "ratio": "9:16",
+                    "megapixels": 0.5,
+                    "references": [],
+                    "media_type": "video",
+                },
                 "input_paths": [],
             }
             engine = ComfyUIH3Engine(settings, ComfyNodeConfig("node", "Node", "http://comfy.test:8188"))
             built = engine._build_workflow(job, [])
             self.assertEqual(built["1"]["inputs"]["text"], "custom prompt")
+            self.assertEqual(built["1"]["inputs"]["ratio"], "9:16")
+            self.assertEqual(built["1"]["inputs"]["megapixels"], 0.5)
             self.assertEqual(built["1"]["inputs"]["steps"], 24)
             self.assertEqual(built["1"]["inputs"]["preset"], "fixed")
             self.assertEqual(built["2"]["inputs"]["filename_prefix"], "minimax-studio-webui/custom-job")

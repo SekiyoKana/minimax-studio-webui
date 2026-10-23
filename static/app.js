@@ -1339,6 +1339,7 @@ async function deleteNode(nodeId) {
 
 const WORKFLOW_FIELDS = [
   ["prompt", "提示词"], ["lyrics", "歌词"], ["width", "宽度"], ["height", "高度"],
+  ["ratio", "画面比例"], ["megapixels", "像素（MP）"],
   ["duration", "时长"], ["num_frames", "帧数"], ["steps", "步数"], ["seed", "随机种子"],
 ];
 
@@ -2314,9 +2315,10 @@ function updateModelUi() {
     referenceInput.accept = kinds.map((kind) => `${kind}/*`).join(",");
     el("addReference").title = state.locale === "en" ? `Add ${kinds.join(", ") || ""} references` : `添加${kinds.join("、") || ""}参考素材`;
     el("addReference").setAttribute("aria-label", el("addReference").title);
-    const showDimensions = fields.has("width") || fields.has("height");
-    el("aspectControl").hidden = !showDimensions;
-    el("resolutionControl").hidden = !showDimensions;
+    const showAspect = fields.has("width") || fields.has("height") || fields.has("ratio");
+    const showResolution = fields.has("width") || fields.has("height") || fields.has("megapixels");
+    el("aspectControl").hidden = !showAspect;
+    el("resolutionControl").hidden = !showResolution;
     el("duration").closest(".duration-control").hidden = !(fields.has("duration") || fields.has("num_frames"));
     el("duration").disabled = false;
     el("duration").min = "1";
@@ -2325,6 +2327,11 @@ function updateModelUi() {
     el("steps").disabled = false;
     el("steps").min = "1";
     el("steps").max = "1000";
+    el("stepsControl").title = localized("采样步数", "Sampling steps");
+    const customDurationControl = el("duration").closest(".duration-control");
+    customDurationControl.classList.remove("digital-human", "h3-sa");
+    customDurationControl.title = localized("视频时长", "Video duration");
+    el("durationHint").hidden = true;
     el("globalSeedControl").hidden = !fields.has("seed");
     el("autoUpscaleControl").hidden = true;
     el("autoUpscale").checked = false;
@@ -2333,7 +2340,14 @@ function updateModelUi() {
     el("upscaleScaleControl").hidden = true;
     el("saSettings").hidden = true;
     el("optimizePrompt").hidden = !fields.has("prompt");
-    el("writeLyrics").hidden = !fields.has("lyrics");
+    el("optimizePrompt").title = localized("优化提示词", "Optimize prompt");
+    el("optimizePrompt").setAttribute("aria-label", el("optimizePrompt").title);
+    el("optimizePromptLabel").textContent = el("optimizePrompt").title;
+    el("writeLyrics").hidden = true;
+    el("lyrics").placeholder = localized(
+      "输入该工作流需要的歌词或文本…",
+      "Enter the lyrics or text this workflow needs...",
+    );
   el("dropZone").classList.remove("music3-mode");
     el("prompt").placeholder = state.locale === "en" ? "Enter a prompt for this workflow..." : "输入工作流提示词…";
     el("dropZone").title = "";
@@ -2342,6 +2356,12 @@ function updateModelUi() {
     return;
   }
   el("lyrics").hidden = !isMusic3();
+  if (isMusic3()) {
+    el("lyrics").placeholder = localized(
+      "输入歌词，使用 [Intro]、[Verse]、[Chorus]、[Bridge]、[Instrumental]、[Outro] 等段落标签",
+      "Enter lyrics using [Intro], [Verse], [Chorus], [Bridge], [Instrumental], and [Outro] sections",
+    );
+  }
   el("dropZone").classList.toggle("music3-mode", isMusic3() && !upscale && !runningHub);
   el("upscaleCategoryControl").hidden = !upscale;
   el("upscaleScaleControl").hidden = !upscale;
@@ -2871,6 +2891,13 @@ function removePendingMentionTrigger() {
   if (start > 0 && promptInput.value[start - 1] === "@") {
     promptInput.setRangeText("", start - 1, start, "end");
   }
+}
+
+function currentMegapixels() {
+  const preset = RESOLUTION_PRESETS.find((item) => item.value === el("resolution").value) || RESOLUTION_PRESETS[2];
+  const labelled = Number((preset.label.match(/^([0-9.]+) MP/) || [])[1]);
+  if (Number.isFinite(labelled)) return labelled;
+  return Number((preset.width * preset.height / 1_000_000).toFixed(2));
 }
 
 function getDimensions() {
@@ -4287,6 +4314,8 @@ form.addEventListener("submit", async (event) => {
         requestBody.lyrics = isMusic3() || selectedWorkflowRecord()?.source === "custom" ? el("lyrics").value.trim() : "";
         requestBody.width = width;
         requestBody.height = height;
+        requestBody.ratio = el("aspectRatio").value;
+        requestBody.megapixels = currentMegapixels();
         requestBody.duration = Number(el("duration").value);
         requestBody.steps = steps;
         requestBody.seed = el("seed").value === "" ? undefined : Number(el("seed").value);
@@ -4315,6 +4344,8 @@ form.addEventListener("submit", async (event) => {
       data.append("lyrics", isMusic3() || selectedWorkflowRecord()?.source === "custom" ? el("lyrics").value.trim() : "");
       data.append("width", String(width));
       data.append("height", String(height));
+      data.append("ratio", el("aspectRatio").value);
+      data.append("megapixels", String(currentMegapixels()));
       data.append("duration", el("duration").value);
       data.append("steps", String(steps));
       data.append("seed", el("seed").value);

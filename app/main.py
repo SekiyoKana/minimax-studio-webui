@@ -137,6 +137,8 @@ class GenerationPatch(BaseModel):
     prompt: str | None = Field(None, max_length=12000)
     width: int | None = None
     height: int | None = None
+    ratio: str | None = Field(None, max_length=20)
+    megapixels: float | None = Field(None, gt=0, le=16)
     duration: float | None = None
     steps: int | None = None
     seed: int | None = Field(None, ge=0, le=2**31 - 1)
@@ -2714,6 +2716,8 @@ async def create_generation(
     auto_upscale_scale: Annotated[UpscaleScale, Form()] = 2,
     width: Annotated[int, Form()] = 832,
     height: Annotated[int, Form()] = 480,
+    ratio: Annotated[str, Form(max_length=20)] = "16:9",
+    megapixels: Annotated[float, Form(gt=0, le=16)] = 0.4,
     duration: Annotated[float, Form()] = 5,
     steps: Annotated[int, Form()] = 10,
     sa_tau: Annotated[float, Form(ge=0, le=4)] = 1.3,
@@ -3068,6 +3072,8 @@ async def create_generation(
             "auto_upscale_scale": auto_upscale_scale,
             "width": width,
             "height": height,
+            "ratio": ratio,
+            "megapixels": megapixels,
             "duration": duration,
             "num_frames": align_frames(duration),
             "steps": steps,

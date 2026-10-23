@@ -509,6 +509,8 @@ class ComfyUIH3Engine:
                 "lyrics": request.get("lyrics"),
                 "width": request.get("width"),
                 "height": request.get("height"),
+                "ratio": request.get("ratio"),
+                "megapixels": request.get("megapixels"),
                 "duration": request.get("duration"),
                 "num_frames": request.get("num_frames"),
                 "steps": request.get("steps"),
