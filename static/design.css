@@ -1766,3 +1766,9 @@ button { appearance: none; -webkit-appearance: none; }
 .display-block-switch { gap: 6px; }
 .display-block-title { color: var(--ink); font-size: var(--text-ui); font-weight: 600; }
 .display-block .skin-grid { margin-top: 1px; }
+
+.display-block-help { margin: 0; color: var(--quiet); font-size: var(--text-small); line-height: 1.5; }
+.display-block .skin-grid,
+.display-block .message-style-grid { margin-top: 0; gap: 10px; }
+.display-block .skin-card,
+.display-block .message-style-card { padding: 8px; border-radius: 14px; }

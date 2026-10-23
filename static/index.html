@@ -23,8 +23,8 @@
         document.documentElement.dataset.theme = mode;
       })();
     </script>
-    <link rel="stylesheet" href="/assets/styles.css?v=63&rev=73">
-    <link rel="stylesheet" href="/assets/design.css?v=50">
+    <link rel="stylesheet" href="/assets/styles.css?v=65&rev=75">
+    <link rel="stylesheet" href="/assets/design.css?v=51">
     <link rel="stylesheet" href="/assets/skins/skins.css?v=8">
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
@@ -521,7 +521,7 @@
           <section class="settings-tab-panel" id="settingsPanelAppearance" role="tabpanel" aria-labelledby="settingsTabAppearance" data-settings-panel="appearance" hidden>
             <div class="display-block display-block-switch">
               <label class="switch-row" id="markdownOptimizeRow"><span>在对话流中优化 Markdown 显示</span><input id="optimizeMarkdown" type="checkbox" checked><span class="switch"></span></label>
-              <p class="settings-help" id="markdownOptimizeHelp">关闭后提示词按原始纯文本显示，不再解析标题、列表、代码块和链接等 Markdown 语法。</p>
+              <p class="display-block-help" id="markdownOptimizeHelp">关闭后提示词按原始纯文本显示，不再解析标题、列表、代码块和链接等 Markdown 语法。</p>
             </div>
             <div class="settings-divider"></div>
             <div class="display-block">
@@ -543,12 +543,11 @@
                   <span class="skin-card-copy"><strong>跟随系统</strong><small>随系统自动切换</small></span>
                 </button>
               </div>
-              <p class="skin-help" id="skinHelp">显示设置只改变界面样式，不影响生成、队列、数据与接口。跟随系统时会随系统深浅色自动切换。</p>
+              <p class="display-block-help" id="skinHelp">显示设置只改变界面样式，不影响生成、队列、数据与接口。跟随系统时会随系统深浅色自动切换。</p>
             </div>
             <div class="settings-divider"></div>
-            <div class="settings-subsection message-style-settings">
-              <strong id="messageStyleTitle">对话消息样式</strong>
-              <p class="settings-help" id="messageStyleHelp">选择对话流的展示方式。默认保留完整预览，极简压缩为横幅，宫格使用瀑布流封面。</p>
+            <div class="display-block">
+              <strong class="display-block-title" id="messageStyleTitle">对话消息样式</strong>
               <div class="message-style-grid" id="messageStyleGrid" role="radiogroup" aria-label="对话消息样式">
                 <button class="message-style-card" type="button" data-message-style="default" role="radio" aria-checked="true">
                   <span class="message-style-preview preview-default" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
@@ -563,6 +562,7 @@
                   <span class="message-style-copy"><strong>宫格</strong><small>瀑布流封面与进度环</small></span>
                 </button>
               </div>
+              <p class="display-block-help" id="messageStyleHelp">选择对话流的展示方式。默认保留完整预览，极简压缩为横幅，宫格使用瀑布流封面。</p>
             </div>
           </section>
           <section class="settings-tab-panel" id="settingsPanelSystem" role="tabpanel" aria-labelledby="settingsTabSystem" data-settings-panel="system" hidden>
