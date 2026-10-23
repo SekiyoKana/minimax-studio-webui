@@ -1782,3 +1782,14 @@ button { appearance: none; -webkit-appearance: none; }
 .display-block .message-style-grid { margin-top: 0; gap: 10px; }
 .display-block .skin-card,
 .display-block .message-style-card { padding: 8px; border-radius: 14px; }
+
+.asset-detail-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+.asset-detail-section-heading h3 { margin: 0; }
+.detail-prompt-toggle { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; color: var(--muted); cursor: pointer; font-size: var(--text-micro); }
+.detail-prompt-toggle input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.detail-prompt-toggle input:checked + .switch { background: var(--blue); }
+.detail-prompt-toggle input:checked + .switch::after { transform: translateX(14px); }
+.asset-detail-markdown.message-text { max-width: none; color: var(--ink); font-size: var(--text-caption); line-height: 1.7; letter-spacing: 0; }
+.asset-detail-markdown[hidden],
+.asset-detail-raw[hidden] { display: none !important; }
+.asset-detail-markdown .markdown-body { min-width: 0; }

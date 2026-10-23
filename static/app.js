@@ -3789,6 +3789,8 @@ function jobCoverMarkup(job, { grid = false } = {}) {
 function renderGridJobCard(job) {
   const request = job.request || {};
   const active = isActive(job);
+  const detailRecord = state.assetDetailWindows.get(windowNode.dataset.detailWindowId);
+  const promptRaw = Boolean(detailRecord?.promptRaw);
   const progress = Math.max(0, Math.min(100, Math.round(Number(job.progress) || 0)));
   const title = job.error || job.stage || statusLabel(job.status);
   return `<article class="grid-job-card${active ? " is-loading" : ""}" data-job-id="${escapeHtml(job.id)}" data-grid-job="${escapeHtml(job.id)}" data-output-job-id="${escapeHtml(job.id)}" tabindex="0" role="button" aria-label="${escapeHtml(shortTitle(job))}">
@@ -3998,6 +4000,8 @@ function renderAssetDetail(job, windowNode = el("assetDetailModal")) {
   const downloadable = job.status === "completed" && Boolean(job.result_url);
   const references = request.references || [];
   const active = isActive(job);
+  const detailRecord = state.assetDetailWindows.get(windowNode.dataset.detailWindowId);
+  const promptRaw = Boolean(detailRecord?.promptRaw);
   const progress = Math.max(0, Math.min(100, Math.round(Number(job.progress) || 0)));
   const preview = active
     ? `<div class="asset-detail-progress">
@@ -4033,7 +4037,13 @@ function renderAssetDetail(job, windowNode = el("assetDetailModal")) {
   const ownerMeta = job.owner_name ? ` · ${t("owner")} ${job.owner_name}` : "";
   get("assetDetailMeta").textContent = `${statusLabel(job.status)} · ${formatTime(job.created_at, true)}${ownerMeta} · ${job.source_job_id || job.id}`;
   body.innerHTML = `<div class="asset-detail-preview">${preview}</div><aside class="asset-detail-info">
-    <section class="asset-detail-section"><h3>${t("prompt")}</h3><pre>${escapeHtml(request.prompt || "")}</pre></section>
+    <section class="asset-detail-section asset-detail-prompt">
+      <div class="asset-detail-section-heading"><h3>${t("prompt")}</h3><label class="detail-prompt-toggle"><span>${localized("显示原文", "Show source")}</span><input type="checkbox" data-prompt-raw${promptRaw ? " checked" : ""}><span class="switch"></span></label></div>
+      <div class="asset-detail-prompt-content">
+        <div class="asset-detail-markdown message-text markdown"${promptRaw ? " hidden" : ""}>${renderMarkdown(request.prompt || "")}</div>
+        <pre class="asset-detail-raw"${promptRaw ? "" : " hidden"}>${escapeHtml(request.prompt || "")}</pre>
+      </div>
+    </section>
     ${request.lyrics ? `<section class="asset-detail-section"><h3>${t("lyrics")}</h3><pre>${escapeHtml(request.lyrics)}</pre></section>` : ""}
     <section class="asset-detail-section"><h3>${t("sourceFiles")}</h3>${files}</section>
     <section class="asset-detail-section"><h3>${t("parameters")}</h3><div class="asset-detail-facts">${facts}</div></section>
@@ -6098,6 +6108,18 @@ el("assetDetailModal").addEventListener("pointerdown", (event) => {
     state.assetDetailJob = record.job;
     bringAssetDetailToFront(record.id);
   }
+});
+el("assetDetailModal").addEventListener("change", (event) => {
+  const input = event.target.closest("[data-prompt-raw]");
+  if (!input) return;
+  const windowNode = input.closest(".asset-detail-dialog");
+  const record = state.assetDetailWindows.get(windowNode?.dataset.detailWindowId);
+  if (record) record.promptRaw = input.checked;
+  const section = input.closest(".asset-detail-prompt");
+  const markdown = section?.querySelector(".asset-detail-markdown");
+  const raw = section?.querySelector(".asset-detail-raw");
+  if (markdown) markdown.hidden = input.checked;
+  if (raw) raw.hidden = !input.checked;
 });
 el("assetDetailModal").addEventListener("click", (event) => {
   const windowNode = event.target.closest(".asset-detail-dialog");
