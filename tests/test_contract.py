@@ -1000,7 +1000,7 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn('id="nextAssetPage"', index)
         self.assertIn('conversationPageSize: 10', app_js)
         self.assertIn('feed.scrollHeight - currentTop - feed.clientHeight < 240', app_js)
-        self.assertIn('repeat(6, minmax(0, 1fr))', (project_root / 'static' / 'design.css').read_text("utf-8"))
+        self.assertIn('repeat(5, minmax(0, 1fr))', (project_root / 'static' / 'design.css').read_text("utf-8"))
         self.assertIn('function openAssetDetail(jobId)', app_js)
         self.assertIn('assetDetailWindows: new Map()', app_js)
         self.assertIn('function toggleAssetDetailInfo(windowId)', app_js)

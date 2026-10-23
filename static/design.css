@@ -1601,7 +1601,7 @@ button { appearance: none; -webkit-appearance: none; }
 .conversation-feed.is-message-grid {
   display: grid;
   min-height: 0;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   align-content: start;
   gap: 16px 12px;
   padding: 20px 24px 36px;
@@ -1751,10 +1751,7 @@ button { appearance: none; -webkit-appearance: none; }
 
 .asset-detail-preview img { display: block; max-width: 100%; max-height: min(600px, 60dvh); margin: auto; object-fit: contain; }
 
-@media (max-width: 1280px) {
-  .conversation-feed.is-message-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-}
-@media (max-width: 1080px) {
+@media (max-width: 1180px) {
   .conversation-feed.is-message-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (max-width: 880px) {

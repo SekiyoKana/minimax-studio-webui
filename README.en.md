@@ -159,7 +159,7 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 - Removed the RunningHub resource-group auto-scheduling entry from the inference node selector; individual RunningHub nodes remain selectable.
 - Dialogs and detail windows now animate in and out; top-right toasts use an icon + message layout with an exit animation.
 - The asset library now defaults to a width that shows exactly 3 columns; the redundant New generation button was removed.
-- Renamed the conversation title to Messages, added Markdown prompt rendering, zoomable asset previews, and Default / Minimal / Grid conversation styles. Grid mode now puts the newest job at the top-left, uses 6 vertical columns, and loads history when scrolled to the bottom.
+- Renamed the conversation title to Messages, added Markdown prompt rendering, zoomable asset previews, and Default / Minimal / Grid conversation styles. Grid mode now puts the newest job at the top-left, uses 5 vertical columns, and loads history when scrolled to the bottom.
 - Renamed the Appearance tab to Display and added an "Optimize Markdown in the conversation" switch, enabled by default.
 - Moved Manage local assets to an icon button in the asset library header.
 - The 4-step and 8-step LoRAs keep their default step counts, but sampling steps are editable.
