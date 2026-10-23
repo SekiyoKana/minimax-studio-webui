@@ -970,7 +970,7 @@ class ContractTests(unittest.TestCase):
         self.assertIn('running_count', app_js)
         self.assertIn('function selectedRunningHubNode()', app_js)
         self.assertIn('const RUNNINGHUB_TARGET_PREFIX = "rh:";', app_js)
-        self.assertIn("runningHubGroups", app_js)
+        self.assertNotIn("runningHubGroups", app_js)
         self.assertIn('el("workflowControl").hidden = Boolean(runningHubNode);', app_js)
         self.assertIn('function renderRunningHubParameters()', app_js)
         self.assertIn('runninghub_parameters', app_js)

@@ -863,22 +863,6 @@ function renderNodeOptions(nodes = state.nodes) {
   const autoOnline = legacyRunningHubAuto ? healthyNodes.length : healthyComfyNodes.length;
   const autoTotal = legacyRunningHubAuto ? state.nodes.length : comfyNodes.length;
   const options = [`<option value="auto">${t("autoSchedule")} · ${autoOnline}/${autoTotal} ${t("available")}</option>`];
-  const runningHubGroups = new Map();
-  availableNodes.filter((node) => node.provider === "runninghub" && node.workflow_id && node.runninghub_schema).forEach((node) => {
-    if (!runningHubGroups.has(node.workflow_id)) runningHubGroups.set(node.workflow_id, []);
-    runningHubGroups.get(node.workflow_id).push(node);
-  });
-  runningHubGroups.forEach((group, resourceId) => {
-    const available = group.filter((node) => node.healthy);
-    const representative = available[0] || group[0];
-    const running = group.reduce((total, node) => total + Number(node.running_count || 0), 0);
-    const capacity = available.reduce((total, node) => total + Number(node.capacity || 1), 0);
-    const stateLabel = running
-      ? `${t("busy")} ${running}/${capacity}`
-      : `${available.length}/${group.length} ${t("available")} · ${localized("并发", "capacity")} ${capacity}`;
-    const label = `${t("autoSchedule")} · ${representative.workflow_name || representative.name}`;
-    options.push(`<option value="${escapeHtml(`${RUNNINGHUB_TARGET_PREFIX}${resourceId}`)}"${available.length ? "" : " disabled"}>${escapeHtml(label)} · ${escapeHtml(stateLabel)}</option>`);
-  });
   availableNodes.forEach((node) => {
     const running = Number(node.running_count || 0);
     const capacity = Number(node.capacity || 1);
