@@ -17,6 +17,9 @@ permissions:
 env:
   PYTHON_VERSION: "3.11"
   APP_NAME: MiniMaxH3Studio
+  # Windows 运行器默认使用 cp1252，强制 UTF-8 才能安全打印非 ASCII 构建日志。
+  PYTHONUTF8: "1"
+  PYTHONIOENCODING: "utf-8"
 
 jobs:
   build:
