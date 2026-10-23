@@ -1197,6 +1197,11 @@ class ComfyUIH3Engine:
                     max_size=None,
                 ) as socket:
                     response = client.post("/prompt", json={"prompt": workflow, "client_id": client_id})
+                    if getattr(response, "is_error", False) is True:
+                        detail = response.text.strip()
+                        raise ValueError(
+                            f"ComfyUI 提交任务失败（HTTP {response.status_code}）：{detail[:2000] or '未返回错误详情'}"
+                        )
                     response.raise_for_status()
                     result = response.json()
                     prompt_id = result.get("prompt_id")
@@ -2261,6 +2266,11 @@ class ComfyUIUpscaleEngine(ComfyUIH3Engine):
                     max_size=None,
                 ) as socket:
                     response = client.post("/prompt", json={"prompt": workflow, "client_id": client_id})
+                    if getattr(response, "is_error", False) is True:
+                        detail = response.text.strip()
+                        raise ValueError(
+                            f"ComfyUI 提交超分任务失败（HTTP {response.status_code}）：{detail[:2000] or '未返回错误详情'}"
+                        )
                     response.raise_for_status()
                     result = response.json()
                     prompt_id = result.get("prompt_id")

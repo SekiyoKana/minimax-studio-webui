@@ -229,6 +229,10 @@ def _translate_pattern(message: str) -> str | None:
     match = re.fullmatch(r"该 LoRA 使用 ([0-9]+) 步采样", message)
     if match:
         return f"This LoRA uses {match.group(1)} sampling steps"
+    match = re.match(r"ComfyUI 提交(超分)?任务失败（HTTP ([0-9]+)）：([\s\S]+)", message)
+    if match:
+        action = "upscale task" if match.group(1) else "task"
+        return f"ComfyUI {action} submission failed (HTTP {match.group(2)}): {match.group(3)}"
     match = re.fullmatch(r"远程产物下载失败：(.+)", message)
     if match:
         return f"Failed to download the remote output: {match.group(1)}"
