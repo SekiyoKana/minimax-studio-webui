@@ -5301,13 +5301,44 @@ function stopSidebarResize() {
   ensureAssetGridFilled().catch((error) => showError(error.message));
 }
 
+function dismissToast(toast) {
+  if (!toast || toast.dataset.leaving === "true") return;
+  toast.dataset.leaving = "true";
+  clearTimeout(Number(toast.dataset.timer || 0));
+  toast.classList.add("is-leaving");
+  window.setTimeout(() => {
+    const region = toast.parentElement;
+    if (!region) return;
+    const siblings = [...region.children].filter(
+      (item) => item !== toast && !item.classList.contains("is-leaving")
+    );
+    const positions = new Map(siblings.map((item) => [item, item.getBoundingClientRect().top]));
+    toast.remove();
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    siblings.forEach((item) => {
+      const delta = positions.get(item) - item.getBoundingClientRect().top;
+      if (Math.abs(delta) < 0.5) return;
+      item.animate(
+        [{ transform: `translateY(${delta}px)` }, { transform: "translateY(0)" }],
+        { duration: 220, easing: "cubic-bezier(.22, 1, .36, 1)" }
+      );
+    });
+  }, 240);
+}
+
 function showToast(message, type = "") {
   if (!message) return;
+  const region = el("toastRegion");
+  if (!region) return;
   const toast = document.createElement("div");
   toast.className = `toast${type ? ` ${type}` : ""}`;
-  toast.textContent = message;
-  el("toastRegion").append(toast);
-  setTimeout(() => toast.remove(), 4500);
+  toast.setAttribute("role", type === "error" ? "alert" : "status");
+  toast.innerHTML = `<span class="toast-icon" aria-hidden="true">${icon(type === "error" ? "circle-alert" : "check")}</span><span class="toast-copy">${escapeHtml(message)}</span>`;
+  toast.addEventListener("click", () => dismissToast(toast), { once: true });
+  region.append(toast);
+  refreshIcons();
+  const timer = window.setTimeout(() => dismissToast(toast), 4200);
+  toast.dataset.timer = String(timer);
 }
 
 function peeringExpiresIn() {
