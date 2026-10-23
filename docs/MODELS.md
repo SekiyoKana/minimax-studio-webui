@@ -24,15 +24,15 @@
 
 | 文件 | 大小 | SHA-256 | 下载 |
 |---|---:|---|---|
-| `minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors` | 1,956,193,000 | `08cfe946033af7d27719b964b6e0a0e50c32138daabbd6ce4137e23df6bf9980` | [Hugging Face 固定版本](https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/f3d9da6dac47dcb985684ca150f02893f619a171/minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors) |
-| `minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors` | 1,956,193,000 | `6a56f41ab4229c9dd845b9501bbd475ee57e112d846cf2e819d534a1ae928c5a` | [Hugging Face 固定版本](https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/0eebcc7e79f9cb200927c80b8e7595265b770e34/minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors) |
+| `minimax_h3_fl2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors` | 1,956,193,000 | `fb4c00361c94bad47f878d5e096c6cab2f45063b0968bd5756dcb7da6936f53e` | [Hugging Face 固定版本](https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/30f485ed874aa44c8183348ad361c5eabad318da/minimax_h3_fl2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors) |
+| `minimax_h3_ref2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors` | 1,956,193,000 | `e56863a7524e0300729cbb7b64cc8b548d90698c1abbf7d83898b0122fbe1e81` | [Hugging Face 固定版本](https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/30f485ed874aa44c8183348ad361c5eabad318da/minimax_h3_ref2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors) |
 
 作者资料：
 
 1. [LightX2V MiniMax H3 Turbo LoRA 模型卡](https://huggingface.co/lightx2v/Minimax-h3-Turbo)
 2. [ModelTC MiniMax H3 Turbo](https://github.com/ModelTC/Minimax-H3-Turbo)
 
-当前 FL2VA 和 Ref2VA 工作流分别使用对应的 768p 8-step v1.0 LoRA，LoRA 强度为 1.0，`res_multistep` 采样器固定使用 8 步。视频偏移为 6.0，音频偏移为 3.0。
+当前 FL2VA 和 Ref2VA 工作流分别使用对应的 768p 8-step v1.1 LoRA，LoRA 强度为 1.0，`res_multistep` 采样器固定使用 8 步。视频偏移为 6.0，音频偏移为 3.0。
 
 ## 超分模型
 

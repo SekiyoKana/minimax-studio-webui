@@ -28,16 +28,16 @@ CHUNK_SIZE = 8 * 1024 * 1024
 PROBE_BYTES = 1024 * 1024
 
 WORKFLOW_SHA256 = {
-    "H3Studio_minimax_h3_fl2va_fp8_720p_15s_api.json": "c714b477a13072388d6fa7098b4d49d2336464904c005e00cc30a7226ad2c853",
-    "H3Studio_minimax_h3_fl2va_fp8_sa_api.json": "851333a7c07ca39c5094cadbd14d0b15e8609eef4b12ae71e664974f2650dcc0",
-    "H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json": "4c513b996438c89e77bebdfbf4bceb492d98ef2658e88ec787e3b5609bf5a67d",
-    "H3Studio_minimax_h3_ref2va_fp8_digital_human_api.json": "aba8e1859dd57f8948c1d6da2be35daf198e15f6d2633da84e75a371fc471745",
-    "H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json": "dc2f8dbf18414d393daeaf895187c142df8633e4d1282bb8eb94133ad58e9b54",
-    "H3Studio_minimax_h3_ref2va_fp8_sa_api.json": "204eb6a760d28e4f592a0537ceda864bba02ac8b9f73a64e56f25b32800381e0",
-    "H3Studio_minimax_h3_ref2va_fp8_scaled_api.json": "f8d78113fbfc7175aaefd8f79dec060c508c05a78aec943135d7de0f43101892",
-    "H3Studio_minimax_h3_ref2va_fp8_tts_api.json": "7269c83bb995fdadb38ef3678be167e238de152cdd8586e33dc4ba384104bc98",
-    "H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json": "1dab7ff0962e76cf8736f7637522644775b8ab9745b7d7db7afdb7610bbd4c5b",
-    "H3Studio_minimax_music3_int8_api.json": "87a5521ecb4f42abed454c1ee6caa674654e1fa716679e311271a0365503dd67",
+    "H3Studio_minimax_h3_fl2va_fp8_720p_15s_api.json": "b8fa94ef488d2b923e17562d79e23bde4bd997d2ec0d7ba158ece76d0b5a5b64",
+    "H3Studio_minimax_h3_fl2va_fp8_sa_api.json": "a34613e039da0674afdbea382ea6a8ff5b9bb92ffd986df7459eeb95126c9e87",
+    "H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json": "bce319075406e69f241135a5beba03cd5c3524515dcae8d38f7eaf1464c4f5b0",
+    "H3Studio_minimax_h3_ref2va_fp8_digital_human_api.json": "829babe98437529714c4608185be9a63cd5db3ea09544d813a060b6e47138c06",
+    "H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json": "f95ba15e1d775535292f6baae25a87cb393d52ab4763780993830b90848ecd76",
+    "H3Studio_minimax_h3_ref2va_fp8_sa_api.json": "f79d53fea723eb0f4fdde03efd4c212a73d1096084172c0259cec428efaa23ef",
+    "H3Studio_minimax_h3_ref2va_fp8_scaled_api.json": "dcd2db8828bb631abd6ff3707d545037047815dc54743d1fab2f98ac53749561",
+    "H3Studio_minimax_h3_ref2va_fp8_tts_api.json": "e5dd94e0e21e6b614ff1ba5837c8be211726793627d23dbe6b642a4d08bb7baf",
+    "H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json": "8100999f681895992d471e2f08c2c070b7c67fbf87e40f983968b88859829dcc",
+    "H3Studio_minimax_music3_int8_api.json": "d3915167d6fd0077066705a48070f933705a4fa8dde51154a4ee1be23c881ed9",
 }
 
 PROFILE_MODEL_IDS = {

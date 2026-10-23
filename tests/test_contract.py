@@ -1158,9 +1158,9 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(turbo["124"]["inputs"]["scheduler"], "simple")
             self.assertEqual(turbo["142"]["class_type"], "LoraLoaderModelOnly")
             expected_lora = (
-                "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors"
+                "minimax_h3_fl2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors"
                 if variant == "fl2va-fp8"
-                else "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors"
+                else "minimax_h3_ref2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors"
             )
             self.assertEqual(
                 turbo["142"]["inputs"]["lora_name"],

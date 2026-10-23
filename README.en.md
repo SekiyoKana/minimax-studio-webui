@@ -153,6 +153,7 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 - Custom workflows support variable references, `ratio` / `megapixels` mappings, result/target node configuration and ComfyUI sync.
 - Built-in workflows are seeded into the database on first start; runtime execution no longer depends on workflow environment variables.
 - Bundled workflows and synced custom workflows use the `H3Studio_` filename prefix.
+- Upgraded the 8-step FL2VA / Ref2VA LoRAs to lightx2v Minimax-h3-Turbo v1.1 768p and updated the SA workflows to reference them.
 - Reference and asset files open in a unified preview dialog.
 - Local ComfyUI supervision: launch path, editable launch command, private environment, managed process and live logs.
 

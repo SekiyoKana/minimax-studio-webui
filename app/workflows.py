@@ -329,13 +329,23 @@ class WorkflowRegistry:
                         preset["id"],
                     ),
                 )
-                # Older databases may have been seeded while a workflow file was
-                # missing. Fill only empty preset graphs; never overwrite data.
-                connection.execute(
-                    "UPDATE workflow_configs SET workflow_json = ?, updated_at = ? "
-                    "WHERE id = ? AND source = 'preset' AND (workflow_json = '' OR workflow_json = '{}')",
-                    (serialize_json(workflow), now, preset["id"]),
-                )
+                # Presets are read-only in the UI, so keep their graph in sync
+                # with the bundled workflow files across updates. User-visible
+                # settings such as visible_in_composer live in other columns.
+                existing = connection.execute(
+                    "SELECT workflow_json FROM workflow_configs WHERE id = ? AND source = 'preset'",
+                    (preset["id"],),
+                ).fetchone()
+                try:
+                    existing_graph = json.loads(existing["workflow_json"]) if existing else None
+                except (TypeError, json.JSONDecodeError):
+                    existing_graph = None
+                if existing is None or existing_graph != workflow:
+                    connection.execute(
+                        "UPDATE workflow_configs SET workflow_json = ?, version = version + 1, updated_at = ? "
+                        "WHERE id = ? AND source = 'preset'",
+                        (serialize_json(workflow), now, preset["id"]),
+                    )
 
     @staticmethod
     def _decode(row: sqlite3.Row) -> dict[str, Any]:
