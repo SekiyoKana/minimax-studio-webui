@@ -24,6 +24,7 @@ const state = {
   assetDetailActiveWindowId: null,
   assetDetailDrag: null,
   messageStyle: "default",
+  conversationAutoFill: 0,
   optimizeMarkdown: true,
   localAssets: [],
   localAssetPage: 0,
@@ -3798,7 +3799,15 @@ function renderGridJobCard(job) {
     </div>
     <div class="grid-job-copy">
       <p>${escapeHtml(markdownPlainText(request.prompt || request.runninghub_workflow_name || shortTitle(job)))}</p>
-      <small>${escapeHtml(executionModeLabel(job))}${job.status === "completed" ? ` · ${formatTime(job.created_at, true)}` : ""}</small>
+      <div class="grid-job-params">${[
+        executionModeLabel(job),
+        modelLabel(job),
+        request.provider === "runninghub" || request.task_type === "upscale" ? "" : `${request.width} × ${request.height}`,
+        request.provider === "runninghub" || request.task_type === "upscale" ? "" : `${request.duration}${t("seconds")}`,
+        request.provider === "runninghub" || request.task_type === "upscale" ? "" : `${request.steps} ${t("steps")}`,
+        request.provider === "runninghub" || request.task_type === "upscale" ? "" : `${t("seed")} ${request.seed}`,
+      ].filter(Boolean).map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>
+      <small title="${escapeHtml(nodeLabel(job))}">${escapeHtml(nodeLabel(job))}${job.status === "completed" ? ` · ${formatTime(job.created_at, true)}` : ""}</small>
     </div>
   </article>`;
 }
@@ -3902,7 +3911,10 @@ function renderConversationFeed(mode = "preserve") {
   const messageStyle = currentMessageStyle();
   feed.classList.toggle("is-message-grid", messageStyle === "grid");
   feed.classList.toggle("is-message-minimal", messageStyle === "minimal");
-  if (mode === "bottom") state.conversationReady = false;
+  if (mode === "bottom") {
+    state.conversationReady = false;
+    state.conversationAutoFill = 0;
+  }
   const oldHeight = feed.scrollHeight;
   const oldTop = feed.scrollTop;
   const nearBottom = oldHeight - oldTop - feed.clientHeight < 160;
@@ -3927,7 +3939,8 @@ function renderConversationFeed(mode = "preserve") {
     state.conversationScrollTop = feed.scrollTop;
     requestAnimationFrame(() => {
       state.conversationReady = true;
-      if (messageStyle === "grid" && feed.scrollHeight <= feed.clientHeight + 8) {
+      if (messageStyle === "grid" && feed.scrollHeight <= feed.clientHeight + 8 && state.conversationAutoFill < 2) {
+        state.conversationAutoFill += 1;
         loadOlderMessages();
       }
     });

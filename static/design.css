@@ -1600,6 +1600,7 @@ button { appearance: none; -webkit-appearance: none; }
 
 .conversation-feed.is-message-grid {
   display: grid;
+  min-height: 0;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   align-content: start;
   gap: 16px 12px;
@@ -1608,10 +1609,11 @@ button { appearance: none; -webkit-appearance: none; }
 }
 .conversation-feed.is-message-grid .chat-empty { column-span: all; }
 .grid-job-card {
-  display: block;
+  display: flex;
   width: 100%;
+  flex-direction: column;
   margin: 0;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--surface);
@@ -1620,7 +1622,7 @@ button { appearance: none; -webkit-appearance: none; }
 }
 .grid-job-card:hover { border-color: var(--line-strong); box-shadow: 0 14px 34px rgba(20, 20, 22, .09); transform: translateY(-2px); }
 .grid-job-card:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-.grid-job-cover { position: relative; aspect-ratio: 3 / 4; overflow: hidden; background: var(--fill-quaternary); }
+.grid-job-cover { position: relative; flex: 0 0 auto; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 17px 17px 0 0; background: var(--fill-quaternary); }
 .grid-job-cover > img,
 .grid-job-cover > video { display: block; width: 100%; height: 100%; object-fit: cover; }
 .grid-cover-placeholder { display: grid; width: 100%; height: 100%; place-content: center; justify-items: center; gap: 7px; background: linear-gradient(135deg, var(--fill-quaternary), var(--canvas)); color: var(--quiet); }
@@ -1657,9 +1659,12 @@ button { appearance: none; -webkit-appearance: none; }
 .grid-job-status.completed { background: rgba(22, 96, 52, .84); }
 .grid-job-status.failed,
 .grid-job-status.cancelled { background: rgba(126, 39, 32, .86); }
-.grid-job-copy { padding: 10px 11px 12px; }
+.grid-job-copy { display: grid; min-width: 0; flex: 1 1 auto; gap: 5px; padding: 10px 11px 12px; }
 .grid-job-copy p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--ink); font-size: var(--text-caption); line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.grid-job-copy small { display: block; margin-top: 6px; overflow: hidden; color: var(--quiet); font: 400 var(--text-micro)/1.4 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.grid-job-params { display: flex; min-width: 0; flex-wrap: wrap; gap: 3px 4px; color: var(--muted); font: 400 var(--text-micro)/1.35 var(--mono); }
+.grid-job-params span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grid-job-params span:not(:last-child)::after { margin-left: 5px; color: var(--quiet); content: "·"; }
+.grid-job-copy small { display: block; overflow: hidden; color: var(--quiet); font: 400 var(--text-micro)/1.35 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 
 .message-style-settings { padding-top: 2px; }
 .message-style-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
@@ -1758,6 +1763,7 @@ button { appearance: none; -webkit-appearance: none; }
 @media (max-width: 720px) {
   .conversation-feed.is-message-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px 14px 24px; gap: 10px; }
   .grid-job-card { border-radius: 14px; }
+  .grid-job-cover { border-radius: 13px 13px 0 0; }
   .message-style-grid { grid-template-columns: 1fr 1fr 1fr; }
   .message-style-card { padding: 6px; }
   .message-style-copy small { display: none; }
