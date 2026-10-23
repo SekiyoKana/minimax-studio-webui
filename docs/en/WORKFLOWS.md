@@ -99,7 +99,7 @@ H3 TTS uses Ref2VA FP8 with the video and audio VAEs. The service forces the vis
 | Native H3, dual sampling, and LoRA-accelerated duration | 1 to 15 seconds |
 | H3 SA duration | 1 to 300 seconds; longer requests are stitched automatically |
 | VDN-H3 duration | 1 to 15 seconds |
-| Steps | Native modes 4 to 50; 4-step LoRA fixed at 4 and 8-step LoRA at 8 |
+| Steps | 4 to 50 for native and LoRA-accelerated modes; 4 or 8 is only the default and remains editable |
 | Width and height | Multiples of 32; shortest side at least 352 |
 | FL2VA assets | 1 to 2 images |
 | Ref2VA images | Up to 9 |

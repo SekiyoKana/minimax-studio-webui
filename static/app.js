@@ -350,7 +350,6 @@ function applyStaticLocale() {
   setText('#assetStatusFilter option[value=""]', t("allStatuses"));
   ["queued", "running", "completed", "failed", "cancelled"].forEach((status) => setText(`#assetStatusFilter option[value="${status}"]`, t(status)));
   setText(".conversation-header h1", t("conversation"));
-  setTitle("#newTaskButton", t("newGeneration"));
   setTitle("#editAssetsButton", state.assetEditMode ? t("exitAssetEdit") : t("editAssets"));
   setTitle("#newAssetFolder", t("newFolder"));
   setTitle("#openAssets", t("assets"));
@@ -2409,7 +2408,7 @@ function updateModelUi() {
   const stepsMode = el("steps").dataset.mode;
   const nextStepsMode = upscale ? "upscale" : music3 ? "music3" : vdnH3 ? "vdn-h3" : accelerated ? `turbo-${turboSteps}` : "h3";
   if (stepsMode !== nextStepsMode) {
-    el("steps").value = upscale ? "1" : music3 ? "30" : vdnH3 ? "50" : "10";
+    el("steps").value = upscale ? "1" : music3 ? "30" : vdnH3 ? "50" : accelerated ? String(turboSteps) : "10";
     el("steps").dataset.mode = nextStepsMode;
   }
   el("steps").min = upscale ? "1" : vdnH3 ? "8" : "4";
@@ -2424,13 +2423,13 @@ function updateModelUi() {
   duration.value = Number.isFinite(currentDuration) && currentDuration >= 1 && currentDuration <= maxDuration
     ? String(currentDuration)
     : String(defaultDuration);
-  if (upscale || music3 || accelerated || digitalHuman || h3Sa) {
-    el("steps").value = upscale ? "1" : music3 ? "30" : accelerated ? String(turboSteps) : digitalHuman ? "20" : "8";
+  if (upscale || music3 || digitalHuman || h3Sa) {
+    el("steps").value = upscale ? "1" : music3 ? "30" : digitalHuman ? "20" : "8";
   } else if (vdnH3) {
     const vdnSteps = Number(el("steps").value);
     if (!Number.isInteger(vdnSteps) || vdnSteps < 8 || vdnSteps > 50) el("steps").value = "50";
   }
-  el("steps").disabled = upscale || music3 || accelerated || digitalHuman || h3Sa || runningHub;
+  el("steps").disabled = upscale || music3 || digitalHuman || h3Sa || runningHub;
   el("duration").disabled = digitalHuman;
   const durationControl = el("duration").closest(".duration-control");
   durationControl.classList.toggle("digital-human", digitalHuman);
@@ -4147,13 +4146,6 @@ function resetComposer() {
   showError("");
 }
 
-function newTask() {
-  resetComposer();
-  closeAssetDrawer();
-  el("conversationFeed").scrollTo({ top: el("conversationFeed").scrollHeight, behavior: "smooth" });
-  promptInput.focus();
-}
-
 async function startEdit(jobId) {
   try {
     const job = await api(`/api/v1/generations/${jobId}`);
@@ -4309,7 +4301,7 @@ form.addEventListener("submit", async (event) => {
   const upscale = isUpscale();
   const minimumPromptLength = upscale ? 0 : isMusic3() ? 2 : 8;
   if (!runningHub && prompt.length < minimumPromptLength) return showError(localized(`请填写至少 ${minimumPromptLength} 个字符的提示词`, `Enter a prompt with at least ${minimumPromptLength} characters`));
-  const steps = upscale ? 1 : isMusic3() ? 30 : selectedExecutionMode() === "turbo-lora" ? selectedTurboSteps() : isH3SA() ? 8 : isVDNH3() ? Number(el("steps").value) : isDigitalHuman() ? 20 : Number(el("steps").value);
+  const steps = upscale ? 1 : isMusic3() ? 30 : isH3SA() ? 8 : isDigitalHuman() ? 20 : Number(el("steps").value);
   if (!runningHub && !upscale && (!Number.isInteger(steps) || steps < 4 || steps > 50)) return showError(localized("采样步数请输入 4–50 的整数", "Sampling steps must be an integer from 4 to 50"));
   const [width, height] = isTTS() ? [32, 32] : getDimensions();
   const button = el("generateButton");
@@ -5265,7 +5257,7 @@ function setSidebarWidth(value, persist = false) {
   const shell = document.querySelector(".app-shell");
   const resizer = el("sidebarResizer");
   if (!shell || window.innerWidth <= 860) return;
-  const width = Math.round(Math.min(sidebarWidthLimit(), Math.max(SIDEBAR_WIDTH_MIN, Number(value) || 320)));
+  const width = Math.round(Math.min(sidebarWidthLimit(), Math.max(SIDEBAR_WIDTH_MIN, Number(value) || 470)));
   shell.style.setProperty("--asset-sidebar-width", `${width}px`);
   resizer?.setAttribute("aria-valuemax", String(sidebarWidthLimit()));
   resizer?.setAttribute("aria-valuenow", String(width));
@@ -5274,7 +5266,7 @@ function setSidebarWidth(value, persist = false) {
 
 function restoreSidebarWidth() {
   const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
-  setSidebarWidth(Number.isFinite(stored) && stored > 0 ? stored : 320);
+  setSidebarWidth(Number.isFinite(stored) && stored > 0 ? stored : 470);
 }
 
 let sidebarResizeState = null;
@@ -5744,7 +5736,6 @@ el("logList").addEventListener("scroll", () => {
   state.logFollowTail = container.scrollHeight - container.scrollTop - container.clientHeight < 24;
 });
 
-el("newTaskButton").addEventListener("click", newTask);
 el("exitEdit").addEventListener("click", resetComposer);
 el("editAssetsButton").addEventListener("click", () => setAssetEditMode(!state.assetEditMode));
 el("newAssetFolder").addEventListener("click", () => openAssetFolderName());

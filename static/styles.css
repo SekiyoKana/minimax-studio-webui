@@ -59,7 +59,7 @@ svg { width: 16px; height: 16px; stroke-width: 1.7; }
 .skip-link { position: fixed; z-index: 110; top: 8px; left: 8px; padding: 8px 12px; transform: translateY(-150%); border-radius: 12px; background: var(--ink); color: white; text-decoration: none; transition: transform .2s ease; }
 .skip-link:focus { transform: translateY(0); }
 
-.app-shell { --asset-sidebar-width: 320px; position: relative; display: grid; width: 100%; height: 100dvh; grid-template-columns: var(--asset-sidebar-width) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+.app-shell { --asset-sidebar-width: 470px; position: relative; display: grid; width: 100%; height: 100dvh; grid-template-columns: var(--asset-sidebar-width) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
 .mobile-only { display: none !important; }
 
 .sidebar-resizer { position: absolute; z-index: 75; top: 0; bottom: 0; left: calc(var(--asset-sidebar-width) - 4px); width: 8px; cursor: col-resize; touch-action: none; }

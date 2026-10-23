@@ -1496,20 +1496,22 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn("H3_COMFY_REF2VA_SPEED_WORKFLOW", deployment)
         self.assertIn('option value="turbo-lora"', index)
         self.assertIn('option value="turbo-lora">8-step LoRA · 1.0', index)
+        self.assertNotIn('id="newTaskButton"', index)
+        self.assertIn('el("steps").disabled = upscale || music3 || digitalHuman || h3Sa || runningHub;', app_js)
         self.assertIn('option value="h3-sa">MiniMax H3 SA · Sol-Attn', index)
         self.assertIn('option value="vdn-h3">VDN-H3 · Video Delta Net', index)
         self.assertIn('vdnH3: "VDN-H3 · Video Delta Net"', app_js)
         self.assertIn('vdnH3 ? "50"', app_js)
-        self.assertIn('isVDNH3() ? Number(el("steps").value)', app_js)
+        self.assertIn('const steps = upscale ? 1 : isMusic3() ? 30 : isH3SA() ? 8 : isDigitalHuman() ? 20 : Number(el("steps").value);', app_js)
         self.assertIn('id="saTau"', index)
         self.assertIn('function readSaParameters()', app_js)
         self.assertIn('id="duration" type="number"', index)
         self.assertIn('duration.max = String(maxDuration);', app_js)
         self.assertNotIn('const H3_SA_DURATIONS', app_js)
         self.assertIn('const accelerated = selectedExecutionMode() === "turbo-lora";', app_js)
-        self.assertIn('accelerated ? String(turboSteps)', app_js)
-        self.assertIn('music3 || accelerated || digitalHuman || h3Sa', app_js)
-        self.assertIn('selectedExecutionMode() === "turbo-lora" ? selectedTurboSteps()', app_js)
+        self.assertIn('accelerated ? String(turboSteps) : "10"', app_js)
+        self.assertIn('upscale || music3 || digitalHuman || h3Sa', app_js)
+        self.assertIn('const turboSteps = selectedTurboSteps();', app_js)
         self.assertNotIn("H3_COMFY_TURBO_WORKFLOW", deployment)
         self.assertNotIn("H3_COMFY_REF2VA_TURBO_WORKFLOW", deployment)
         self.assertNotIn("H3_COMFY_SA_WORKFLOW", deployment)
@@ -1530,7 +1532,7 @@ class ContractTests(unittest.TestCase):
         self.assertIn('视频长度由驱动音频长度决定', index)
         self.assertIn('class="control-tooltip"', index)
         self.assertIn('el("durationHint").hidden = !digitalHuman;', app_js)
-        self.assertIn('music3 || accelerated || digitalHuman || h3Sa', app_js)
+        self.assertIn('upscale || music3 || digitalHuman || h3Sa', app_js)
         self.assertNotIn("H3_COMFY_DIGITAL_HUMAN_WORKFLOW", environment)
 
     def test_tts_frontend_and_prompt_contract(self):
@@ -2187,9 +2189,9 @@ class ContractTests(unittest.TestCase):
         for steps in (3, 51):
             with self.assertRaises(HTTPException):
                 validate_generation(608, 352, 5, steps)
-        validate_generation(608, 352, 5, 4, "turbo-lora")
-        validate_generation(608, 352, 5, 8, "turbo-lora")
-        for steps in (3, 5, 10, 50):
+        for steps in (4, 5, 8, 10, 50):
+            validate_generation(608, 352, 5, steps, "turbo-lora")
+        for steps in (3, 51):
             with self.assertRaises(HTTPException):
                 validate_generation(608, 352, 5, steps, "turbo-lora")
         validate_generation(608, 352, 5, 20, "digital-human")
