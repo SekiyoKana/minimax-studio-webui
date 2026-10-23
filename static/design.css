@@ -1797,3 +1797,23 @@ button { appearance: none; -webkit-appearance: none; }
 .asset-detail-markdown[hidden],
 .asset-detail-raw[hidden] { display: none !important; }
 .asset-detail-markdown .markdown-body { min-width: 0; }
+
+.message-grid-loading {
+  display: flex;
+  grid-column: 1 / -1;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--quiet);
+  font-size: var(--text-caption);
+}
+.message-grid-loading i {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: h3-grid-spin .7s linear infinite;
+}
+@keyframes h3-grid-spin { to { transform: rotate(360deg); } }

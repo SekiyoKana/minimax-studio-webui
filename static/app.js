@@ -3315,6 +3315,7 @@ async function refreshConversation(initial = false) {
     }
   } finally {
     state.conversationLoading = false;
+    hideConversationHistoryLoading();
     if (state.conversationRefreshPending) {
       const reset = state.conversationRefreshResetPending;
       state.conversationRefreshPending = false;
@@ -3452,9 +3453,32 @@ function applyJobDelete(jobId) {
   refreshIcons();
 }
 
+function showConversationHistoryLoading() {
+  if (currentMessageStyle() !== "grid") return;
+  const feed = el("conversationFeed");
+  const grid = feed?.querySelector(".message-grid");
+  if (!grid) return;
+  const nearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 120;
+  let loader = grid.querySelector(".message-grid-loading");
+  if (!loader) {
+    loader = document.createElement("div");
+    loader.className = "message-grid-loading";
+    loader.innerHTML = `<i aria-hidden="true"></i><span>${localized("正在加载历史…", "Loading history…")}</span>`;
+    grid.append(loader);
+  }
+  if (nearBottom) {
+    requestAnimationFrame(() => { feed.scrollTop = feed.scrollHeight; });
+  }
+}
+
+function hideConversationHistoryLoading() {
+  el("conversationFeed")?.querySelector(".message-grid-loading")?.remove();
+}
+
 async function loadOlderMessages() {
   if (state.conversationLoading || state.conversationPage >= state.conversationPages) return;
   state.conversationLoading = true;
+  showConversationHistoryLoading();
   try {
     const nextPage = state.conversationPage + 1;
     const deviceFilterSignature = conversationDeviceFilterSignature();
@@ -3481,6 +3505,7 @@ async function loadOlderMessages() {
     showError(error.message);
   } finally {
     state.conversationLoading = false;
+    hideConversationHistoryLoading();
     if (state.conversationRefreshPending) {
       const reset = state.conversationRefreshResetPending;
       state.conversationRefreshPending = false;
@@ -3935,6 +3960,7 @@ function renderConversationFeed(mode = "preserve") {
     : cards || chatEmptyMarkup();
   feed.innerHTML = content;
   refreshIcons();
+  if (messageStyle === "grid" && state.conversationLoading) showConversationHistoryLoading();
   requestAnimationFrame(() => {
     if (messageStyle === "grid") {
       feed.scrollTop = mode === "bottom" ? 0 : oldTop;
