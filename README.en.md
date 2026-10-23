@@ -83,8 +83,6 @@ Every bundled workflow and every custom workflow synced to ComfyUI uses the `H3S
 | `H3Studio_minimax_h3_fl2va_vdn_api.json` | FL2VA VDN-H3 |
 | `H3Studio_minimax_h3_ref2va_fp8_scaled_api.json` | Ref2VA native sampling |
 | `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA 8-step LoRA |
-| `H3Studio_minimax_h3_fl2va_fp8_turbo_lora_4step_api.json` | FL2VA 4-step LoRA |
-| `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_4step_api.json` | Ref2VA 4-step LoRA |
 | `H3Studio_minimax_h3_ref2va_fp8_sa_api.json` | Ref2VA H3 SA |
 | `H3Studio_minimax_h3_ref2va_vdn_api.json` | Ref2VA VDN-H3 |
 | `H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json` | Dual sampling |
@@ -152,6 +150,11 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 
 ### 2026-10-23
 
+- Added a cancel button (below the progress caption) to grid task cards so queued or running jobs can be cancelled without opening details; grid mode's Fill composer now returns to the newest position (top).
+- Added a floating Back to latest button: top for grid mode, bottom for the conversation; switching conversation styles now always lands on the newest content.
+- Moved Show asset library below Optimize Markdown; hiding the library now animates its width and opacity to the left, the desktop grid expands to 6 columns, and re-enabling restores it.
+- Replaced the text H3 brand mark with the application logo image while keeping the STUDIO wordmark.
+- Removed the 4-step LoRA presets together with their 4-step workflow files and model-manifest entries: output quality did not meet the generation bar, so LoRA acceleration now ships only with the 8-step plan. Existing jobs keep their workflow snapshots and are unaffected.
 - Custom workflows support variable references, `ratio` / `megapixels` mappings, result/target node configuration and ComfyUI sync.
 - Built-in workflows are seeded into the database on first start; runtime execution no longer depends on workflow environment variables.
 - Bundled workflows and synced custom workflows use the `H3Studio_` filename prefix.
@@ -163,6 +166,10 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 - Renamed the Appearance tab to Display and added an "Optimize Markdown in the conversation" switch, enabled by default.
 - Moved Manage local assets to an icon button in the asset library header.
 - The 4-step and 8-step LoRAs keep their default step counts, but sampling steps are editable.
+- Grid style is now cover-only: the white caption strip is gone and a translucent veil on hover/focus reveals the prompt, parameters, and node info. Long prompts ellipsize, and a quick delete button sits in the top-right corner.
+- Grid history now rises one card at a time, and the conversation feed and asset library use keyed DOM reuse, so loading and status updates no longer flash, reload covers, or jump the scroll position.
+- Display settings gained a Show asset library switch (on by default) and a Composer style selector (fixed / floating). Hiding the library moves Manage local assets into the top-right toolbar; the floating composer docks to the bottom edge and slides up when the pointer enters that region.
+- Added soft fade transitions at the asset library and conversation scroll boundaries, including a natural dissolve where the floating composer meets the feed.
 - Reference and asset files open in a unified preview dialog.
 - Local ComfyUI supervision: launch path, editable launch command, private environment, managed process and live logs.
 

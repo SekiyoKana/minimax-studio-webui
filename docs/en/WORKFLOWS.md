@@ -16,8 +16,6 @@ See the [official ComfyUI MiniMax H3 tutorial](https://docs.comfy.org/tutorials/
 | `H3Studio_minimax_h3_ref2va_fp8_scaled_api.json` | Ref2VA FP8 Scaled | Native | `dcd2db8828bb631abd6ff3707d545037047815dc54743d1fab2f98ac53749561` |
 | `H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json` | FL2VA FP8 Scaled + FL2VA 8-step v1.1 768p LoRA | `res_multistep`, 8 steps, video shift 6 / audio shift 3 | `bce319075406e69f241135a5beba03cd5c3524515dcae8d38f7eaf1464c4f5b0` |
 | `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA FP8 Scaled + Ref2VA 8-step v1.1 768p LoRA | `res_multistep`, 8 steps, video shift 6 / audio shift 3 | `8100999f681895992d471e2f08c2c070b7c67fbf87e40f983968b88859829dcc` |
-| `H3Studio_minimax_h3_fl2va_fp8_turbo_lora_4step_api.json` | FL2VA FP8 Scaled + FL2VA 4-step v1.3 768p LoRA | `res_multistep`, 4 steps, video shift 6 / audio shift 3 | `bd5bdbadb0ef7daab6c621359aa429c24824e8244da5ecc79869d807674c29a5` |
-| `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_4step_api.json` | Ref2VA FP8 Scaled + Ref2VA 4-step v1.0 768p LoRA | `res_multistep`, 4 steps, video shift 6 / audio shift 3 | `c60cb2b0ac6c64bcb88a53feb18e3db73c46b9cd1555740ce53f5e7947656325` |
 | `H3Studio_minimax_h3_fl2va_fp8_sa_api.json` | FL2VA FP8 + FL2VA 8-step v1.1 768p LoRA + Sol-Attn + Latent 3D Upscaler | H3 SA, two 8-step stages | `a34613e039da0674afdbea382ea6a8ff5b9bb92ffd986df7459eeb95126c9e87` |
 | `H3Studio_minimax_h3_ref2va_fp8_sa_api.json` | Ref2VA FP8 + Ref2VA 8-step v1.1 768p LoRA + Sol-Attn + Latent 3D Upscaler | H3 SA, two 8-step stages | `f79d53fea723eb0f4fdde03efd4c212a73d1096084172c0259cec428efaa23ef` |
 | `H3Studio_minimax_h3_fl2va_vdn_api.json` | FL2VA FP8 + VDN-H3 Video Delta Net | VDN-H3, automatic stage selection for 8–50 steps | `42db673ea1927d17e43e0687017f1f33765e8d5da6446c74b717141314cfaa93` |
@@ -57,8 +55,8 @@ Turbo workflows add:
 | Node | Type | Configuration |
 |---|---|---|
 | `123` | `KSamplerSelect` | `res_multistep` |
-| `124` | `BasicScheduler` | `simple`, 4 or 8 steps |
-| `142` | `LoraLoaderModelOnly` | Corresponding FL2VA or Ref2VA 768p 4-step or 8-step LoRA, model strength 1.0 |
+| `124` | `BasicScheduler` | `simple`, 8 steps |
+| `142` | `LoraLoaderModelOnly` | Corresponding FL2VA or Ref2VA 8-step v1.1 768p LoRA, model strength 1.0 |
 | `143` | `MiniMaxH3SigmaShift` | Video shift 6.0, audio shift 3.0 |
 
 H3 SA adds a low-resolution first H3 stage, Latent 3D upscaling, and a high-resolution Sol-Attn refinement stage. The first-stage size is approximately two thirds of the requested target, and the second stage uses the requested size. Ref2VA image, video, and audio references are injected dynamically into the first stage, then its joint latent is passed to the second stage.
@@ -84,7 +82,7 @@ The digital human workflow adds:
 
 The API dynamically creates `VHS_LoadVideo` nodes for Ref2VA video references, so [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) is required. A pinned source package is available under [`comfyui_nodes/`](../../comfyui_nodes/).
 
-LoRA-accelerated workflows use ComfyUI's built-in LoRA loader and sampling nodes, with no Turbo custom node dependency. The 8-step variants use v1.1; the 4-step variants use FL2VA v1.3 / Ref2VA v1.0.
+LoRA-accelerated workflows use ComfyUI's built-in LoRA loader and sampling nodes, with no Turbo custom node dependency. The 8-step variants use v1.1 for both FL2VA and Ref2VA.
 
 The digital-human workflow requires `VRGDG_MiniMaxH3AudioDrive`. The minimal archive in this repository contains only that node and its upstream license notice. The service reads driving-audio duration with server-side `ffprobe`; the current API workflow does not depend on ComfyUI-SoundFlow or `SoundFlow_GetLength`.
 
@@ -99,7 +97,7 @@ H3 TTS uses Ref2VA FP8 with the video and audio VAEs. The service forces the vis
 | Native H3, dual sampling, and LoRA-accelerated duration | 1 to 15 seconds |
 | H3 SA duration | 1 to 300 seconds; longer requests are stitched automatically |
 | VDN-H3 duration | 1 to 15 seconds |
-| Steps | 4 to 50 for native and LoRA-accelerated modes; 4 or 8 is only the default and remains editable |
+| Steps | 4 to 50 for native and LoRA-accelerated modes; LoRA acceleration defaults to 8 steps and remains editable |
 | Width and height | Multiples of 32; shortest side at least 352 |
 | FL2VA assets | 1 to 2 images |
 | Ref2VA images | Up to 9 |

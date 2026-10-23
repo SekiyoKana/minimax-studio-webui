@@ -18,8 +18,6 @@
 | `H3Studio_minimax_h3_ref2va_fp8_scaled_api.json` | Ref2VA FP8 Scaled | 普通流 | `dcd2db8828bb631abd6ff3707d545037047815dc54743d1fab2f98ac53749561` |
 | `H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json` | FL2VA FP8 Scaled + FL2VA 8-step v1.1 768p LoRA | `res_multistep`，8 步，视频偏移 6/音频偏移 3 | `bce319075406e69f241135a5beba03cd5c3524515dcae8d38f7eaf1464c4f5b0` |
 | `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA FP8 Scaled + Ref2VA 8-step v1.1 768p LoRA | `res_multistep`，8 步，视频偏移 6/音频偏移 3 | `8100999f681895992d471e2f08c2c070b7c67fbf87e40f983968b88859829dcc` |
-| `H3Studio_minimax_h3_fl2va_fp8_turbo_lora_4step_api.json` | FL2VA FP8 Scaled + FL2VA 4-step v1.3 768p LoRA | `res_multistep`，4 步，视频偏移 6/音频偏移 3 | `bd5bdbadb0ef7daab6c621359aa429c24824e8244da5ecc79869d807674c29a5` |
-| `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_4step_api.json` | Ref2VA FP8 Scaled + Ref2VA 4-step v1.0 768p LoRA | `res_multistep`，4 步，视频偏移 6/音频偏移 3 | `c60cb2b0ac6c64bcb88a53feb18e3db73c46b9cd1555740ce53f5e7947656325` |
 | `H3Studio_minimax_h3_fl2va_fp8_sa_api.json` | FL2VA FP8 + FL2VA 8-step v1.1 768p LoRA + Sol-Attn + Latent 3D Upscaler | H3 SA，双阶段 8 步 | `a34613e039da0674afdbea382ea6a8ff5b9bb92ffd986df7459eeb95126c9e87` |
 | `H3Studio_minimax_h3_ref2va_fp8_sa_api.json` | Ref2VA FP8 + Ref2VA 8-step v1.1 768p LoRA + Sol-Attn + Latent 3D Upscaler | H3 SA，双阶段 8 步 | `f79d53fea723eb0f4fdde03efd4c212a73d1096084172c0259cec428efaa23ef` |
 | `H3Studio_minimax_h3_fl2va_vdn_api.json` | FL2VA FP8 + VDN-H3 Video Delta Net | VDN-H3，8–50 步自动选择 stage | `42db673ea1927d17e43e0687017f1f33765e8d5da6446c74b717141314cfaa93` |
@@ -61,8 +59,8 @@ Turbo 工作流增加：
 | 节点 | 类型 | 配置 |
 |---|---|---|
 | `123` | `KSamplerSelect` | `res_multistep` |
-| `124` | `BasicScheduler` | `simple`，4 步或 8 步 |
-| `142` | `LoraLoaderModelOnly` | FL2VA 或 Ref2VA 对应的 4-step / 8-step 768p LoRA，模型强度 1.0 |
+| `124` | `BasicScheduler` | `simple`，8 步 |
+| `142` | `LoraLoaderModelOnly` | FL2VA 或 Ref2VA 对应的 8-step v1.1 768p LoRA，模型强度 1.0 |
 | `143` | `MiniMaxH3SigmaShift` | 视频偏移 6.0，音频偏移 3.0 |
 
 H3 SA 工作流增加低分辨率首阶段、Latent 3D 放大和高分辨率 Sol-Attn 二阶段。首阶段尺寸按目标尺寸的约三分之二计算，二阶段尺寸使用请求尺寸。`ref2va-fp8` 的图片、视频和音频参考在首阶段动态注入，首阶段输出的联合潜变量继续传入二阶段。
@@ -100,7 +98,7 @@ VDN-H3 工作流通过 `ApplyVDNH3` 注入 Video Delta Net 混合注意力。步
 
 Ref2VA 视频参考由 API 动态创建 `VHS_LoadVideo` 节点，因此需要 [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite)。固定版本源码包位于 [`comfyui_nodes/`](../comfyui_nodes/)。
 
-LoRA 加速工作流使用 ComfyUI 内置的 LoRA 加载器和采样节点，无需 Turbo 自定义节点。8-step 使用 v1.1，4-step 使用 FL2VA v1.3 / Ref2VA v1.0，FL2VA 与 Ref2VA 各一份。
+LoRA 加速工作流使用 ComfyUI 内置的 LoRA 加载器和采样节点，无需 Turbo 自定义节点。8-step 使用 v1.1，FL2VA 与 Ref2VA 各一份。
 
 数字人工作流需要 `VRGDG_MiniMaxH3AudioDrive`。仓库中的最小节点包只包含该节点及上游许可说明。服务端通过 `ffprobe` 读取驱动音频时长，当前 API 工作流不依赖 ComfyUI-SoundFlow 或 `SoundFlow_GetLength`。
 
@@ -115,7 +113,7 @@ H3 TTS 使用 Ref2VA FP8、视频 VAE 和音频 VAE。服务将画面尺寸强�
 | 普通 H3、双采、8-step 时长 | 1 至 15 秒 |
 | H3 SA 时长 | 1 至 300 秒，超过单段上限时自动拼接 |
 | VDN-H3 时长 | 1 至 15 秒 |
-| 步数 | 普通流与 LoRA 加速均为 4 至 50；4-step / 8-step 仅作为默认值，可自行修改 |
+| 步数 | 普通流与 LoRA 加速均为 4 至 50；LoRA 加速默认 8 步，可自行修改 |
 | 宽高 | 32 的倍数，最小边不低于 352 |
 | FL2VA 素材 | 1 至 2 张图片 |
 | Ref2VA 图片 | 最多 9 张 |

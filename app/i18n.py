@@ -47,7 +47,6 @@ ENGLISH_ERRORS: dict[str, str] = {
     "不支持的执行方案": "Unsupported execution mode",
     "ComfyUI 启动命令不能为空": "The ComfyUI launch command cannot be empty",
     "ComfyUI 启动命令长度必须为 1 至 2000 个字符，且不能包含换行": "The ComfyUI launch command must be 1 to 2000 characters and cannot contain newlines",
-    "4-step LoRA 使用 4 步，8-step LoRA 使用 8 步": "Use 4 steps for the 4-step LoRA and 8 steps for the 8-step LoRA",
     "互联设备不存在": "Paired device not found",
     "互联设备授权无效": "Invalid paired-device authorization",
     "仅已完成且存在产物的任务支持重命名": "Only completed tasks with outputs can be renamed",

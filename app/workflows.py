@@ -20,10 +20,8 @@ from .nodes import ComfyNodeConfig
 PRESETS: tuple[dict[str, Any], ...] = (
     {"id": "preset-fl2va-native", "name": "普通流 · 原生 H3", "name_en": "Native H3", "description": "FL2VA 原生采样，适用于常规文生视频任务。", "description_en": "Native FL2VA sampling for standard text-to-video generation.", "model_variant": "fl2va-fp8", "execution_mode": "native", "workflow_file": "H3Studio_minimax_h3_fl2va_fp8_720p_15s_api.json"},
     {"id": "preset-fl2va-turbo", "name": "FL2VA · 8-step LoRA", "name_en": "FL2VA · 8-step LoRA", "description": "使用 8 步 LoRA 加速 FL2VA 视频生成。", "description_en": "Accelerated FL2VA video generation with an 8-step LoRA.", "model_variant": "fl2va-fp8", "execution_mode": "turbo-lora", "workflow_file": "H3Studio_minimax_h3_fl2va_fp8_turbo_lora_api.json"},
-    {"id": "preset-fl2va-turbo-4step", "name": "FL2VA · 4-step LoRA", "name_en": "FL2VA · 4-step LoRA", "description": "使用 4 步 LoRA（v1.3 768p）加速 FL2VA 视频生成。", "description_en": "Accelerated FL2VA video generation with the 4-step v1.3 768p LoRA.", "model_variant": "fl2va-fp8", "execution_mode": "turbo-lora", "workflow_file": "H3Studio_minimax_h3_fl2va_fp8_turbo_lora_4step_api.json"},
     {"id": "preset-ref2va-native", "name": "Ref2VA · 原生 H3", "name_en": "Ref2VA · Native H3", "description": "使用多模态参考素材进行原生 Ref2VA 视频生成。", "description_en": "Native Ref2VA video generation with multimodal references.", "model_variant": "ref2va-fp8", "execution_mode": "native", "workflow_file": "H3Studio_minimax_h3_ref2va_fp8_scaled_api.json"},
     {"id": "preset-ref2va-turbo", "name": "Ref2VA · 8-step LoRA", "name_en": "Ref2VA · 8-step LoRA", "description": "使用多模态参考素材和 8 步 LoRA 加速生成。", "description_en": "Accelerated multimodal Ref2VA generation with an 8-step LoRA.", "model_variant": "ref2va-fp8", "execution_mode": "turbo-lora", "workflow_file": "H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json"},
-    {"id": "preset-ref2va-turbo-4step", "name": "Ref2VA · 4-step LoRA", "name_en": "Ref2VA · 4-step LoRA", "description": "使用多模态参考素材和 4 步 LoRA（v1.0 768p）加速生成。", "description_en": "Accelerated multimodal Ref2VA generation with the 4-step v1.0 768p LoRA.", "model_variant": "ref2va-fp8", "execution_mode": "turbo-lora", "workflow_file": "H3Studio_minimax_h3_ref2va_fp8_turbo_lora_4step_api.json"},
     {"id": "preset-ref2va-dual", "name": "双采 · Sigma + 潜空间放大", "name_en": "Dual sampling · Sigma + latent upscale", "description": "采用 Sigma 双阶段采样并在潜空间放大画面。", "description_en": "Uses two-stage Sigma sampling with latent-space upscaling.", "model_variant": "ref2va-fp8", "execution_mode": "dual-sampling", "workflow_file": "H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json"},
     {"id": "preset-fl2va-h3-sa", "name": "FL2VA · H3 SA", "name_en": "FL2VA · H3 SA", "description": "使用 Sol-Attn 加速参数执行 FL2VA 视频生成。", "description_en": "FL2VA video generation using Sol-Attn acceleration settings.", "model_variant": "fl2va-fp8", "execution_mode": "h3-sa", "workflow_file": "H3Studio_minimax_h3_fl2va_fp8_sa_api.json"},
     {"id": "preset-ref2va-h3-sa", "name": "Ref2VA · H3 SA", "name_en": "Ref2VA · H3 SA", "description": "使用参考素材和 Sol-Attn 加速参数执行生成。", "description_en": "Reference-guided generation using Sol-Attn acceleration settings.", "model_variant": "ref2va-fp8", "execution_mode": "h3-sa", "workflow_file": "H3Studio_minimax_h3_ref2va_fp8_sa_api.json"},
@@ -36,6 +34,15 @@ PRESETS: tuple[dict[str, Any], ...] = (
     {"id": "preset-upscale-image", "name": "图片超分", "name_en": "Image upscale", "description": "提升输入图片的分辨率与细节。", "description_en": "Increases the resolution and detail of an input image.", "model_variant": "fl2va-fp8", "execution_mode": "native", "workflow_file": "H3Studio_comfy_upscale_image_api.json", "media_type": "image", "task_type": "upscale"},
     {"id": "preset-upscale-video", "name": "视频超分", "name_en": "Video upscale", "description": "提升输入视频的分辨率与画面细节。", "description_en": "Increases the resolution and visual detail of an input video.", "model_variant": "fl2va-fp8", "execution_mode": "native", "workflow_file": "H3Studio_comfy_upscale_video_api.json", "media_type": "video", "task_type": "upscale"},
 )
+
+# Retired built-in presets are removed from existing databases during startup.
+# Jobs already created keep their workflow_snapshot, so history and regenerate
+# still work after the preset rows disappear.
+RETIRED_PRESET_IDS: tuple[str, ...] = (
+    "preset-fl2va-turbo-4step",
+    "preset-ref2va-turbo-4step",
+)
+
 FIELD_NAMES = {"prompt", "lyrics", "width", "height", "duration", "num_frames", "steps", "seed"}
 MEDIA_TYPES = {"image", "video", "audio"}
 REFERENCE_TYPES = MEDIA_TYPES
@@ -348,6 +355,15 @@ class WorkflowRegistry:
                         "WHERE id = ? AND source = 'preset'",
                         (serialize_json(workflow), now, preset["id"]),
                     )
+            for preset_id in RETIRED_PRESET_IDS:
+                connection.execute(
+                    "DELETE FROM workflow_node_sync WHERE workflow_id = ?",
+                    (preset_id,),
+                )
+                connection.execute(
+                    "DELETE FROM workflow_configs WHERE id = ? AND source = 'preset'",
+                    (preset_id,),
+                )
 
     @staticmethod
     def _decode(row: sqlite3.Row) -> dict[str, Any]:

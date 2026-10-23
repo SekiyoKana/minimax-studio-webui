@@ -111,9 +111,7 @@ html[data-skin="aurora"] .asset-sidebar {
   backdrop-filter: blur(12px);
 }
 
-html[data-skin="aurora"] .brand-mark {
-  background: linear-gradient(135deg, #6fd3ff 0%, #8a7bff 52%, #ff8a66 100%);
-  color: #061018;
+html[data-skin="aurora"] .brand-logo {
   box-shadow: 0 0 20px rgba(111, 211, 255, 0.32);
 }
 

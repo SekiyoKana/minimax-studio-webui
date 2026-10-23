@@ -21,16 +21,20 @@
         var dark = mode === "dark" || (mode === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
         if (dark) document.documentElement.dataset.skin = "aurora";
         document.documentElement.dataset.theme = mode;
+        try {
+          if (localStorage.getItem("h3-show-asset-library") === "0") document.documentElement.dataset.assetLibrary = "hidden";
+          if (localStorage.getItem("h3-composer-style") === "floating") document.documentElement.dataset.composerStyle = "floating";
+        } catch (error) { /* storage disabled */ }
       })();
     </script>
-    <link rel="stylesheet" href="/assets/styles.css?v=66&rev=76">
-    <link rel="stylesheet" href="/assets/design.css?v=58">
-    <link rel="stylesheet" href="/assets/skins/skins.css?v=8">
+    <link rel="stylesheet" href="/assets/styles.css?v=68&rev=78">
+    <link rel="stylesheet" href="/assets/design.css?v=61">
+    <link rel="stylesheet" href="/assets/skins/skins.css?v=10">
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
     <script src="/assets/dropdown.js?v=4" defer></script>
     <script src="/assets/motion.js?v=4" defer></script>
-    <script src="/assets/app.js?v=120&rev=132&upscale=1" defer></script>
+    <script src="/assets/app.js?v=124&rev=136&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -39,8 +43,8 @@
       <aside class="asset-sidebar" id="assetSidebar">
         <header class="brand-row">
           <button class="brand" id="brandTrigger" type="button" aria-label="H3 Studio">
-            <span class="brand-mark">H3</span>
-            <span>STUDIO</span>
+            <img class="brand-logo" src="/assets/media/brand-logo.png" alt="" width="38" height="38" decoding="async" draggable="false">
+            <span class="brand-wordmark">STUDIO</span>
           </button>
           <button class="icon-button mobile-only" id="closeAssets" type="button" title="关闭素材库" aria-label="关闭素材库"><i data-lucide="x"></i></button>
         </header>
@@ -98,6 +102,7 @@
             <button class="icon-button node-manager-trigger" id="openNodeManager" type="button" title="管理推理节点" aria-label="管理推理节点"><i data-lucide="server-cog"></i></button>
             <button class="icon-button" id="openWorkflowManager" type="button" title="管理工作流" aria-label="管理工作流"><i data-lucide="workflow"></i></button>
             <button class="icon-button" id="openPeering" type="button" title="多端互联" aria-label="多端互联"><i data-lucide="key-round"></i></button>
+            <button class="icon-button" id="manageLocalAssetsHeader" type="button" title="管理本地素材" aria-label="管理本地素材" hidden><i data-lucide="folder-cog"></i></button>
             <button class="icon-button" id="androidServerSettings" type="button" title="服务器连接" aria-label="服务器连接" hidden><i data-lucide="network"></i></button>
             <button class="icon-button" id="openGlobalSettings" type="button" title="设置" aria-label="设置"><i data-lucide="settings-2"></i></button>
             <button class="icon-button" id="languageToggle" type="button" title="Switch to English" aria-label="Switch to English"><i data-lucide="languages"></i></button>
@@ -244,6 +249,8 @@
           </div>
           <p class="form-error" id="formError" role="alert"></p>
         </form>
+        <div class="composer-hotzone" id="composerHotzone" aria-hidden="true"><span></span></div>
+        <button class="conversation-jump" id="conversationJump" type="button" title="回到顶部" aria-label="回到顶部" aria-hidden="true" tabindex="-1"><i data-lucide="arrow-up"></i></button>
       </main>
     </div>
 
@@ -524,6 +531,11 @@
               <p class="display-block-help" id="markdownOptimizeHelp">关闭后提示词按原始纯文本显示，不再解析标题、列表、代码块和链接等 Markdown 语法。</p>
             </div>
             <div class="settings-divider"></div>
+            <div class="display-block display-block-switch">
+              <label class="switch-row" id="showAssetLibraryRow"><span>显示素材库</span><input id="showAssetLibrary" type="checkbox" checked><span class="switch"></span></label>
+              <p class="display-block-help" id="showAssetLibraryHelp">关闭后素材库向左收起，宫格可显示 6 列；管理本地素材的按钮会移动至顶部工具栏。</p>
+            </div>
+            <div class="settings-divider"></div>
             <div class="display-block">
               <strong class="display-block-title" id="themeTitle">界面主题</strong>
               <div class="skin-grid" id="themeGrid" role="radiogroup" aria-label="界面主题">
@@ -563,6 +575,21 @@
                 </button>
               </div>
               <p class="display-block-help" id="messageStyleHelp">选择对话流的展示方式。默认保留完整预览，极简压缩为横幅，宫格使用瀑布流封面。</p>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="display-block">
+              <strong class="display-block-title" id="composerStyleTitle">输入框样式</strong>
+              <div class="message-style-grid two-up" id="composerStyleGrid" role="radiogroup" aria-label="输入框样式">
+                <button class="message-style-card" type="button" data-composer-style="fixed" role="radio" aria-checked="true">
+                  <span class="message-style-preview preview-composer-fixed" aria-hidden="true"><i class="preview-feed-line"></i><i class="preview-feed-line"></i><i class="preview-composer-bar"></i></span>
+                  <span class="message-style-copy"><strong>固定</strong><small>常驻对话区域底部</small></span>
+                </button>
+                <button class="message-style-card" type="button" data-composer-style="floating" role="radio" aria-checked="false">
+                  <span class="message-style-preview preview-composer-floating" aria-hidden="true"><i class="preview-feed-line"></i><i class="preview-feed-line"></i><i class="preview-float-bar"></i></span>
+                  <span class="message-style-copy"><strong>浮动</strong><small>移入底部区域时呼出</small></span>
+                </button>
+              </div>
+              <p class="display-block-help" id="composerStyleHelp">浮动模式下输入框不再占据对话网格，停留于页面底部，鼠标移入底部区域时呼出。</p>
             </div>
           </section>
           <section class="settings-tab-panel" id="settingsPanelSystem" role="tabpanel" aria-labelledby="settingsTabSystem" data-settings-panel="system" hidden>

@@ -83,8 +83,6 @@ MiniMax H3 Studio 为 MiniMax H3、H3 TTS、数字人、Music3 和通用 Running
 | `H3Studio_minimax_h3_fl2va_vdn_api.json` | FL2VA VDN-H3 |
 | `H3Studio_minimax_h3_ref2va_fp8_scaled_api.json` | Ref2VA 原生采样 |
 | `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_api.json` | Ref2VA 8 步 LoRA |
-| `H3Studio_minimax_h3_fl2va_fp8_turbo_lora_4step_api.json` | FL2VA 4 步 LoRA |
-| `H3Studio_minimax_h3_ref2va_fp8_turbo_lora_4step_api.json` | Ref2VA 4 步 LoRA |
 | `H3Studio_minimax_h3_ref2va_fp8_sa_api.json` | Ref2VA H3 SA |
 | `H3Studio_minimax_h3_ref2va_vdn_api.json` | Ref2VA VDN-H3 |
 | `H3Studio_minimax_h3_ref2va_fp8_dual_sampling_upscale_api.json` | 双阶段采样 |
@@ -152,6 +150,11 @@ flowchart LR
 
 ### 2026-10-23
 
+- 宫格任务卡新增取消按钮（位于进度文案下方），无需进入详情即可取消排队或生成中的任务；宫格「回填到发送区」改为回到最新位置（顶部）。
+- 新增「回到顶部 / 回到底部」浮动按钮：宫格模式回到顶部，对话模式回到底部；切换对话消息样式后始终停留在最新位置。
+- 「显示素材库」开关移到「优化 Markdown 显示」下方；关闭时素材库以宽度与透明度动画向左收起，宫格在宽屏下改为 6 列，重新开启后恢复。
+- 左上角品牌改为使用应用 Logo 图片，保留 STUDIO 字标，不再使用纯文字 H3 图标。
+- 移除 4 步 LoRA 预设及对应的 4 步工作流文件与模型清单项：实测画质达不到生成要求，LoRA 加速统一保留 8-step 方案。已有任务的工作流快照不受影响。
 - 自定义工作流支持可变数量参考素材、`ratio` / `megapixels` 映射、结果节点与目标节点配置，并可将工作流同步到 ComfyUI。
 - 内置工作流改为首次建库时从 `workflows/` 写入数据库，运行时不再依赖工作流环境变量。
 - 所有内置和同步到 ComfyUI 的工作流文件统一使用 `H3Studio_` 前缀。
@@ -163,6 +166,10 @@ flowchart LR
 - 设置中的「外观」页签更名为「显示」，新增「在对话流中优化 Markdown 显示」开关，默认开启。
 - 「管理本地素材」入口移到素材库标题栏，以图标按钮打开。
 - 4 步 / 8 步 LoRA 保留默认步数，但采样步数不再锁定，可自行修改。
+- 宫格样式改为纯封面布局：移除封面下方的白色信息区，改由 hover / 聚焦时的半透明蒙版展示提示词、参数与节点信息，提示词超出部分省略，右上角提供快捷删除按钮。
+- 宫格历史记录改为逐张浮现的分段入场动画；对话流与素材库改用 keyed DOM 复用，加载与状态更新时不再闪烁、重载封面或跳动滚动位置。
+- 显示设置新增「显示素材库」开关（默认开启）与「输入框样式」（固定 / 浮动）；关闭素材库后“管理本地素材”移入右上角工具栏，浮动输入框贴底悬浮并在鼠标移入底部区域时呼出。
+- 素材库与对话流的滚动边界加入渐隐过渡，浮动输入框与对话内容之间使用自然淡出衔接。
 - 素材、参考文件和详情源文件支持统一弹窗预览。
 - 增加本地 ComfyUI 接管：启动路径、可编辑启动命令、私有环境、托管进程和实时日志。
 

@@ -24,6 +24,8 @@ const state = {
   assetDetailActiveWindowId: null,
   assetDetailDrag: null,
   messageStyle: "default",
+  showAssetLibrary: true,
+  composerStyle: "fixed",
   conversationAutoFill: 0,
   optimizeMarkdown: true,
   localAssets: [],
@@ -103,6 +105,14 @@ const RUNNINGHUB_TARGET_PREFIX = "rh:";
 const SIDEBAR_WIDTH_STORAGE_KEY = "h3-asset-sidebar-width";
 const SIDEBAR_WIDTH_MIN = 260;
 const SIDEBAR_WIDTH_MAX_RATIO = 0.5;
+const ASSET_LIBRARY_STORAGE_KEY = "h3-show-asset-library";
+const COMPOSER_STYLE_STORAGE_KEY = "h3-composer-style";
+// Presets removed from the bundled catalog. The server prunes these rows on
+// startup; filtering here also hides them from older running servers.
+const RETIRED_WORKFLOW_IDS = new Set([
+  "preset-fl2va-turbo-4step",
+  "preset-ref2va-turbo-4step",
+]);
 const ANDROID_CLIENT = new URLSearchParams(window.location.search).get("h3_client") === "android";
 
 const COPY = {
@@ -345,7 +355,18 @@ function renderThemeOptions() {
     button.querySelector("strong").textContent = localized(style.name, style.nameEn);
     button.querySelector("small").textContent = localized(style.note, style.noteEn);
   });
+  setText("#showAssetLibraryRow span:first-child", localized("显示素材库", "Show asset library"));
+  setText("#showAssetLibraryHelp", localized("关闭后素材库向左收起，宫格可显示 6 列；管理本地素材的按钮会移动至顶部工具栏。", "The library collapses to the left and the grid can show 6 columns; the local asset manager moves to the top toolbar."));
+  setText("#composerStyleTitle", localized("输入框样式", "Composer style"));
+  setText("#composerStyleHelp", localized("浮动模式下输入框不再占据对话网格，停留于页面底部，鼠标移入底部区域时呼出。", "Floating lifts the composer out of the conversation grid and docks it at the bottom; hover the bottom edge to reveal it."));
+  document.querySelectorAll("button[data-composer-style]").forEach((button) => {
+    const style = COMPOSER_STYLES.find((item) => item.id === button.dataset.composerStyle);
+    if (!style) return;
+    button.querySelector("strong").textContent = localized(style.name, style.nameEn);
+    button.querySelector("small").textContent = localized(style.note, style.noteEn);
+  });
   renderMessageStyleOptions();
+  renderComposerStyleOptions();
 }
 
 function watchSystemTheme() {
@@ -438,6 +459,7 @@ function applyStaticLocale() {
   setLeadingText("#remoteDisconnectPolicy", "Handle remote records when disconnected");
   setLeadingText("#settingsPanelSystem label:nth-of-type(8)", "Remote records key");
   setTitle("#manageLocalAssets", "Manage local assets");
+  setTitle("#manageLocalAssetsHeader", "Manage local assets");
   setText("#globalSettingsForm .settings-form-actions button span", "Save settings");
   setText("#settingsPanelUpload .settings-help", "Images over 1 MB are compressed locally before upload.");
   setLeadingText("#globalSeedControl", "Random seed");
@@ -655,8 +677,37 @@ function icon(name) {
   return `<i data-lucide="${name}" aria-hidden="true"></i>`;
 }
 
-function refreshIcons() {
-  if (window.lucide) window.lucide.createIcons();
+const LUCIDE_ICON_CACHE = new Map();
+
+function lucideIconSvg(name) {
+  if (!window.lucide?.icons || typeof window.lucide.createElement !== "function") return null;
+  const key = String(name).split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join("");
+  const definition = window.lucide.icons[key];
+  if (!definition) return null;
+  if (!LUCIDE_ICON_CACHE.has(key)) LUCIDE_ICON_CACHE.set(key, window.lucide.createElement(definition));
+  const svg = LUCIDE_ICON_CACHE.get(key).cloneNode(true);
+  svg.setAttribute("class", `lucide lucide-${name}`);
+  svg.setAttribute("data-lucide", name);
+  return svg;
+}
+
+function refreshIcons(root = document) {
+  if (!window.lucide) return;
+  if (!root || typeof root.querySelectorAll !== "function") root = document;
+  // lucide.createIcons() re-creates every [data-lucide] node, including SVG
+  // icons it made earlier, which makes each re-render churn the whole page.
+  // Replace only the <i> placeholders instead, so existing icons stay mounted.
+  if (window.lucide.icons && typeof window.lucide.createElement === "function") {
+    root.querySelectorAll("i[data-lucide]").forEach((placeholder) => {
+      const svg = lucideIconSvg(placeholder.getAttribute("data-lucide"));
+      if (!svg) return;
+      const hidden = placeholder.getAttribute("aria-hidden");
+      if (hidden !== null) svg.setAttribute("aria-hidden", hidden);
+      placeholder.replaceWith(svg);
+    });
+    return;
+  }
+  window.lucide.createIcons();
 }
 
 function togglePasswordField(inputId, buttonId) {
@@ -1571,7 +1622,7 @@ function renderWorkflowList() {
 
 async function loadWorkflows() {
   const payload = await api("/api/v1/workflows");
-  state.workflows = payload.data || [];
+  state.workflows = (payload.data || []).filter((item) => !RETIRED_WORKFLOW_IDS.has(item.id));
   renderWorkflowOptions();
   renderWorkflowList();
   updateModelUi();
@@ -3248,10 +3299,11 @@ function renderAssets(total = state.assetTotal) {
     : state.assets.length && !state.assetHasMore
       ? `<div class="asset-load-state">${icon("check")}<span>${t("allLoaded")}</span></div>`
       : "";
-  el("assetGrid").innerHTML = `${folderCards}${renderAssetDirectoryHeader()}${cards}${empty}${error}${loadState}`;
+  morphRegion(el("assetGrid"), `${folderCards}${renderAssetDirectoryHeader()}${cards}${empty}${error}${loadState}`);
   updateAssetChrome();
   updateAssetSelectionChrome();
   refreshIcons();
+  updateScrollFades();
 }
 
 function dedupeJobs(jobs) {
@@ -3331,6 +3383,213 @@ function elementFromHtml(markup) {
   return template.content.firstElementChild;
 }
 
+/* Keyed, in-place DOM reconciliation.
+ *
+ * The feed used to be replaced with innerHTML on every event, which reloaded
+ * images/videos, replayed entrance animations and made the scroll position
+ * jump. These helpers morph the existing tree instead: nodes are matched by
+ * their data-* key, only changed attributes/text are written, and untouched
+ * media nodes are never re-created. */
+const MORPH_KEY_ATTRIBUTES = [
+  "data-job-id",
+  "data-grid-job",
+  "data-asset-job",
+  "data-asset-folder-card",
+  "data-asset-folder-back",
+  "data-directory-folder-id",
+  "data-feed-key",
+];
+
+function morphKey(node) {
+  if (!node || node.nodeType !== 1) return "";
+  // Action buttons inside a message or an asset card all share the same job id,
+  // so include the action to keep each button individually addressable.
+  const action = node.getAttribute("data-job-action")
+    || node.getAttribute("data-asset-input")
+    || node.getAttribute("data-folder-action")
+    || "";
+  for (const name of MORPH_KEY_ATTRIBUTES) {
+    if (node.hasAttribute(name)) return `${name}:${node.getAttribute(name)}:${action}`;
+  }
+  return "";
+}
+
+function sameNodeKind(left, right) {
+  return left && right && left.nodeType === right.nodeType && left.nodeName === right.nodeName;
+}
+
+function lucideEquivalent(current, next) {
+  return current.nodeName === "svg"
+    && next.nodeName === "I"
+    && next.hasAttribute("data-lucide")
+    && current.classList.contains(`lucide-${next.getAttribute("data-lucide")}`);
+}
+
+function morphAttributes(current, next) {
+  // The entrance animation is owned by JS, not by the rendered template, so it
+  // must survive a status update that arrives while the card is still rising.
+  const keepEnterAnimation = current.classList.contains("grid-card-enter");
+  const enterOrder = current.style.getPropertyValue("--enter-order");
+  for (const attribute of Array.from(next.attributes)) {
+    if (current.getAttribute(attribute.name) !== attribute.value) current.setAttribute(attribute.name, attribute.value);
+  }
+  for (const attribute of Array.from(current.attributes)) {
+    if (!next.hasAttribute(attribute.name)) current.removeAttribute(attribute.name);
+  }
+  if (keepEnterAnimation) {
+    current.classList.add("grid-card-enter");
+    if (enterOrder) current.style.setProperty("--enter-order", enterOrder);
+  }
+  if (current.tagName === "INPUT") {
+    current.checked = next.checked;
+    if (current.type !== "file") current.value = next.value;
+  } else if (current.tagName === "OPTION") {
+    current.selected = next.selected;
+  }
+}
+
+function morphNode(current, next) {
+  if (!next || !current) return current;
+  if (lucideEquivalent(current, next)) return current;
+  if (!sameNodeKind(current, next)) {
+    current.replaceWith(next);
+    return next;
+  }
+  if (current.nodeType === Node.TEXT_NODE) {
+    if (current.nodeValue !== next.nodeValue) current.nodeValue = next.nodeValue;
+    return current;
+  }
+  if (current.nodeType !== Node.ELEMENT_NODE) return current;
+  morphAttributes(current, next);
+  reconcileChildren(current, Array.from(next.childNodes));
+  return current;
+}
+
+function reconcileChildren(parent, nextChildren, created = []) {
+  const currentChildren = Array.from(parent.childNodes);
+  const keyedCurrent = new Map();
+  currentChildren.forEach((node) => {
+    const key = morphKey(node);
+    if (key && !keyedCurrent.has(key)) keyedCurrent.set(key, node);
+  });
+  const transient = currentChildren.filter((node) => node.nodeType === 1 && node.hasAttribute("data-feed-transient"));
+  const used = new Set(transient);
+  const ordered = [];
+  nextChildren.forEach((next, index) => {
+    let match = null;
+    const key = morphKey(next);
+    if (key) {
+      const candidate = keyedCurrent.get(key);
+      if (candidate && !used.has(candidate)) match = candidate;
+    } else {
+      const candidate = currentChildren[index];
+      if (candidate && !used.has(candidate) && !morphKey(candidate)
+        && (sameNodeKind(candidate, next) || lucideEquivalent(candidate, next))) match = candidate;
+    }
+    if (match) {
+      used.add(match);
+      ordered.push(morphNode(match, next));
+    } else {
+      created.push(next);
+      ordered.push(next);
+    }
+  });
+  currentChildren.forEach((node) => {
+    if (!used.has(node)) node.remove();
+  });
+  ordered.forEach((node, index) => {
+    if (parent.childNodes[index] !== node) parent.insertBefore(node, parent.childNodes[index] || null);
+  });
+  transient.forEach((node) => {
+    if (node.parentElement !== parent || node !== parent.lastChild) parent.appendChild(node);
+  });
+  return created;
+}
+
+function morphRegion(parent, markup, created = []) {
+  const template = document.createElement("template");
+  template.innerHTML = markup;
+  reconcileChildren(parent, Array.from(template.content.childNodes), created);
+  return created;
+}
+
+function morphElement(current, markup) {
+  if (!current) return null;
+  return morphNode(current, elementFromHtml(markup));
+}
+
+function setScrollTopInstant(node, value) {
+  if (!node) return;
+  if (typeof node.scrollTo === "function") {
+    node.scrollTo({ top: value, behavior: "instant" });
+    return;
+  }
+  node.scrollTop = value;
+}
+
+function updateScrollFade(node, size = 16) {
+  if (!node) return;
+  const max = Math.max(0, node.scrollHeight - node.clientHeight);
+  const cover = node.id === "conversationFeed"
+    ? Math.max(0, Number.parseFloat(node.style.getPropertyValue("--composer-cover")) || 0)
+    : 0;
+  const top = node.scrollTop > 4 ? size : 0;
+  // While a floating composer covers the bottom edge, finish the fade at its
+  // top edge instead of underneath it, so the content dissolves into the dock.
+  const bottom = max - node.scrollTop > 4 ? size + cover : 0;
+  const topValue = `${top}px`;
+  const bottomValue = `${bottom}px`;
+  if (node.style.getPropertyValue("--scroll-fade-top") !== topValue) node.style.setProperty("--scroll-fade-top", topValue);
+  if (node.style.getPropertyValue("--scroll-fade-bottom") !== bottomValue) node.style.setProperty("--scroll-fade-bottom", bottomValue);
+}
+
+function updateScrollFades() {
+  updateScrollFade(el("assetGrid"));
+  updateScrollFade(el("conversationFeed"));
+}
+
+function scrollConversationToLatest(behavior = "smooth") {
+  const feed = el("conversationFeed");
+  if (!feed) return;
+  const top = currentMessageStyle() === "grid" ? 0 : feed.scrollHeight;
+  if (behavior === "instant") {
+    setScrollTopInstant(feed, top);
+    state.conversationScrollTop = feed.scrollTop;
+    updateScrollFades();
+    updateConversationJump();
+    return;
+  }
+  if (typeof feed.scrollTo === "function") feed.scrollTo({ top, behavior: "smooth" });
+  else feed.scrollTop = top;
+}
+
+function updateConversationJump() {
+  const button = el("conversationJump");
+  const feed = el("conversationFeed");
+  if (!button || !feed) return;
+  const grid = currentMessageStyle() === "grid";
+  const max = Math.max(0, feed.scrollHeight - feed.clientHeight);
+  // For grid mode "latest" is the top; for the conversation it is the bottom.
+  const distance = grid ? feed.scrollTop : max - feed.scrollTop;
+  const visible = Boolean(state.conversationReady) && max > 48 && distance > 110;
+  button.classList.toggle("is-visible", visible);
+  const tabIndex = visible ? 0 : -1;
+  if (button.tabIndex !== tabIndex) button.tabIndex = tabIndex;
+  const ariaHidden = String(!visible);
+  if (button.getAttribute("aria-hidden") !== ariaHidden) button.setAttribute("aria-hidden", ariaHidden);
+  const direction = grid ? "top" : "bottom";
+  if (button.dataset.direction !== direction) {
+    button.dataset.direction = direction;
+    button.innerHTML = icon(direction === "top" ? "arrow-up" : "arrow-down");
+    refreshIcons(button);
+  }
+  const label = grid ? localized("回到顶部", "Back to top") : localized("回到底部", "Back to bottom");
+  if (button.title !== label) {
+    button.title = label;
+    button.setAttribute("aria-label", label);
+  }
+}
+
 function jobElement(container, attribute, jobId) {
   return Array.from(container.querySelectorAll(`[${attribute}]`)).find((item) => item.getAttribute(attribute) === jobId) || null;
 }
@@ -3355,63 +3614,68 @@ function upsertAsset(job) {
   }
   const index = state.assets.findIndex((item) => item.id === job.id);
   const matches = assetMatchesCurrentView(job);
-  const card = jobElement(el("assetGrid"), "data-asset-job", job.id);
+  let changed = false;
   if (index >= 0 && !matches) {
     state.assets.splice(index, 1);
     state.assetTotal = Math.max(0, state.assetTotal - 1);
-    card?.remove();
+    changed = true;
   } else if (index >= 0) {
     state.assets[index] = job;
-    card?.replaceWith(elementFromHtml(renderAssetCard(job)));
+    changed = true;
   } else if (matches) {
     const newestTime = state.assets[0] ? new Date(state.assets[0].created_at).getTime() : 0;
     const jobTime = new Date(job.created_at).getTime();
     if (!state.assets.length || jobTime >= newestTime) {
       state.assets.unshift(job);
       state.assetTotal += 1;
-      el("assetGrid").querySelector(".library-empty")?.remove();
-      el("assetGrid").prepend(elementFromHtml(renderAssetCard(job)));
+      changed = true;
     }
   }
-  if (!state.assets.length) el("assetGrid").innerHTML = `<div class="library-empty">${icon("images")}<span>${t("noAssets")}</span></div>`;
-  state.assetPages = Math.max(1, Math.ceil(state.assetTotal / state.assetPageSize));
-  updateAssetChrome();
-  refreshIcons();
+  if (changed) {
+    state.assetPages = Math.max(1, Math.ceil(state.assetTotal / state.assetPageSize));
+    // renderAssets morphs the grid in place, so covers, videos and the scroll
+    // position all survive a status update.
+    renderAssets();
+  }
 }
 
 function upsertConversation(job) {
   const index = state.conversations.findIndex((item) => item.id === job.id);
-  const current = jobElement(el("conversationFeed"), "data-job-id", job.id);
   const matches = conversationMatchesCurrentView(job);
+  let changed = false;
   if (index >= 0 && !matches) {
     state.conversations.splice(index, 1);
-    current?.remove();
+    changed = true;
   } else if (index >= 0) {
     state.conversations[index] = job;
-    current?.replaceWith(elementFromHtml(renderJobExchange(job)));
+    changed = true;
   } else if (matches) {
     const newestTime = state.conversations[0] ? new Date(state.conversations[0].created_at).getTime() : 0;
     const jobTime = new Date(job.created_at).getTime();
     if (state.conversations.length && jobTime < newestTime) return;
     state.conversations.unshift(job);
-    el("conversationFeed").querySelector(".chat-empty")?.remove();
-    const card = elementFromHtml(renderJobExchange(job));
-    if (currentMessageStyle() === "grid") {
-      let grid = el("conversationFeed").querySelector(".message-grid");
-      if (!grid) {
-        grid = document.createElement("div");
-        grid.className = "message-grid";
-        el("conversationFeed").append(grid);
-      }
-      grid.prepend(card);
-      if (state.conversationScrollTop <= 24) el("conversationFeed").scrollTop = 0;
-    } else {
-      el("conversationFeed").append(card);
-      el("conversationFeed").scrollTop = el("conversationFeed").scrollHeight;
-    }
+    changed = true;
   }
-  if (!state.conversations.length) el("conversationFeed").innerHTML = `${chatEmptyMarkup()}`;
-  refreshIcons();
+  if (changed) {
+    // Keyed reconciliation keeps every unchanged card (and its poster frame)
+    // mounted; only genuinely new cards animate in. Streaming snapshots that
+    // touch several jobs are coalesced into a single frame.
+    scheduleConversationRender("preserve");
+  }
+}
+
+let conversationRenderHandle = 0;
+let conversationRenderMode = "preserve";
+
+function scheduleConversationRender(mode = "preserve") {
+  conversationRenderMode = mode;
+  if (conversationRenderHandle) return;
+  conversationRenderHandle = requestAnimationFrame(() => {
+    conversationRenderHandle = 0;
+    const nextMode = conversationRenderMode;
+    conversationRenderMode = "preserve";
+    renderConversationFeed(nextMode);
+  });
 }
 
 function conversationMatchesCurrentView(job) {
@@ -3443,14 +3707,15 @@ function applyJobDelete(jobId) {
   const knownJob = state.assets[assetIndex] || state.conversations[conversationIndex];
   if (assetIndex >= 0) state.assets.splice(assetIndex, 1);
   if (conversationIndex >= 0) state.conversations.splice(conversationIndex, 1);
-  jobElement(el("assetGrid"), "data-asset-job", jobId)?.remove();
+  if (assetIndex >= 0) jobElement(el("assetGrid"), "data-asset-job", jobId)?.remove();
   jobElement(el("conversationFeed"), "data-job-id", jobId)?.remove();
   if (knownJob && assetMatchesCurrentView(knownJob)) state.assetTotal = Math.max(0, state.assetTotal - 1);
-  if (!state.assets.length) el("assetGrid").innerHTML = `<div class="library-empty">${icon("images")}<span>${t("noAssets")}</span></div>`;
-  if (!state.conversations.length) el("conversationFeed").innerHTML = `${chatEmptyMarkup()}`;
+  if (!state.assets.length) renderAssets();
+  if (!state.conversations.length) morphRegion(el("conversationFeed"), chatEmptyMarkup());
   state.assetPages = Math.max(1, Math.ceil(state.assetTotal / state.assetPageSize));
   updateAssetChrome();
   refreshIcons();
+  updateScrollFades();
 }
 
 function showConversationHistoryLoading() {
@@ -3463,16 +3728,21 @@ function showConversationHistoryLoading() {
   if (!loader) {
     loader = document.createElement("div");
     loader.className = "message-grid-loading";
+    loader.setAttribute("data-feed-transient", "history-loading");
     loader.innerHTML = `<i aria-hidden="true"></i><span>${localized("正在加载历史…", "Loading history…")}</span>`;
     grid.append(loader);
   }
   if (nearBottom) {
-    requestAnimationFrame(() => { feed.scrollTop = feed.scrollHeight; });
+    requestAnimationFrame(() => {
+      setScrollTopInstant(feed, feed.scrollHeight);
+      updateScrollFades();
+    });
   }
 }
 
 function hideConversationHistoryLoading() {
   el("conversationFeed")?.querySelector(".message-grid-loading")?.remove();
+  updateScrollFades();
 }
 
 async function loadOlderMessages() {
@@ -3785,8 +4055,181 @@ function applyMessageStyle(style, { persist = true, render = true } = {}) {
     try { localStorage.setItem(MESSAGE_STYLE_STORAGE_KEY, state.messageStyle); } catch (error) { /* storage disabled */ }
   }
   renderMessageStyleOptions();
-  if (render) renderConversationFeed(state.messageStyle === "grid" ? "bottom" : "preserve");
+  // Every style has a different definition of "latest" (top for grid, bottom
+  // for the conversation), so a switch always lands on the newest content.
+  if (render) renderConversationFeed("bottom");
   return state.messageStyle;
+}
+
+const COMPOSER_STYLES = [
+  { id: "fixed", name: "固定", nameEn: "Fixed", note: "常驻对话区域底部", noteEn: "Pinned below the conversation" },
+  { id: "floating", name: "浮动", nameEn: "Floating", note: "移入底部区域时呼出", noteEn: "Slides up from the bottom on hover" },
+];
+
+function normalizeComposerStyle(value) {
+  return COMPOSER_STYLES.some((style) => style.id === value) ? value : "fixed";
+}
+
+function storedComposerStyle() {
+  try {
+    return normalizeComposerStyle(localStorage.getItem(COMPOSER_STYLE_STORAGE_KEY));
+  } catch (error) {
+    return "fixed";
+  }
+}
+
+function storedShowAssetLibrary() {
+  try {
+    return localStorage.getItem(ASSET_LIBRARY_STORAGE_KEY) !== "0";
+  } catch (error) {
+    return true;
+  }
+}
+
+function currentComposerStyle() {
+  return normalizeComposerStyle(state.composerStyle);
+}
+
+function renderComposerStyleOptions() {
+  document.querySelectorAll("button[data-composer-style]").forEach((button) => {
+    const active = button.dataset.composerStyle === currentComposerStyle();
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-checked", String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
+}
+
+function setCssVariable(node, name, value) {
+  if (!node) return;
+  if (node.style.getPropertyValue(name) !== value) node.style.setProperty(name, value);
+}
+
+function updateComposerFloatSpace() {
+  const root = document.documentElement;
+  const feed = el("conversationFeed");
+  const composer = el("generationForm");
+  const height = composer ? composer.offsetHeight : 0;
+  if (currentComposerStyle() !== "floating") {
+    root.style.removeProperty("--composer-float-space");
+    feed?.style.removeProperty("--composer-cover");
+    setCssVariable(root, "--composer-offset", `${height ? Math.round(height) + 20 : 120}px`);
+    updateScrollFades();
+    updateConversationJump();
+    return;
+  }
+  const value = height ? Math.min(360, Math.max(72, Math.round(height) + 30)) : 140;
+  setCssVariable(root, "--composer-float-space", `${value}px`);
+  // The jump button must stay above the reserved dock area even while the
+  // floating composer is hidden, otherwise hovering the dock moves it around.
+  setCssVariable(root, "--composer-offset", `${height ? Math.round(height) + 30 : 140}px`);
+  // Reduced-motion mode keeps the dock visible at all times, so reserve the
+  // same fade space for it.
+  const reduceMotion = Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+  const revealed = Boolean(composer?.classList.contains("is-revealed")) || reduceMotion;
+  const coverValue = revealed ? `${Math.round(height) + 14}px` : "0px";
+  if (feed) setCssVariable(feed, "--composer-cover", coverValue);
+  updateScrollFades();
+  updateConversationJump();
+}
+
+function setComposerRevealed(revealed) {
+  const composer = el("generationForm");
+  if (!composer) return;
+  const visible = currentComposerStyle() === "floating" && Boolean(revealed);
+  composer.classList.toggle("is-revealed", visible);
+  updateComposerFloatSpace();
+}
+
+function applyComposerStyle(style, { persist = true } = {}) {
+  state.composerStyle = normalizeComposerStyle(style);
+  document.documentElement.dataset.composerStyle = state.composerStyle;
+  if (persist) {
+    try { localStorage.setItem(COMPOSER_STYLE_STORAGE_KEY, state.composerStyle); } catch (error) { /* storage disabled */ }
+  }
+  renderComposerStyleOptions();
+  const composer = el("generationForm");
+  const keepRevealed = currentComposerStyle() === "floating" && Boolean(composer?.contains(document.activeElement));
+  setComposerRevealed(keepRevealed);
+  updateComposerFloatSpace();
+  requestAnimationFrame(updateScrollFades);
+  return state.composerStyle;
+}
+
+function initFloatingComposer() {
+  const hotzone = el("composerHotzone");
+  const composer = el("generationForm");
+  if (!hotzone || !composer) return;
+  let hideTimer = 0;
+  const reveal = () => {
+    window.clearTimeout(hideTimer);
+    if (currentComposerStyle() === "floating") setComposerRevealed(true);
+  };
+  const hideSoon = () => {
+    window.clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(() => {
+      if (currentComposerStyle() !== "floating") return;
+      if (composer.contains(document.activeElement)) return;
+      if (composer.matches(":hover") || hotzone.matches(":hover")) return;
+      setComposerRevealed(false);
+    }, 170);
+  };
+  hotzone.addEventListener("pointerenter", reveal);
+  hotzone.addEventListener("click", () => {
+    reveal();
+    promptInput?.focus({ preventScroll: true });
+  });
+  composer.addEventListener("pointerenter", reveal);
+  composer.addEventListener("pointerleave", hideSoon);
+  composer.addEventListener("focusin", reveal);
+  composer.addEventListener("focusout", hideSoon);
+  document.addEventListener("pointerdown", (event) => {
+    if (currentComposerStyle() !== "floating" || !composer.classList.contains("is-revealed")) return;
+    if (composer.contains(event.target) || hotzone.contains(event.target)) return;
+    if (composer.contains(document.activeElement)) return;
+    setComposerRevealed(false);
+  });
+  if ("ResizeObserver" in window) {
+    new ResizeObserver(() => updateComposerFloatSpace()).observe(composer);
+  }
+  updateComposerFloatSpace();
+}
+
+let libraryAnimationTimer = 0;
+
+function applyAssetLibraryVisibility(visible, { persist = true, animate = true } = {}) {
+  state.showAssetLibrary = visible !== false;
+  const root = document.documentElement;
+  if (animate) {
+    root.classList.add("is-library-animating");
+    window.clearTimeout(libraryAnimationTimer);
+    libraryAnimationTimer = window.setTimeout(() => root.classList.remove("is-library-animating"), 560);
+  } else {
+    window.clearTimeout(libraryAnimationTimer);
+    root.classList.remove("is-library-animating");
+  }
+  root.dataset.assetLibrary = state.showAssetLibrary ? "visible" : "hidden";
+  const toggle = el("showAssetLibrary");
+  if (toggle) toggle.checked = state.showAssetLibrary;
+  const sidebar = el("assetSidebar");
+  if (sidebar) {
+    sidebar.inert = !state.showAssetLibrary;
+    sidebar.setAttribute("aria-hidden", String(!state.showAssetLibrary));
+  }
+  const headerButton = el("manageLocalAssetsHeader");
+  if (headerButton) headerButton.hidden = state.showAssetLibrary;
+  const mobileTrigger = el("openAssets");
+  if (mobileTrigger) mobileTrigger.hidden = !state.showAssetLibrary;
+  if (!state.showAssetLibrary) closeAssetDrawer();
+  if (persist) {
+    try { localStorage.setItem(ASSET_LIBRARY_STORAGE_KEY, state.showAssetLibrary ? "1" : "0"); } catch (error) { /* storage disabled */ }
+  }
+  syncHeaderTips();
+  requestAnimationFrame(() => {
+    updateScrollFades();
+    updateConversationJump();
+    updateComposerFloatSpace();
+  });
+  return state.showAssetLibrary;
 }
 
 function gridProgressRing(job) {
@@ -3822,23 +4265,27 @@ function renderGridJobCard(job) {
   const active = isActive(job);
   const progress = Math.max(0, Math.min(100, Math.round(Number(job.progress) || 0)));
   const title = job.error || job.stage || statusLabel(job.status);
+  const prompt = markdownPlainText(request.prompt || request.runninghub_workflow_name || shortTitle(job));
+  const params = [
+    executionModeLabel(job),
+    modelLabel(job),
+    request.provider === "runninghub" || request.task_type === "upscale" ? "" : `${request.width} × ${request.height}`,
+    request.provider === "runninghub" || request.task_type === "upscale" ? "" : `${request.duration}${t("seconds")}`,
+    request.provider === "runninghub" || request.task_type === "upscale" ? "" : `${request.steps} ${t("steps")}`,
+    request.provider === "runninghub" || request.task_type === "upscale" ? "" : `${t("seed")} ${request.seed}`,
+  ].filter(Boolean).map((item) => `<span>${escapeHtml(item)}</span>`).join("");
+  const meta = `${nodeLabel(job)}${job.status === "completed" ? ` · ${formatTime(job.created_at, true)}` : ""}`;
   return `<article class="grid-job-card${active ? " is-loading" : ""}" data-job-id="${escapeHtml(job.id)}" data-grid-job="${escapeHtml(job.id)}" data-output-job-id="${escapeHtml(job.id)}" tabindex="0" role="button" aria-label="${escapeHtml(shortTitle(job))}">
     <div class="grid-job-cover">
       ${jobCoverMarkup(job, { grid: true })}
-      ${active ? `<div class="grid-loading-mask"><span class="grid-progress-ring" style="--progress:${progress * 3.6}deg"><span>${progress}%</span></span><b>${escapeHtml(title)}</b></div>` : ""}
+      ${active ? `<div class="grid-loading-mask"><span class="grid-progress-ring" style="--progress:${progress * 3.6}deg"><span>${progress}%</span></span><b>${escapeHtml(title)}</b><button class="grid-cancel-button" type="button" data-grid-cancel="${escapeHtml(job.id)}" title="${localized("取消任务", "Cancel task")}" aria-label="${localized("取消任务", "Cancel task")}">${icon("square")}</button></div>` : ""}
       <span class="grid-job-status ${escapeHtml(job.status)}">${escapeHtml(statusLabel(job.status))}</span>
-    </div>
-    <div class="grid-job-copy">
-      <p>${escapeHtml(markdownPlainText(request.prompt || request.runninghub_workflow_name || shortTitle(job)))}</p>
-      <div class="grid-job-params">${[
-        executionModeLabel(job),
-        modelLabel(job),
-        request.provider === "runninghub" || request.task_type === "upscale" ? "" : `${request.width} × ${request.height}`,
-        request.provider === "runninghub" || request.task_type === "upscale" ? "" : `${request.duration}${t("seconds")}`,
-        request.provider === "runninghub" || request.task_type === "upscale" ? "" : `${request.steps} ${t("steps")}`,
-        request.provider === "runninghub" || request.task_type === "upscale" ? "" : `${t("seed")} ${request.seed}`,
-      ].filter(Boolean).map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>
-      <small title="${escapeHtml(nodeLabel(job))}">${escapeHtml(nodeLabel(job))}${job.status === "completed" ? ` · ${formatTime(job.created_at, true)}` : ""}</small>
+      <button class="grid-job-delete" type="button" data-grid-delete="${escapeHtml(job.id)}" title="${localized("删除记录", "Delete record")}" aria-label="${localized("删除记录", "Delete record")}">${icon("trash-2")}</button>
+      <div class="grid-job-hover">
+        <p class="grid-job-prompt" title="${escapeHtml(prompt)}">${escapeHtml(prompt)}</p>
+        <div class="grid-job-params">${params}</div>
+        <small class="grid-job-meta" title="${escapeHtml(meta)}">${escapeHtml(meta)}</small>
+      </div>
     </div>
   </article>`;
 }
@@ -3937,6 +4384,26 @@ function chatEmptyMarkup() {
   return `<div class="chat-empty"><span>H3</span><h2>${t("startCreating")}</h2><p>${localized("用一句话描述画面，或从素材库选择参考图开始。", "Describe a shot in one line, or start from a reference in the library.")}</p></div>`;
 }
 
+function animateGridCard(card, index) {
+  if (!card || !card.classList.contains("grid-job-card")) return;
+  card.style.setProperty("--enter-order", String(Math.min(index, 12)));
+  card.classList.add("grid-card-enter");
+  card.addEventListener("animationend", () => {
+    card.classList.remove("grid-card-enter");
+    card.style.removeProperty("--enter-order");
+    if (!card.getAttribute("style")) card.removeAttribute("style");
+  }, { once: true });
+}
+
+function gridScrollAnchor(feed) {
+  if (feed.scrollTop <= 8) return null;
+  const cards = Array.from(feed.querySelectorAll(".grid-job-card"));
+  const feedTop = feed.getBoundingClientRect().top;
+  const card = cards.find((item) => item.getBoundingClientRect().bottom > feedTop + 2);
+  if (!card) return null;
+  return { id: card.dataset.gridJob, offset: card.getBoundingClientRect().top - feedTop };
+}
+
 function renderConversationFeed(mode = "preserve") {
   const feed = el("conversationFeed");
   const messageStyle = currentMessageStyle();
@@ -3949,36 +4416,58 @@ function renderConversationFeed(mode = "preserve") {
   const oldHeight = feed.scrollHeight;
   const oldTop = feed.scrollTop;
   const nearBottom = oldHeight - oldTop - feed.clientHeight < 160;
+  // Keep the card the reader is looking at pinned while new history arrives.
+  const anchor = messageStyle === "grid" && mode !== "bottom" ? gridScrollAnchor(feed) : null;
   const timeline = [...state.conversations]
     .reverse()
     .map((job) => ({ type: "job", at: job.created_at, data: job }))
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   const orderedTimeline = messageStyle === "grid" ? [...timeline].reverse() : timeline;
+  const previousGridIds = messageStyle === "grid"
+    ? new Set(Array.from(feed.querySelectorAll(".grid-job-card")).map((card) => card.dataset.gridJob))
+    : new Set();
   const cards = orderedTimeline.map((item) => renderJobExchange(item.data)).join("");
   const content = messageStyle === "grid"
-    ? cards ? `<div class="message-grid">${cards}</div>` : chatEmptyMarkup()
+    ? cards ? `<div class="message-grid" data-feed-key="grid">${cards}</div>` : chatEmptyMarkup()
     : cards || chatEmptyMarkup();
-  feed.innerHTML = content;
+  morphRegion(feed, content);
   refreshIcons();
+  if (messageStyle === "grid") {
+    // Cards that did not exist before this render get the staggered entrance,
+    // whether the whole grid was just created or history was appended.
+    Array.from(feed.querySelectorAll(".grid-job-card"))
+      .filter((card) => !previousGridIds.has(card.dataset.gridJob))
+      .forEach((card, index) => animateGridCard(card, index));
+  }
   if (messageStyle === "grid" && state.conversationLoading) showConversationHistoryLoading();
-  requestAnimationFrame(() => {
-    if (messageStyle === "grid") {
-      feed.scrollTop = mode === "bottom" ? 0 : oldTop;
-    } else if (mode === "bottom" || (mode === "preserve" && nearBottom)) {
-      feed.scrollTop = feed.scrollHeight;
-    } else if (mode === "prepend") {
-      feed.scrollTop = oldTop + (feed.scrollHeight - oldHeight);
-    } else {
-      feed.scrollTop = oldTop;
-    }
-    state.conversationScrollTop = feed.scrollTop;
-    requestAnimationFrame(() => {
-      state.conversationReady = true;
-      if (messageStyle === "grid" && feed.scrollHeight <= feed.clientHeight + 8 && state.conversationAutoFill < 2) {
-        state.conversationAutoFill += 1;
-        loadOlderMessages();
+  if (messageStyle === "grid") {
+    if (mode === "bottom") {
+      setScrollTopInstant(feed, 0);
+    } else if (anchor) {
+      const node = jobElement(feed, "data-grid-job", anchor.id);
+      if (node) {
+        const delta = node.getBoundingClientRect().top - feed.getBoundingClientRect().top;
+        setScrollTopInstant(feed, feed.scrollTop + delta - anchor.offset);
       }
-    });
+    } else if (oldTop <= 8) {
+      setScrollTopInstant(feed, 0);
+    }
+  } else if (mode === "bottom" || (mode === "preserve" && nearBottom)) {
+    setScrollTopInstant(feed, feed.scrollHeight);
+  } else if (mode === "prepend") {
+    setScrollTopInstant(feed, oldTop + (feed.scrollHeight - oldHeight));
+  }
+  state.conversationScrollTop = feed.scrollTop;
+  updateScrollFades();
+  requestAnimationFrame(() => {
+    state.conversationReady = true;
+    updateScrollFades();
+    updateConversationJump();
+    updateComposerFloatSpace();
+    if (messageStyle === "grid" && feed.scrollHeight <= feed.clientHeight + 8 && state.conversationAutoFill < 2) {
+      state.conversationAutoFill += 1;
+      loadOlderMessages();
+    }
   });
 }
 
@@ -4440,7 +4929,7 @@ async function backfillJob(jobId) {
     renderReferences();
     if (detailOpen) closeAssetDetail(detailRecord.id);
     closeAssetDrawer();
-    el("conversationFeed").scrollTop = el("conversationFeed").scrollHeight;
+    scrollConversationToLatest("instant");
     promptInput.focus();
     showError("");
   } catch (error) {
@@ -6047,10 +6536,29 @@ el("assetGrid").addEventListener("drop", (event) => {
 });
 el("assetGrid").addEventListener("scroll", () => {
   const grid = el("assetGrid");
+  updateScrollFade(grid);
   if (grid.scrollHeight - grid.scrollTop - grid.clientHeight < 180) loadAssets();
 }, { passive: true });
 
 el("conversationFeed").addEventListener("click", (event) => {
+  const gridCancel = event.target.closest("[data-grid-cancel]");
+  if (gridCancel) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (gridCancel.disabled) return;
+    gridCancel.disabled = true;
+    cancelJob(gridCancel.dataset.gridCancel).finally(() => {
+      if (gridCancel.isConnected) gridCancel.disabled = false;
+    });
+    return;
+  }
+  const gridDelete = event.target.closest("[data-grid-delete]");
+  if (gridDelete) {
+    event.preventDefault();
+    event.stopPropagation();
+    deleteJob(gridDelete.dataset.gridDelete);
+    return;
+  }
   const action = event.target.closest("[data-job-action]");
   if (action) return handleJobAction(action.dataset.jobAction, action.dataset.jobId);
   const outputDetail = event.target.closest("[data-output-detail]");
@@ -6059,6 +6567,7 @@ el("conversationFeed").addEventListener("click", (event) => {
   if (gridCard) return openAssetDetail(gridCard.dataset.gridJob);
 });
 el("conversationFeed").addEventListener("keydown", (event) => {
+  if (event.target.closest("[data-grid-delete], [data-grid-cancel]")) return;
   const gridCard = event.target.closest("[data-grid-job]");
   if (!gridCard || !["Enter", " "].includes(event.key)) return;
   event.preventDefault();
@@ -6069,6 +6578,8 @@ el("conversationFeed").addEventListener("scroll", () => {
   const currentTop = feed.scrollTop;
   const movingUp = currentTop < state.conversationScrollTop;
   state.conversationScrollTop = currentTop;
+  updateScrollFade(feed);
+  updateConversationJump();
   if (!state.conversationReady) return;
   if (currentMessageStyle() === "grid") {
     if (feed.scrollHeight - currentTop - feed.clientHeight < 240) loadOlderMessages();
@@ -6076,6 +6587,8 @@ el("conversationFeed").addEventListener("scroll", () => {
   }
   if (movingUp && currentTop < 72) loadOlderMessages();
 }, { passive: true });
+
+el("conversationJump").addEventListener("click", () => scrollConversationToLatest());
 
 el("queueList").addEventListener("click", (event) => {
   const action = event.target.closest("[data-job-action]");
@@ -6213,6 +6726,10 @@ document.querySelectorAll("[data-settings-tab]").forEach((button) => {
 document.querySelectorAll("[data-message-style]").forEach((button) => {
   button.addEventListener("click", () => applyMessageStyle(button.dataset.messageStyle));
 });
+document.querySelectorAll("button[data-composer-style]").forEach((button) => {
+  button.addEventListener("click", () => applyComposerStyle(button.dataset.composerStyle));
+});
+el("showAssetLibrary").addEventListener("change", () => applyAssetLibraryVisibility(el("showAssetLibrary").checked));
 el("optimizeMarkdown").addEventListener("change", () => applyMarkdownOptimization(el("optimizeMarkdown").checked));
 el("themeGrid")?.addEventListener("click", (event) => {
   const card = event.target.closest("[data-theme-option]");
@@ -6240,6 +6757,7 @@ el("bindLocalComfyui").addEventListener("change", () => {
 });
 el("toggleRemoteRecordsKey").addEventListener("click", () => togglePasswordField("remoteRecordsKey", "toggleRemoteRecordsKey"));
 el("manageLocalAssets").addEventListener("click", openLocalAssets);
+el("manageLocalAssetsHeader").addEventListener("click", openLocalAssets);
 el("closeLocalAssets").addEventListener("click", closeLocalAssets);
 el("deleteLocalArtifacts").addEventListener("click", deleteLocalArtifacts);
 el("clearOldVideos").addEventListener("click", clearOldVideos);
@@ -6634,13 +7152,17 @@ el("sidebarResizer").addEventListener("keydown", (event) => {
 });
 window.addEventListener("resize", () => {
   if (!el("opsModal").hidden) applyOpsPosition();
-  applyLauncherPosition();
-  if (window.innerWidth > 860) setSidebarWidth(el("assetSidebar").getBoundingClientRect().width, false);
+  if (state.showAssetLibrary && window.innerWidth > 860) setSidebarWidth(el("assetSidebar").getBoundingClientRect().width, false);
+  updateComposerFloatSpace();
+  requestAnimationFrame(updateScrollFades);
 });
 
 async function initialize() {
   applyTheme(currentTheme(), { persist: false });
   applyMessageStyle(storedMessageStyle(), { persist: false, render: false });
+  applyAssetLibraryVisibility(storedShowAssetLibrary(), { persist: false, animate: false });
+  applyComposerStyle(storedComposerStyle(), { persist: false });
+  initFloatingComposer();
   let markdownEnabled = true;
   try { markdownEnabled = localStorage.getItem(OPTIMIZE_MARKDOWN_STORAGE_KEY) !== "0"; } catch (error) { /* storage disabled */ }
   applyMarkdownOptimization(markdownEnabled, { persist: false, render: false });

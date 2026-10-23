@@ -27,7 +27,7 @@ def sample_workflow():
 
 
 class WorkflowTests(unittest.TestCase):
-    def test_preset_snapshot_keeps_the_4step_graph(self):
+    def test_preset_snapshot_keeps_the_turbo_graph(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             settings = Settings(root=root, comfy_output_dir=root / "remote-output")
@@ -36,24 +36,24 @@ class WorkflowTests(unittest.TestCase):
                 root / "data" / "config.db",
                 Path(__file__).resolve().parents[1] / "workflows",
             )
-            preset = registry.get("preset-fl2va-turbo-4step")
+            preset = registry.get("preset-fl2va-turbo")
             snapshot = {
                 "source": "preset",
                 "workflow_json": deepcopy(preset["workflow_json"]),
                 "media_type": "video",
             }
             job = {
-                "id": "four-step-job",
+                "id": "turbo-job",
                 "workflow_snapshot": snapshot,
                 "request": {
-                    "prompt": "four step",
+                    "prompt": "turbo",
                     "model_variant": "fl2va-fp8",
                     "execution_mode": "turbo-lora",
                     "width": 608,
                     "height": 352,
                     "duration": 5,
                     "num_frames": 124,
-                    "steps": 4,
+                    "steps": 8,
                     "seed": 1,
                     "references": [],
                 },
@@ -65,10 +65,10 @@ class WorkflowTests(unittest.TestCase):
                 workflow_registry=registry,
             )
             built = engine._build_workflow(job, ["first.png"])
-            self.assertEqual(built["124"]["inputs"]["steps"], 4)
+            self.assertEqual(built["124"]["inputs"]["steps"], 8)
             self.assertEqual(
                 built["142"]["inputs"]["lora_name"],
-                "minimax_h3_fl2v_turbo_4step_v1.3_768p_comfyui_bf16.safetensors",
+                "minimax_h3_fl2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors",
             )
 
     def test_engine_loads_preset_from_database_before_files(self):
@@ -143,7 +143,9 @@ class WorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             database = Path(temp) / "config.db"
             registry = WorkflowRegistry(database, Path(__file__).parents[1] / "workflows")
-            self.assertEqual(len(registry.list()), 17)
+            self.assertEqual(len(registry.list()), 15)
+            self.assertIsNone(registry.get("preset-fl2va-turbo-4step"))
+            self.assertIsNone(registry.get("preset-ref2va-turbo-4step"))
             created = registry.create(
                 validate_workflow_config(
                     name="自定义工作流",

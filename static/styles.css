@@ -76,7 +76,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .asset-sidebar { display: grid; min-width: 0; min-height: 0; height: 100%; grid-template-rows: 66px auto auto auto minmax(0, 1fr); border-right: 1px solid var(--line); background: #eef0ec; }
 .brand-row { display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 1px solid var(--line); }
 .brand { display: inline-flex; height: 42px; align-items: center; gap: 9px; padding: 0; border: 0; background: transparent; color: var(--ink); cursor: default; font: 500 var(--text-caption)/1 var(--mono); }
-.brand-mark { display: grid; width: 33px; height: 33px; place-items: center; border-radius: 12px; background: var(--ink); color: white; font-size: var(--text-caption); }
+.brand-logo { display: block; width: 33px; height: 33px; flex: 0 0 auto; border-radius: 9px; object-fit: cover; }
 
 .library-heading { display: flex; align-items: center; justify-content: space-between; padding: 17px 13px 11px 16px; }
 .library-heading > div { display: flex; align-items: baseline; gap: 8px; }
