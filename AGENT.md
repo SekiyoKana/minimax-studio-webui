@@ -1,16 +1,94 @@
-# MiniMax H3 Studio Agent Integration Guide
+# MiniMax H3 Studio · Agent 接入指南
 
-本文档面向需要调用 MiniMax H3 Studio 的 AI Agent、自动化程序和 Skill 作者。部署后可以通过以下地址读取同一份文档：
+本文档面向需要调用 MiniMax H3 Studio 的 AI Agent、自动化程序和 Skill 作者。部署后可以在同一地址读取本文档：
 
 ```text
 GET {BASE_URL}/AGENT.md
 ```
 
-其中 `BASE_URL` 是服务根地址，例如 `http://SERVER_IP:8193`。接口的机器可读定义位于 `{BASE_URL}/openapi.json`，交互式文档位于 `{BASE_URL}/docs`。
+`BASE_URL` 是服务根地址，例如 `http://SERVER_IP:8193`。接口的机器可读定义位于 `{BASE_URL}/openapi.json`，交互式文档位于 `{BASE_URL}/docs`。
 
-## 1. 项目作用
+阅读顺序：先读「版本与默认约定」，按其中的默认参数直接开工；需要具体接口字段时再查后续章节，并以 `openapi.json` 为准。
 
-MiniMax H3 Studio 提供统一的 Web 和 HTTP API，用于：
+## 版本与默认约定
+
+本节是所有调用的前置约定，优先级高于后文的接口细节。
+
+### 版本
+
+| 项目 | 值 |
+|---|---|
+| 文档版本 | `1.0.0` |
+| 对应服务版本 | `APP_VERSION = 1.0.0` |
+| 版本来源 | `GET {BASE_URL}/health` 的 `version` 字段 |
+| 更新责任 | 仅项目维护者更新版本号，Agent 不得自行修改 |
+
+**每次会话或每批任务提交前检查版本：**
+
+1. 调用 `GET {BASE_URL}/health`，读取 `version`。
+2. 与本地 Skill 或脚本记录的 `project_version`（或本文档标注的版本）比较。
+3. 版本一致：继续调用业务接口。
+4. 版本不一致：重新拉取 `{BASE_URL}/AGENT.md` 和 `{BASE_URL}/openapi.json`：
+   - 文档或接口有变化：按新文档更新 Skill，并更新记录的 `project_version`。
+   - 文档和接口都没有变化：在 Skill 中标记 `version_mismatch`，保留原逻辑继续，不阻塞任务。
+5. 版本检查只用于发现文档或接口变化，不替代 `openapi.json` 的参数校验。
+
+### 默认约定
+
+除用户明确要求其他方案外，按下表执行：
+
+| 场景 | 默认做法 |
+|---|---|
+| 普通视频 | `execution_mode=turbo-lora`、`steps=8` |
+| 首帧 / 首尾帧 | `model_variant=fl2va-fp8` + `turbo-lora` + `steps=8` |
+| 多张图片 / 视频 / 音频参考 | `model_variant=ref2va-fp8` + `turbo-lora` + `steps=8` |
+| 批量 / 系列 / 短剧任务 | **先创建文件夹，再在文件夹内批量创建任务** |
+| 任务等待 | 保存 `id` 与 `status_url`，轮询到终态，不重复提交 |
+| 产物下载 | `completed` 后请求 `/result`，视频封面使用 `/preview` |
+| 鉴权 | `Authorization: Bearer`，密钥不进 URL、日志或模型上下文 |
+| 无痕任务 | `incognito=true` + `X-H3-Incognito-Code`，不进入文件夹系统 |
+| 删除、清理类操作 | 客户端明确确认后再执行 |
+| 版本检查 | 每轮业务请求前比对 `/health.version` |
+
+默认视频参数：
+
+```text
+execution_mode=turbo-lora
+steps=8
+model_variant=fl2va-fp8   # 或 ref2va-fp8
+```
+
+### 三条硬规则
+
+1. **批量任务先建文件夹。** 系列短剧、连续剧情、多场景任务，或任何一次要生成多条的任务，先调用 `POST /api/v1/asset-folders` 创建（或复用同名）文件夹，保存返回的 `folder_id`，然后让这一批次的每个生成请求都带上同一个 `folder_id`。不要先散落创建任务再逐个移动。
+2. **请求前检查版本。** 调用业务接口前先读取 `/health.version`；版本不一致时按上一节的流程刷新文档，不带着过期约定继续批量提交。
+3. **默认使用 8 步流。** 普通视频默认 `turbo-lora` + `steps=8`，速度最快且效果接近原生 H3 20 步方案；只有需要原生基线、高分辨率二阶段、VDN 或双采等特殊能力时，才切换到其他执行方案。
+
+### 禁止事项
+
+- 不要因为网络超时重复提交同一任务，先按已保存的 `job_id` 查询状态。
+- 不要把 `H3_API_KEY`、RunningHub API Key、互联设备令牌、无痕授权码或参考文件内容写入日志、URL 或模型上下文。
+- 不要对远端素材执行移动、重命名或删除。
+- 不要在客户端未确认时执行删除任务、删除文件夹、清理 30 天视频等破坏性操作。
+- 不要自行修改版本号，也不要假设 `openapi.json` 中不存在的字段可用。
+
+## 1. 最小调用流程
+
+建议的最小调用流程如下：
+
+1. 请求 `/health`，确认服务可用，读取 `version`、`nodes`、`online_nodes`、`parallel_capacity`。
+2. 请求 `/api/v1/comfy/nodes`，选择可用的本机节点或远端互联节点。
+3. 若是批量或系列任务，先请求 `/api/v1/asset-folders` 创建文件夹并保存 `folder_id`。
+4. 使用 `multipart/form-data` 请求 `/api/v1/generations` 创建任务。
+5. 保存创建响应中的 `id` 和 `status_url`，按间隔请求任务详情，直到状态为 `completed`、`failed` 或 `cancelled`。
+6. 状态为 `completed` 时请求 `/api/v1/generations/{job_id}/result` 下载产物，视频封面使用 `/preview`。
+7. 需要整理任务时调用文件夹移动接口，需要修改显示名称时调用名称接口。
+
+创建任务后不要因为网络超时直接重复提交。优先使用已保存的 `job_id` 查询状态，避免生成重复产物。
+
+## 2. 项目作用与组件
+
+MiniMax H3 Studio 提供统一的 Web 与 HTTP API，用于：
 
 - 通过 ComfyUI 节点生成 MiniMax H3 视频和 Music3 音频。
 - 通过 RunningHub 工作流执行动态参数任务。
@@ -34,7 +112,7 @@ MiniMax H3 Studio 提供统一的 Web 和 HTTP API，用于：
 
 默认 API 端口为 `8193`。ComfyUI 默认使用本机内部端口 `8188`，通常不应直接暴露给外部调用者。
 
-## 2. 访问与鉴权
+## 3. 访问与鉴权
 
 以下地址公开提供只读信息：
 
@@ -53,6 +131,8 @@ Authorization: Bearer YOUR_H3_API_KEY
 ```
 
 所有 `/api/v1/*` 普通调用都应携带该请求头。未设置 `H3_API_KEY` 时，普通接口不要求服务级 API Key。不要把 API Key 放在 URL 查询参数中，也不要写入 Skill 日志或模型上下文。
+
+无痕（私密）接口额外要求请求头 `X-H3-Incognito-Code`。授权码由用户在客户端输入，可通过 `POST /api/v1/incognito/authorize` 校验；无痕任务的生成请求必须同时设置 `incognito=true`，且不进入文件夹系统。授权码只放在请求头，不要写入日志、URL 或产物。
 
 多端互联的内部接口使用设备级 Bearer 令牌。`/api/v1/peering/pair`、`/api/v1/peering/revoke`、`/api/v1/peering/export/*` 和 `/api/v1/peering/proxy/*` 不使用服务级 API Key，调用时必须遵循互联接口的设备令牌规则。
 
@@ -75,60 +155,6 @@ Authorization: Bearer YOUR_H3_API_KEY
 | `422` | 参数校验失败或工作流参数无效 |
 | `502` | 远端节点或互联设备调用失败 |
 
-## 3. Agent 调用流程
-
-建议的最小调用流程如下：
-
-1. 请求 `/health`，确认服务可用并读取 `nodes`、`online_nodes`、`parallel_capacity`。
-2. 请求 `/api/v1/comfy/nodes`，选择可用的本机节点，或读取远端互联节点。
-3. 请求 `/api/v1/asset-folders`，需要分类时创建或复用文件夹并保存返回的 `id`。
-4. 使用 `multipart/form-data` 请求 `/api/v1/generations` 创建任务。
-5. 保存创建响应中的 `id` 和 `status_url`，按间隔请求任务详情，直到状态为 `completed`、`failed` 或 `cancelled`。
-6. `completed` 时请求 `/api/v1/generations/{job_id}/result` 下载产物，视频封面使用 `/preview`。
-7. 需要整理任务时调用文件夹移动接口，需要修改显示名称时调用名称接口。
-
-创建任务后不要因为网络超时直接重复提交。优先使用已保存的 `job_id` 查询状态，避免生成重复产物。
-
-### 默认视频方案
-
-Agent 创建普通视频时，默认使用 8 步 LoRA：
-
-```text
-execution_mode=turbo-lora
-steps=8
-```
-
-当前项目验证中，8 步 LoRA 的处理速度最快，生成效果接近原生 H3 20 步方案。`model_variant` 根据参考素材类型选择：
-
-| 参考素材 | `model_variant` | `execution_mode` | `steps` |
-|---|---|---|---:|
-| 首帧图片或首尾帧图片 | `fl2va-fp8` | `turbo-lora` | 8 |
-| 多张图片、视频或音频参考 | `ref2va-fp8` | `turbo-lora` | 8 |
-
-系列短剧、连续剧情或多场景任务应先创建一个文件夹，再将返回的 `folder_id` 传入该系列的每个生成请求。这样可以使同一短剧的任务和产物保持在同一文件夹中。
-
-推荐流程：
-
-1. `POST /api/v1/asset-folders` 创建短剧文件夹，或使用已有同名文件夹。
-2. 保存响应中的 `folder_id`。
-3. 每次调用 `/api/v1/generations` 时提交相同的 `folder_id`。
-4. 重新生成时按接口要求重新选择目标文件夹。
-
-其他方案按以下条件选择：
-
-| 方案 | 选择条件 |
-|---|---|
-| `turbo-lora` | 普通视频的默认执行方案，使用 8 步并根据参考素材选择 FL2VA 或 Ref2VA |
-| `native` | 需要原生 H3 20 步基线或需要完整原生采样时 |
-| `h3-sa` | 需要高分辨率二阶段精修或 15 秒以上长视频时 |
-| `vdn-h3` | 需要 8 至 50 步 VDN H3 时 |
-| `dual-sampling` | 需要双阶段采样和 Latent 3D 放大时 |
-| `digital-human` | 输入人物图片和驱动音频时 |
-| `tts` | 只需要人物语音 FLAC 时 |
-| `music3` | 需要 Music3 音乐 FLAC 时 |
-
-8 步 LoRA 默认路径仍需执行节点健康检查、参数校验和终态轮询。Agent 应根据任务类型切换 `model_variant`，不要将 8 步视频参数用于数字人、TTS、Music3 或 RunningHub 任务。
-
 ## 4. 健康检查与节点
 
 ```bash
@@ -140,12 +166,15 @@ curl -H "Authorization: Bearer $H3_API_KEY" "$BASE_URL/api/v1/comfy/nodes"
 
 - `status`：服务状态。
 - `engine`：`comfyui` 或 `fake`。
+- `gpu`：GPU 标签。
 - `nodes`：节点 ID、提供方、健康状态、并发容量和任务信息。
 - `online_nodes`：当前在线节点数。
 - `parallel_capacity`：在线节点并发容量总和。
 - `queue_depth`：服务队列深度。
+- `health_interval_seconds`：健康检查间隔。
 - `version`：服务版本号，用于 Skill 的版本一致性检查。
 - `revision`：任务存储修订号。
+- `platform`：`macos`、`windows` 或 `linux`。
 
 `/api/v1/comfy/nodes` 返回节点配置和运行状态。节点提供方为 `comfyui` 或 `runninghub`。创建和修改节点需要管理员级别的服务访问权限，RunningHub 节点还需要 `api_key` 和 `workflow_url`。查询节点时不会返回密钥内容，只返回 `has_api_key`。
 
@@ -177,19 +206,28 @@ curl -X POST "$BASE_URL/api/v1/comfy/nodes" \
 
 ### ComfyUI 工作流配置
 
-工作流列表接口为 `GET /api/v1/workflows`。内置预设使用数据库中的稳定 ID，并包含 `description`、`description_en` 双语简介；自定义工作流支持 `POST`、`GET`、`PATCH`、`DELETE /api/v1/workflows/{workflow_id}`，可选填写 `description`。同步与校验使用 `POST /api/v1/workflows/{workflow_id}/sync`。
+工作流配置保存在 `data/config.db`。内置预设使用数据库中的稳定 ID，包含 `description`、`description_en` 双语简介，只能修改 `visible_in_composer`；自定义工作流支持完整 CRUD，并可选填写最多 500 字符的 `description`。
+
+```text
+GET    /api/v1/workflows
+POST   /api/v1/workflows
+GET    /api/v1/workflows/{workflow_id}
+PATCH  /api/v1/workflows/{workflow_id}
+DELETE /api/v1/workflows/{workflow_id}
+POST   /api/v1/workflows/{workflow_id}/sync
+```
+
+自定义工作流通过 `POST /api/v1/workflows` 创建，`workflow_json` 必须是 ComfyUI API 格式（编辑器 UI 格式不能直接使用），并按需提供 `field_mappings`、`reference_mappings`、`static_inputs`、`result_node_id`、`media_type`、`target_node_ids` 和 `visible_in_composer`。`field_mappings` 支持 `prompt`、`lyrics`、`width`、`height`、`duration`、`num_frames`、`steps` 和 `seed`。
 
 在私密模式中创建的自定义工作流及 H3 NSFW · NaughtyTimes LoRA 预设仅对携带有效 `X-H3-Incognito-Code` 请求头的工作流接口可见或可操作。提交私密工作流任务还必须设置 `incognito=true`；普通模式不能提交或重新生成私密工作流任务。
 
 自定义工作流执行必须提交 `workflow_id`，并将 `comfy_node` 指定为已同步的目标 ComfyUI 节点，或使用 `auto` 让调度器从已同步且在线的目标节点中选择。运行任务使用创建时保存的工作流快照。省略 `workflow_id` 时继续使用 `model_variant` 与 `execution_mode` 的原有请求方式。
 
-自定义工作流的 `reference_mappings` 支持“槽位”绑定：把 `input` 写成 `ref_images`、`ref_videos` 或 `ref_audios` 并附加 `"slot": true`，引擎会按媒体类型和从 1 开始的 `index` 动态创建 `LoadImage`、`VHS_LoadVideo`、`LoadAudio` 节点并接到 `ref_image_N`、`ref_video_N`、`ref_audio_N` 上，因此参考素材数量不受固定节点数量限制。工作流导入、校验和同步失败的原始报错会同时写入「实时日志」（`GET /api/v1/logs`），不再占用工作流列表上方的提示位。
+`reference_mappings` 支持“槽位”绑定：把 `input` 写成 `ref_images`、`ref_videos` 或 `ref_audios` 并附加 `"slot": true`，引擎会按媒体类型和从 1 开始的 `index` 动态创建 `LoadImage`、`VHS_LoadVideo`、`LoadAudio` 节点并接到 `ref_image_N`、`ref_video_N`、`ref_audio_N` 上，因此参考素材数量不受固定节点数量限制。`result_node_id` 必须指向包含 `filename_prefix` 输入的结果节点。
+
+服务只保存配置，不会替目标 ComfyUI 安装节点或模型；执行前先确认目标服务器已包含工作流引用的节点、模型和其他资源。通过远程互联节点执行自定义工作流前，还要在目标设备导入相同配置。工作流导入、校验和同步失败的原始报错会同时写入「实时日志」（`GET /api/v1/logs`）。
 
 ## 5. 创建生成任务
-
-### ComfyUI 工作流配置
-
-`GET /api/v1/comfy/workflows` 返回数据库中的内置和用户导入工作流配置。导入使用 `POST /api/v1/comfy/workflows` 的 multipart 字段 `workflow_file`，文件必须是可直接提交给 ComfyUI `/prompt` 的 API JSON；ComfyUI 编辑器 UI 格式不能直接使用。生成请求可以通过 `workflow_id` 选择配置。服务只保存配置，不会替目标 ComfyUI 安装节点或模型，请先确认目标服务器已包含工作流引用的节点、模型和其他资源。通过远程互联节点执行自定义工作流前，还要在目标设备导入相同配置。
 
 接口：
 
@@ -251,7 +289,29 @@ curl -X POST "$BASE_URL/api/v1/generations" \
 
 参考素材类型包括 `image`、`video`、`audio`。RunningHub 工作流还可使用 `file`。上传文件的实际类型必须与 manifest 一致。RunningHub 的字段键来自节点查询结果中的 `runninghub_schema.fields`，可通过 manifest 项的 `field_key` 指定绑定字段。
 
-执行方案与模式组合、分辨率、时长、步数和参考素材数量由服务校验。Agent 应先读取 `/openapi.json`，再根据目标模式构造请求，避免假设所有字段在所有模式下都有效。
+执行方案与模式组合、分辨率、时长、步数和参考素材数量由服务校验。主要约束如下：
+
+| 执行方案 | 主要约束 |
+|---|---|
+| 通用 | 宽高必须是 32 的倍数，且不低于 `352 × 352` |
+| 通用 | 采样步数范围 `4–50` |
+| `turbo-lora` | 默认视频方案，使用 8 步并根据参考素材选择 FL2VA 或 Ref2VA |
+| `native` | 原生 H3 20 步基线；时长 1–15 秒 |
+| `h3-sa` | 固定 8 步，时长 1–300 秒，用于高分辨率二阶段精修或长视频 |
+| `vdn-h3` | 步数 8–50；8 步时使用 DMD 检查点 |
+| `dual-sampling` | 仅 `ref2va-fp8`，至少一张图片参考，时长 1–15 秒 |
+| `digital-human` | 固定 20 步，需 1 张人物图片 + 1 段驱动音频 |
+| `tts` | 固定 `32 × 32`，时长 1–15 秒，最多 3 段音频参考 |
+| `music3` | 固定 30 步，时长 1–300 秒 |
+| `h3-nsfw` | 仅无痕模式（`incognito=true` + 有效授权码），仅 `ref2va-fp8` |
+
+选型参考：需要原生 20 步基线选 `native`；需要高分辨率二阶段精修或 15 秒以上长视频选 `h3-sa`；需要 8–50 步 VDN 选 `vdn-h3`；需要双阶段采样与 Latent 3D 放大选 `dual-sampling`；输入人物图片 + 驱动音频选 `digital-human`；只要人物语音 FLAC 选 `tts`；要 Music3 音乐 FLAC 选 `music3`。
+
+超分任务复用同一接口：提交 `task_type=upscale`，用 `upscale_category`（`real`、`anime`、`3d`）和 `upscale_scale`（`2` 或 `4`）选择模型，支持图片和视频输入，视频按源帧率合成 MP4。
+
+8 步 LoRA 默认路径仍需执行节点健康检查、参数校验和终态轮询。不要把 8 步视频参数用于数字人、TTS、Music3、超分或 RunningHub 任务。
+
+Agent 应先读取 `/openapi.json`，再根据目标模式构造请求，避免假设所有字段在所有模式下都有效。
 
 远端 RunningHub 或互联推理任务可以携带本地 `folder_id`。服务只把本机代理任务归入本地文件夹，不向远端节点写入目录信息。
 
@@ -357,6 +417,13 @@ curl -X PATCH "$BASE_URL/api/v1/generations/JOB_ID/name" \
 ## 8. 文件夹与素材库
 
 文件夹为 SQLite 中的单层对象。文件夹名称长度为 1 至 80 个字符，同级名称按大小写折叠后判重。无痕任务不进入文件夹系统。
+
+批量任务的标准做法：
+
+1. `POST /api/v1/asset-folders` 创建文件夹，或复用已有同名文件夹。
+2. 保存响应中的 `folder_id`。
+3. 该批次每个生成请求都提交相同的 `folder_id`。
+4. 重新生成时，为新任务重新指定目标文件夹。
 
 列出文件夹和数量：
 
@@ -529,8 +596,8 @@ Content-Type: application/json
 
 需要基于本服务创建 Skill 时，Agent 应执行以下步骤：
 
-1. 读取 `{BASE_URL}/AGENT.md` 获取项目用途、权限边界和业务规则。
-2. 读取 `{BASE_URL}/openapi.json` 获取实际路径、参数类型、必填字段和响应结构。
+1. 读取 `{BASE_URL}/AGENT.md` 获取项目用途、权限边界、版本与默认约定。
+2. 读取 `{BASE_URL}/health` 记录 `version`，并读取 `{BASE_URL}/openapi.json` 获取实际路径、参数类型、必填字段和响应结构。
 3. 将 `BASE_URL` 和 `H3_API_KEY` 作为运行时配置，不把地址和密钥硬编码到 Skill 源码。
 4. 封装以下最小工具：健康检查、节点选择、文件夹列表、任务创建、任务轮询、任务取消、产物下载、文件夹移动和素材列表。
 5. 普通视频创建工具默认提交 `fl2va-fp8`、`turbo-lora` 和 `steps=8`；使用 Ref2VA 参考素材时切换到 `ref2va-fp8`。
@@ -559,6 +626,7 @@ Skill 学习或创建时必须记录当前服务版本，并在后续调用中�
 check_health() -> health payload
 list_nodes() -> available nodes
 list_folders() -> folders and counts
+create_folder(name) -> folder payload
 create_generation(form, files) -> job payload
 wait_generation(job_id, timeout) -> terminal job payload
 download_result(job_id, destination) -> local file
