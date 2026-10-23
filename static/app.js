@@ -23,6 +23,7 @@ const state = {
   assetDetailWindowOrder: [],
   assetDetailActiveWindowId: null,
   assetDetailDrag: null,
+  messageStyle: "default",
   localAssets: [],
   localAssetPage: 0,
   localAssetPages: 1,
@@ -105,7 +106,7 @@ const ANDROID_CLIENT = new URLSearchParams(window.location.search).get("h3_clien
 const COPY = {
   "zh-CN": {
     assetLibrary: "素材库", assetSearch: "搜索素材", allStatuses: "全部状态", queued: "排队中", running: "生成中", completed: "已完成", failed: "失败", cancelled: "已取消",
-    conversation: "H3 对话", switchLanguage: "Switch to English", apiDocs: "API 文档", newGeneration: "新建生成", close: "关闭", assets: "素材库",
+    conversation: "对话消息", switchLanguage: "Switch to English", apiDocs: "API 文档", newGeneration: "新建生成", close: "关闭", assets: "素材库",
     connectEngine: "连接推理节点", offline: "服务离线", autoSchedule: "自动调度", nodePending: "节点待分配", online: "在线", available: "可用", nodeOffline: "离线", disabled: "已停用", busy: "执行中",
     balance: "余额", credits: "点数", recentCost: "最近调用消耗", accountUnavailable: "账户信息不可用", workflowUnavailable: "工作流信息不可用", balancePending: "余额读取中", accountTasks: "账户任务", balanceUpdated: "余额更新", balanceFailed: "余额读取失败",
     noAssets: "暂无素材", loading: "加载中", allLoaded: "已加载全部", loadFailed: "加载失败", startCreating: "开始创作", you: "你", allAssets: "全部素材", unfiled: "未分组", folders: "文件夹", editAssets: "编辑素材", exitAssetEdit: "退出编辑", selectedAssets: "已选择", newFolder: "新建文件夹", renameFolder: "重命名文件夹", deleteFolder: "删除文件夹", moveTo: "移动到", noSelection: "未选择素材", folderName: "文件夹名称", folderPurpose: "用于归类短剧生成任务", folderDeleteConfirm: "删除文件夹后，其中的任务记录、参考文件和生成产物都会被删除。确认继续？", activeFolderDelete: "文件夹包含进行中任务，请先取消或等待任务结束", regenerateFolder: "选择重新生成任务的文件夹",
@@ -118,7 +119,7 @@ const COPY = {
   },
   en: {
     assetLibrary: "Assets", assetSearch: "Search assets", allStatuses: "All statuses", queued: "Queued", running: "Running", completed: "Completed", failed: "Failed", cancelled: "Cancelled",
-    conversation: "H3 Chat", switchLanguage: "Switch to Chinese", apiDocs: "API documentation", newGeneration: "New generation", close: "Close", assets: "Assets",
+    conversation: "Messages", switchLanguage: "Switch to Chinese", apiDocs: "API documentation", newGeneration: "New generation", close: "Close", assets: "Assets",
     connectEngine: "Connecting to inference nodes", offline: "Service offline", autoSchedule: "Auto", nodePending: "Awaiting node", online: "Online", available: "available", nodeOffline: "Offline", disabled: "Disabled", busy: "Running",
     balance: "Balance", credits: "credits", recentCost: "Recent call cost", accountUnavailable: "Account unavailable", workflowUnavailable: "Workflow information unavailable", balancePending: "Loading balance", accountTasks: "Account tasks", balanceUpdated: "balance updated", balanceFailed: "balance read failed",
     noAssets: "No assets", loading: "Loading", allLoaded: "All assets loaded", loadFailed: "Load failed", startCreating: "Start creating", you: "You", allAssets: "All assets", unfiled: "Unfiled", folders: "Folders", editAssets: "Edit assets", exitAssetEdit: "Exit editing", selectedAssets: "Selected", newFolder: "New folder", renameFolder: "Rename folder", deleteFolder: "Delete folder", moveTo: "Move to", noSelection: "No assets selected", folderName: "Folder name", folderPurpose: "Organize short-drama generation tasks", folderDeleteConfirm: "Deleting this folder also deletes its task records, source files, and generated outputs. Continue?", activeFolderDelete: "This folder contains active tasks. Cancel or wait for them first.", regenerateFolder: "Choose a folder for the regenerated task",
@@ -331,6 +332,15 @@ function renderThemeOptions() {
       "Appearance only changes the interface; generation, queue, data and APIs are unaffected. System mode follows your OS light/dark setting."
     );
   }
+  setText("#messageStyleTitle", "对话消息样式");
+  setText("#messageStyleHelp", "选择对话流的展示方式。默认保留完整预览，极简压缩为横幅，宫格使用瀑布流封面。");
+  document.querySelectorAll("[data-message-style]").forEach((button) => {
+    const style = MESSAGE_STYLES.find((item) => item.id === button.dataset.messageStyle);
+    if (!style) return;
+    button.querySelector("strong").textContent = localized(style.name, style.nameEn);
+    button.querySelector("small").textContent = localized(style.note, style.noteEn);
+  });
+  renderMessageStyleOptions();
 }
 
 function watchSystemTheme() {
@@ -3409,6 +3419,11 @@ function conversationMatchesCurrentView(job) {
 }
 
 function applyJobUpsert(job) {
+  state.assetDetailWindows.forEach((record) => {
+    if (record.jobId !== job.id || !record.node) return;
+    record.job = job;
+    renderAssetDetail(job, record.node);
+  });
   if (!state.assetFolderId && !job.peer_asset && job.folder_id) {
     const staleIndex = state.assets.findIndex((item) => item.id === job.id);
     if (staleIndex >= 0) state.assets.splice(staleIndex, 1);
@@ -3601,7 +3616,222 @@ function messageActions(job) {
   return `<div class="message-actions">${buttons.join("")}</div>`;
 }
 
+function markdownInline(value) {
+  let text = escapeHtml(value);
+  text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+  text = text.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  text = text.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+  text = text.replace(/__([^_\n]+)__/g, "<strong>$1</strong>");
+  text = text.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+  return text;
+}
+
+function markdownPlainText(value) {
+  return String(value || "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/[*_`>#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function renderMarkdown(value) {
+  const lines = String(value || "").replace(/\r\n?/g, "\n").split("\n");
+  const output = [];
+  let paragraph = [];
+  let listType = "";
+  let quote = [];
+  let code = null;
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    output.push(`<p>${paragraph.map(markdownInline).join("<br>")}</p>`);
+    paragraph = [];
+  };
+  const closeList = () => {
+    if (!listType) return;
+    output.push(`</${listType}>`);
+    listType = "";
+  };
+  const flushQuote = () => {
+    if (!quote.length) return;
+    output.push(`<blockquote>${quote.map(markdownInline).join("<br>")}</blockquote>`);
+    quote = [];
+  };
+  const flushAll = () => {
+    flushParagraph();
+    closeList();
+    flushQuote();
+  };
+  for (const line of lines) {
+    if (code) {
+      if (/^```/.test(line.trim())) {
+        output.push(`<pre><code>${code.map(escapeHtml).join("\n")}</code></pre>`);
+        code = null;
+      } else {
+        code.push(line);
+      }
+      continue;
+    }
+    if (/^```/.test(line.trim())) {
+      flushAll();
+      code = [];
+      continue;
+    }
+    if (!line.trim()) {
+      flushAll();
+      continue;
+    }
+    const heading = line.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      flushAll();
+      const level = Math.min(4, heading[1].length);
+      output.push(`<h${level}>${markdownInline(heading[2])}</h${level}>`);
+      continue;
+    }
+    const quoteLine = line.match(/^>\s?(.*)$/);
+    if (quoteLine) {
+      flushParagraph();
+      closeList();
+      quote.push(quoteLine[1]);
+      continue;
+    }
+    if (quote.length) flushQuote();
+    const unordered = line.match(/^\s*[-*+]\s+(.+)$/);
+    const ordered = line.match(/^\s*\d+\.\s+(.+)$/);
+    if (unordered || ordered) {
+      flushParagraph();
+      flushQuote();
+      const type = ordered ? "ol" : "ul";
+      if (listType !== type) {
+        closeList();
+        listType = type;
+        output.push(`<${type}>`);
+      }
+      output.push(`<li>${markdownInline((ordered || unordered)[1])}</li>`);
+      continue;
+    }
+    if (listType) closeList();
+    paragraph.push(line);
+  }
+  if (code) output.push(`<pre><code>${code.map(escapeHtml).join("\n")}</code></pre>`);
+  flushAll();
+  return output.join("");
+}
+
+const MESSAGE_STYLE_STORAGE_KEY = "h3-message-style";
+const MESSAGE_STYLES = [
+  { id: "default", name: "默认", nameEn: "Default", note: "完整的对话与视频预览", noteEn: "Full conversation and media preview" },
+  { id: "minimal", name: "极简", nameEn: "Minimal", note: "用紧凑横幅展示产出", noteEn: "Compact output banners" },
+  { id: "grid", name: "宫格", nameEn: "Grid", note: "瀑布流封面与进度环", noteEn: "Masonry covers and progress rings" },
+];
+
+function normalizeMessageStyle(value) {
+  return MESSAGE_STYLES.some((style) => style.id === value) ? value : "default";
+}
+
+function storedMessageStyle() {
+  try {
+    return normalizeMessageStyle(localStorage.getItem(MESSAGE_STYLE_STORAGE_KEY));
+  } catch (error) {
+    return "default";
+  }
+}
+
+function currentMessageStyle() {
+  return normalizeMessageStyle(state.messageStyle);
+}
+
+function renderMessageStyleOptions() {
+  document.querySelectorAll("[data-message-style]").forEach((button) => {
+    const active = button.dataset.messageStyle === currentMessageStyle();
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-checked", String(active));
+  });
+}
+
+function applyMessageStyle(style, { persist = true, render = true } = {}) {
+  state.messageStyle = normalizeMessageStyle(style);
+  document.body.dataset.messageStyle = state.messageStyle;
+  if (persist) {
+    try { localStorage.setItem(MESSAGE_STYLE_STORAGE_KEY, state.messageStyle); } catch (error) { /* storage disabled */ }
+  }
+  renderMessageStyleOptions();
+  if (render) renderConversationFeed("preserve");
+  return state.messageStyle;
+}
+
+function gridProgressRing(job) {
+  const percent = Math.max(0, Math.min(100, Math.round(Number(job.progress) || 0)));
+  return `<span class="grid-progress-ring" style="--progress:${percent * 3.6}deg"><span>${percent}%</span></span>`;
+}
+
+function jobCoverMarkup(job, { grid = false } = {}) {
+  const mediaType = jobMediaType(job);
+  const request = job.request || {};
+  const completed = job.status === "completed" && job.result_url;
+  if (completed) {
+    if (mediaType === "image") {
+      return `<img src="${escapeHtml(job.result_url)}" alt="${escapeHtml(shortTitle(job))}" loading="lazy">`;
+    }
+    if (mediaType === "video") {
+      return `<video src="${escapeHtml(job.result_url)}#t=0.1" muted playsinline preload="metadata" aria-label="${escapeHtml(shortTitle(job))}"></video>`;
+    }
+    if (mediaType === "audio") return `<span class="grid-cover-audio">${icon("audio-lines")}</span>`;
+  }
+  const reference = (request.references || []).find((item) => item.type === "image");
+  if (reference) {
+    const index = request.references.indexOf(reference);
+    const url = reference.url || `/api/v1/generations/${encodeURIComponent(job.id)}/references/${index}`;
+    return `<img src="${escapeHtml(url)}" alt="${escapeHtml(reference.name || "reference")}" loading="lazy">`;
+  }
+  const iconName = mediaType === "audio" ? "audio-lines" : mediaType === "image" ? "image" : "sparkles";
+  return `<span class="grid-cover-placeholder">${icon(iconName)}<b>H3</b></span>`;
+}
+
+function renderGridJobCard(job) {
+  const request = job.request || {};
+  const active = isActive(job);
+  const progress = Math.max(0, Math.min(100, Math.round(Number(job.progress) || 0)));
+  const title = job.error || job.stage || statusLabel(job.status);
+  return `<article class="grid-job-card${active ? " is-loading" : ""}" data-job-id="${escapeHtml(job.id)}" data-grid-job="${escapeHtml(job.id)}" data-output-job-id="${escapeHtml(job.id)}" tabindex="0" role="button" aria-label="${escapeHtml(shortTitle(job))}">
+    <div class="grid-job-cover">
+      ${jobCoverMarkup(job, { grid: true })}
+      ${active ? `<div class="grid-loading-mask"><span class="grid-progress-ring" style="--progress:${progress * 3.6}deg"><span>${progress}%</span></span><b>${escapeHtml(title)}</b></div>` : ""}
+      <span class="grid-job-status ${escapeHtml(job.status)}">${escapeHtml(statusLabel(job.status))}</span>
+    </div>
+    <div class="grid-job-copy">
+      <p>${escapeHtml(markdownPlainText(request.prompt || request.runninghub_workflow_name || shortTitle(job)))}</p>
+      <small>${escapeHtml(executionModeLabel(job))}${job.status === "completed" ? ` · ${formatTime(job.created_at, true)}` : ""}</small>
+    </div>
+  </article>`;
+}
+
+function minimalOutputBanner(job, detail) {
+  const mediaType = jobMediaType(job);
+  const active = isActive(job);
+  const completed = job.status === "completed" && job.result_url;
+  const thumb = completed
+    ? mediaType === "image"
+      ? `<img src="${escapeHtml(job.result_url)}" alt="" loading="lazy">`
+      : mediaType === "video"
+        ? `<video src="${escapeHtml(job.result_url)}#t=0.1" muted playsinline preload="metadata"></video>`
+        : `<span class="message-output-icon">${icon("audio-lines")}</span>`
+    : `<span class="message-output-icon">${icon(active ? "loader-circle" : "file-question")}</span>`;
+  const progress = active
+    ? `<span class="minimal-progress-track"><span style="width:${Math.max(0, Math.min(100, job.progress || 0))}%"></span></span>`
+    : "";
+  return `<button type="button" class="message-output-banner${active ? " is-loading" : ""}" data-output-detail="${escapeHtml(job.id)}">
+    <span class="message-output-thumb">${thumb}</span>
+    <span class="message-output-copy"><b>${escapeHtml(statusLabel(job.status))}</b><small>${escapeHtml(detail || executionModeLabel(job))}</small>${progress}</span>
+    <span class="message-output-open">${icon("chevron-right")}</span>
+  </button>`;
+}
+
 function renderJobExchange(job) {
+  if (currentMessageStyle() === "grid") return renderGridJobCard(job);
+  const minimal = currentMessageStyle() === "minimal";
   const request = job.request || {};
   const mediaType = jobMediaType(job);
   const audio = mediaType === "audio";
@@ -3615,7 +3845,9 @@ function renderJobExchange(job) {
   const executionMode = `<span class="message-plan ${executionModeClass(job)}">${executionModeLabel(job)}</span>`;
   const elapsed = `<span>${t("overallTime")} ${formatElapsed(job.elapsed_seconds)}</span>`;
   let assistantBody = "";
-  if (active) {
+  if (minimal) {
+    assistantBody = minimalOutputBanner(job, detail);
+  } else if (active) {
     assistantBody = `<div class="generation-progress">
       <div><span class="progress-stage"><i></i>${escapeHtml(job.stage || statusLabel(job.status))}</span><b>${job.progress || 0}%</b></div>
       <div class="progress-track"><span style="width:${Math.max(0, Math.min(100, job.progress || 0))}%"></span></div>
@@ -3635,10 +3867,10 @@ function renderJobExchange(job) {
   } else {
     assistantBody = `<p class="terminal-state ${job.status}">${escapeHtml(detail || statusLabel(job.status))}</p>`;
   }
-  return `<section class="exchange" id="job-${job.id}" data-job-id="${job.id}">
+  return `<section class="exchange${minimal ? " minimal-exchange" : ""}" id="job-${job.id}" data-job-id="${job.id}">
     <article class="message user-message">
       <div class="message-avatar user-avatar">${t("you")}</div>
-      <div class="message-body">${referenceSummary(job)}<div class="message-text">${escapeHtml(request.prompt || request.runninghub_workflow_name || "")}${audio && request.lyrics ? `\n\n${escapeHtml(request.lyrics)}` : ""}</div><div class="message-meta">${sourceLabel}${executionMode}<span>${modelLabel(job)}</span><span>${escapeHtml(nodeLabel(job))}</span>${runningHub || audio || request.task_type === "upscale" ? "" : `<span>${request.width} × ${request.height}</span>`}${runningHub || request.task_type === "upscale" ? "" : `<span>${request.duration}${t("seconds")}</span><span>${request.steps} ${t("steps")}</span><span>${t("seed")} ${request.seed}</span>`}${elapsed}${incognito}</div></div>
+      <div class="message-body">${referenceSummary(job)}<div class="message-text markdown">${renderMarkdown(request.prompt || request.runninghub_workflow_name || "")}${audio && request.lyrics ? renderMarkdown(request.lyrics) : ""}</div><div class="message-meta">${sourceLabel}${executionMode}<span>${modelLabel(job)}</span><span>${escapeHtml(nodeLabel(job))}</span>${runningHub || audio || request.task_type === "upscale" ? "" : `<span>${request.width} × ${request.height}</span>`}${runningHub || request.task_type === "upscale" ? "" : `<span>${request.duration}${t("seconds")}</span><span>${request.steps} ${t("steps")}</span><span>${t("seed")} ${request.seed}</span>`}${elapsed}${incognito}</div></div>
     </article>
     <article class="message assistant-message" data-output-job-id="${escapeHtml(job.id)}">
       <div class="message-avatar assistant-avatar">H3</div>
@@ -3653,6 +3885,9 @@ function chatEmptyMarkup() {
 
 function renderConversationFeed(mode = "preserve") {
   const feed = el("conversationFeed");
+  const messageStyle = currentMessageStyle();
+  feed.classList.toggle("is-message-grid", messageStyle === "grid");
+  feed.classList.toggle("is-message-minimal", messageStyle === "minimal");
   if (mode === "bottom") state.conversationReady = false;
   const oldHeight = feed.scrollHeight;
   const oldTop = feed.scrollTop;
@@ -3727,7 +3962,14 @@ function renderAssetDetail(job, windowNode = el("assetDetailModal")) {
   const download = get("downloadAssetDetail");
   const downloadable = job.status === "completed" && Boolean(job.result_url);
   const references = request.references || [];
-  const preview = job.asset_deleted
+  const active = isActive(job);
+  const progress = Math.max(0, Math.min(100, Math.round(Number(job.progress) || 0)));
+  const preview = active
+    ? `<div class="asset-detail-progress">
+        <span class="grid-progress-ring" style="--progress:${progress * 3.6}deg"><span>${progress}%</span></span>
+        <div><strong>${escapeHtml(job.stage || statusLabel(job.status))}</strong><p>${escapeHtml(job.queue_position ? `${t("queuePosition")} ${job.queue_position}` : statusLabel(job.status))}</p></div>
+      </div>`
+    : job.asset_deleted
     ? `<div class="asset-detail-placeholder">${icon("file-x-2")}<span>${t("assetDeleted")}</span></div>`
     : job.status === "completed" && job.result_url
     ? audio
@@ -3761,6 +4003,8 @@ function renderAssetDetail(job, windowNode = el("assetDetailModal")) {
     <section class="asset-detail-section"><h3>${t("sourceFiles")}</h3>${files}</section>
     <section class="asset-detail-section"><h3>${t("parameters")}</h3><div class="asset-detail-facts">${facts}</div></section>
   </div>`;
+  const footer = windowNode.querySelector(".asset-detail-footer");
+  if (footer) footer.hidden = active;
   get("deleteAssetDetail").hidden = peerAsset || localAsset;
   get("deleteAssetDetail").disabled = peerAsset || localAsset || isActive(job);
   get("renameAssetDetail").hidden = peerAsset || localAsset || job.status !== "completed" || !downloadable;
@@ -4751,7 +4995,14 @@ function assetPreviewMarkup(asset) {
   const kind = assetPreviewKind(url, asset.type);
   const safeUrl = escapeHtml(url);
   const safeName = escapeHtml(name);
-  if (kind === "image" && url) return `<img src="${safeUrl}" alt="${safeName}">`;
+  if (kind === "image" && url) {
+    return `<div class="asset-preview-image-stage" data-preview-stage style="--preview-zoom:100%"><img src="${safeUrl}" alt="${safeName}" data-preview-image></div>
+      <div class="asset-preview-zoom-controls" aria-label="${localized("图片缩放", "Image zoom")}">
+        <button type="button" data-preview-zoom="out" aria-label="${localized("缩小", "Zoom out")}" title="${localized("缩小", "Zoom out")}">${icon("minus")}</button>
+        <button type="button" data-preview-zoom="reset" aria-label="${localized("适应窗口", "Fit to window")}" title="${localized("适应窗口", "Fit to window")}">${icon("maximize-2")}</button>
+        <button type="button" data-preview-zoom="in" aria-label="${localized("放大", "Zoom in")}" title="${localized("放大", "Zoom in")}">${icon("plus")}</button>
+      </div>`;
+  }
   if (kind === "video" && url) return `<video src="${safeUrl}" controls playsinline autoplay preload="metadata" aria-label="${safeName}"></video>`;
   if (kind === "audio" && url) {
     return `<div class="asset-preview-audio"><div class="asset-preview-audio-name">${icon("audio-lines")}<b>${safeName}</b></div><audio src="${safeUrl}" controls autoplay preload="metadata" aria-label="${safeName}"></audio></div>`;
@@ -4759,10 +5010,21 @@ function assetPreviewMarkup(asset) {
   return `<div class="local-asset-preview-unsupported">${icon("file-question")}<b>${safeName}</b><span>${localized("该文件无法预览", "This file cannot be previewed")}</span></div>`;
 }
 
+let assetPreviewZoom = 1;
+
+function setAssetPreviewZoom(value) {
+  const stage = el("localAssetPreviewBody")?.querySelector("[data-preview-stage]");
+  if (!stage) return;
+  assetPreviewZoom = Math.max(1, Math.min(4, value));
+  stage.style.setProperty("--preview-zoom", `${assetPreviewZoom * 100}%`);
+  stage.classList.toggle("is-zoomed", assetPreviewZoom > 1.001);
+}
+
 function openAssetPreview(asset) {
   const body = el("localAssetPreviewBody");
   if (!body) return;
   const kind = assetPreviewKind(asset.url, asset.type);
+  assetPreviewZoom = 1;
   body.innerHTML = assetPreviewMarkup(asset);
   const dialog = document.querySelector(".local-asset-preview-dialog");
   if (dialog) dialog.setAttribute("aria-label", asset.name || localized("素材预览", "Asset preview"));
@@ -5713,6 +5975,16 @@ el("assetGrid").addEventListener("scroll", () => {
 el("conversationFeed").addEventListener("click", (event) => {
   const action = event.target.closest("[data-job-action]");
   if (action) return handleJobAction(action.dataset.jobAction, action.dataset.jobId);
+  const outputDetail = event.target.closest("[data-output-detail]");
+  if (outputDetail) return openAssetDetail(outputDetail.dataset.outputDetail);
+  const gridCard = event.target.closest("[data-grid-job]");
+  if (gridCard) return openAssetDetail(gridCard.dataset.gridJob);
+});
+el("conversationFeed").addEventListener("keydown", (event) => {
+  const gridCard = event.target.closest("[data-grid-job]");
+  if (!gridCard || !["Enter", " "].includes(event.key)) return;
+  event.preventDefault();
+  openAssetDetail(gridCard.dataset.gridJob);
 });
 el("conversationFeed").addEventListener("scroll", () => {
   const currentTop = el("conversationFeed").scrollTop;
@@ -5842,6 +6114,9 @@ el("openGlobalSettings").addEventListener("click", () => openGlobalSettings("sys
 document.querySelectorAll("[data-settings-tab]").forEach((button) => {
   button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab));
 });
+document.querySelectorAll("[data-message-style]").forEach((button) => {
+  button.addEventListener("click", () => applyMessageStyle(button.dataset.messageStyle));
+});
 el("themeGrid")?.addEventListener("click", (event) => {
   const card = event.target.closest("[data-theme-option]");
   if (!card) return;
@@ -5877,6 +6152,23 @@ el("confirmOldVideoCleanup").addEventListener("click", confirmOldVideoCleanup);
 el("oldVideoCleanupModal").addEventListener("click", (event) => { if (event.target === el("oldVideoCleanupModal")) closeOldVideoCleanup(); });
 el("localAssetsModal").addEventListener("click", (event) => { if (event.target === el("localAssetsModal")) closeLocalAssets(); });
 el("closeLocalAssetPreview").addEventListener("click", closeLocalAssetPreview);
+el("localAssetPreviewBody").addEventListener("click", (event) => {
+  const control = event.target.closest("[data-preview-zoom]");
+  if (control) {
+    if (control.dataset.previewZoom === "in") setAssetPreviewZoom(assetPreviewZoom * 1.25);
+    if (control.dataset.previewZoom === "out") setAssetPreviewZoom(assetPreviewZoom / 1.25);
+    if (control.dataset.previewZoom === "reset") setAssetPreviewZoom(1);
+    return;
+  }
+  if (event.target.closest("[data-preview-image]")) {
+    setAssetPreviewZoom(assetPreviewZoom > 1.001 ? 1 : 2);
+  }
+});
+el("localAssetPreviewBody").addEventListener("wheel", (event) => {
+  if (!event.ctrlKey && !event.metaKey) return;
+  event.preventDefault();
+  setAssetPreviewZoom(assetPreviewZoom * (event.deltaY < 0 ? 1.1 : 0.9));
+}, { passive: false });
 el("localAssetPreviewModal").addEventListener("click", (event) => { if (event.target === el("localAssetPreviewModal")) closeLocalAssetPreview(); });
 el("localAssetsList").addEventListener("change", (event) => {
   const checkbox = event.target.closest('input[type="checkbox"]');
@@ -6251,6 +6543,7 @@ window.addEventListener("resize", () => {
 
 async function initialize() {
   applyTheme(currentTheme(), { persist: false });
+  applyMessageStyle(storedMessageStyle(), { persist: false, render: false });
   watchSystemTheme();
   if (ANDROID_CLIENT) {
     document.body.classList.add("android-client");

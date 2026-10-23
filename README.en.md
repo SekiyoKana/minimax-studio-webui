@@ -158,6 +158,7 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 - Upgraded the 8-step FL2VA / Ref2VA LoRAs to lightx2v Minimax-h3-Turbo v1.1 768p, added 4-step workflows (FL2VA v1.3 / Ref2VA v1.0), and updated the SA workflows to reference the new LoRAs.
 - Dialogs and detail windows now animate in and out; top-right toasts use an icon + message layout with an exit animation.
 - The asset library now defaults to a width that shows exactly 3 columns; the redundant New generation button was removed.
+- Renamed the conversation title to Messages, added Markdown prompt rendering, zoomable asset previews, and Default / Minimal / Grid conversation styles.
 - The 4-step and 8-step LoRAs keep their default step counts, but sampling steps are editable.
 - Reference and asset files open in a unified preview dialog.
 - Local ComfyUI supervision: launch path, editable launch command, private environment, managed process and live logs.

@@ -23,14 +23,14 @@
         document.documentElement.dataset.theme = mode;
       })();
     </script>
-    <link rel="stylesheet" href="/assets/styles.css?v=61&rev=71">
-    <link rel="stylesheet" href="/assets/design.css?v=47">
+    <link rel="stylesheet" href="/assets/styles.css?v=62&rev=72">
+    <link rel="stylesheet" href="/assets/design.css?v=48">
     <link rel="stylesheet" href="/assets/skins/skins.css?v=8">
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
     <script src="/assets/dropdown.js?v=4" defer></script>
     <script src="/assets/motion.js?v=4" defer></script>
-    <script src="/assets/app.js?v=108&rev=120&upscale=1" defer></script>
+    <script src="/assets/app.js?v=109&rev=121&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -84,7 +84,7 @@
             <button class="icon-button mobile-only" id="openAssets" type="button" title="素材库" aria-label="素材库"><i data-lucide="panel-left"></i></button>
             <div>
               <div class="title-line">
-                <h1>H3 对话</h1>
+                <h1>对话消息</h1>
                 <button class="incognito-status" id="incognitoStatus" type="button" title="退出无痕模式" hidden><i data-lucide="scan-eye"></i><span>无痕</span></button>
               </div>
               <div class="engine-state" aria-live="polite">
@@ -537,6 +537,25 @@
               </button>
             </div>
             <p class="skin-help" id="skinHelp">外观只改变界面样式，不影响生成、队列、数据与接口。跟随系统时会随系统深浅色自动切换。</p>
+            <div class="settings-divider"></div>
+            <div class="settings-subsection message-style-settings">
+              <strong id="messageStyleTitle">对话消息样式</strong>
+              <p class="settings-help" id="messageStyleHelp">选择对话流的展示方式。默认保留完整预览，极简压缩为横幅，宫格使用瀑布流封面。</p>
+              <div class="message-style-grid" id="messageStyleGrid" role="radiogroup" aria-label="对话消息样式">
+                <button class="message-style-card" type="button" data-message-style="default" role="radio" aria-checked="true">
+                  <span class="message-style-preview preview-default" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                  <span class="message-style-copy"><strong>默认</strong><small>完整对话与媒体预览</small></span>
+                </button>
+                <button class="message-style-card" type="button" data-message-style="minimal" role="radio" aria-checked="false">
+                  <span class="message-style-preview preview-minimal" aria-hidden="true"><i></i><i></i><i></i></span>
+                  <span class="message-style-copy"><strong>极简</strong><small>紧凑横幅展示产出</small></span>
+                </button>
+                <button class="message-style-card" type="button" data-message-style="grid" role="radio" aria-checked="false">
+                  <span class="message-style-preview preview-grid" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+                  <span class="message-style-copy"><strong>宫格</strong><small>瀑布流封面与进度环</small></span>
+                </button>
+              </div>
+            </div>
           </section>
           <section class="settings-tab-panel" id="settingsPanelSystem" role="tabpanel" aria-labelledby="settingsTabSystem" data-settings-panel="system" hidden>
             <label>节点状态查询周期（秒）<input id="globalHealthInterval" type="number" min="5" max="3600" step="1"></label>
