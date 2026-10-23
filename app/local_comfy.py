@@ -690,34 +690,43 @@ class LocalComfySupervisor:
             if state is None:
                 return
             was_starting = state.get("status") == "starting"
-            state["pid"] = 0
-            if stopping:
-                state["status"] = "stopped"
-                state["error"] = ""
-            elif was_starting:
-                state["status"] = "failed"
-                state["error"] = (
-                    f"ComfyUI 进程启动后退出（退出码 {code}），日志：{state.get('log_path', '')}"
-                )
-            else:
-                state["status"] = "stopped"
-                state["error"] = ""
-            self._procs.pop(key, None)
-            offset = 0
             log_path = state.get("log_path") or ""
-        name = state.get("name") or key
+            name = state.get("name") or key
         if stopping:
+            with self._lock:
+                state = self._states.get(key)
+                if state is None:
+                    return
+                state["pid"] = 0
+                state["status"] = "stopped"
+                state["error"] = ""
+                self._procs.pop(key, None)
             self._emit(f"本地 ComfyUI 已关闭：{name}（{key}）")
             return
-        tail = self._tail_file(log_path, offset)
+        tail = self._tail_file(log_path)
         if was_starting:
+            # 先写出失败详情（日志 + 运行事件），再把状态落成 failed。
+            # 否则调用方可能在 _emit 之前就读到 failed，从而拿到一条
+            # 不含原始报错的失败通知。
             message = (
                 f"本地 ComfyUI 启动失败：{name}（{key}），退出码 {code}\n"
                 f"日志文件：{log_path}\n原始报错:\n{tail or '(日志为空)'}"
             )
             logger.error(message)
             self._emit(message, "error")
-        else:
+        with self._lock:
+            state = self._states.get(key)
+            if state is None:
+                return
+            state["pid"] = 0
+            state["status"] = "failed" if was_starting else "stopped"
+            state["error"] = (
+                f"ComfyUI 进程启动后退出（退出码 {code}），日志：{log_path}"
+                if was_starting
+                else ""
+            )
+            self._procs.pop(key, None)
+        if not was_starting:
             self._emit(f"本地 ComfyUI 进程已退出：{name}（{key}），退出码 {code}", "warning")
             if tail:
                 logger.info("本地 ComfyUI 退出输出（%s）:\n%s", key, tail)
@@ -729,12 +738,12 @@ class LocalComfySupervisor:
         state["status"] = "failed"
         state["pid"] = 0
         state["error"] = message
+        tail = self._tail_file(str(state.get("log_path") or ""), offset)
+        logger.error("%s\n原始报错:\n%s", message, tail or "(无输出)")
+        self._emit(f"{message}\n原始报错:\n{tail or '(无输出)'}", "error")
         with self._lock:
             self._states[key] = state
             self._procs.pop(key, None)
-        tail = self._tail(key, offset)
-        logger.error("%s\n原始报错:\n%s", message, tail or "(无输出)")
-        self._emit(f"{message}\n原始报错:\n{tail or '(无输出)'}", "error")
 
     def _resolve_python(self, launch_dir: Path) -> tuple[list[str], str]:
         for candidate in venv_python_candidates(launch_dir):
