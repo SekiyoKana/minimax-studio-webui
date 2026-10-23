@@ -77,7 +77,12 @@ class LaunchTargetTests(unittest.TestCase):
 
     def test_path_variants_collapse_separators(self):
         variants = _path_variants("D:/ComfyUI")
-        normalized = {os.path.normcase(os.path.normpath(str(item))) for item in variants}
+        # normcase only folds case on Windows; compare case-insensitively so
+        # the same assertion also covers macOS and Linux test runs.
+        normalized = {
+            os.path.normcase(os.path.normpath(str(item))).casefold()
+            for item in variants
+        }
         self.assertEqual(len(normalized), 1)
         self.assertTrue(normalized.pop().endswith("comfyui"))
 

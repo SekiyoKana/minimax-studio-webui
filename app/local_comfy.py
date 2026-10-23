@@ -195,7 +195,9 @@ def venv_python_candidates(launch_dir: Path) -> list[Path]:
     unique: list[Path] = []
     seen: set[str] = set()
     for item in candidates:
-        key = os.path.normcase(str(item))
+        # normcase only folds case on Windows; casefold keeps the dedupe
+        # behaviour consistent on macOS and Linux as well.
+        key = os.path.normcase(str(item)).casefold()
         if key in seen:
             continue
         seen.add(key)
