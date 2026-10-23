@@ -30,7 +30,7 @@
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
     <script src="/assets/dropdown.js?v=4" defer></script>
     <script src="/assets/motion.js?v=4" defer></script>
-    <script src="/assets/app.js?v=111&rev=123&upscale=1" defer></script>
+    <script src="/assets/app.js?v=112&rev=124&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -47,7 +47,7 @@
 
         <div class="library-heading">
           <div><h2>素材库</h2><span id="assetTotal">0</span></div>
-          <div class="library-heading-actions"><button class="icon-button" id="refreshAssets" type="button" title="刷新素材库" aria-label="刷新素材库"><i data-lucide="refresh-cw"></i></button><button class="icon-button" id="editAssetsButton" type="button" title="编辑素材" aria-label="编辑素材" aria-pressed="false"><i data-lucide="square-check"></i></button></div>
+          <div class="library-heading-actions"><button class="icon-button" id="refreshAssets" type="button" title="刷新素材库" aria-label="刷新素材库"><i data-lucide="refresh-cw"></i></button><button class="icon-button" id="editAssetsButton" type="button" title="编辑素材" aria-label="编辑素材" aria-pressed="false"><i data-lucide="square-check"></i></button><button class="icon-button" id="manageLocalAssets" type="button" title="管理本地素材" aria-label="管理本地素材"><i data-lucide="folder-cog"></i></button></div>
         </div>
 
         <div class="library-tools">
@@ -576,7 +576,6 @@
             <p class="settings-help" id="excludeRunningHubHelp">开启后，选择「自动调度」的任务不会使用 RunningHub API 节点，需要手动选择 RunningHub 节点。</p>
             <label><span id="remoteDisconnectLabel">互联断开时处理远程记录</span><select id="remoteDisconnectPolicy"><option value="encrypt">加密</option><option value="delete">删除</option></select></label>
             <label><span id="remoteRecordsKeyLabel">远程记录密钥</span><span class="password-field"><input id="remoteRecordsKey" type="password" minlength="8" maxlength="256" autocomplete="new-password"><button class="password-toggle" id="toggleRemoteRecordsKey" type="button" title="显示密钥" aria-label="显示密钥"><i data-lucide="eye"></i></button></span><small id="remoteRecordsKeyHelp">至少 8 个字符，最多 256 个字符</small></label>
-            <div class="settings-actions"><button type="button" id="manageLocalAssets"><i data-lucide="folder-cog"></i><span>管理本地素材</span></button></div>
           </section>
           <section class="settings-tab-panel" id="settingsPanelUpload" role="tabpanel" aria-labelledby="settingsTabUpload" data-settings-panel="upload" hidden>
             <label class="switch-row"><span>大尺寸图片自动压缩</span><input id="autoCompressLargeImages" type="checkbox"><span class="switch"></span></label>

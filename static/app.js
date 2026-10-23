@@ -436,7 +436,7 @@ function applyStaticLocale() {
   setText("#excludeRunningHubHelp", "When enabled, jobs using auto scheduling never run on RunningHub API nodes; select a RunningHub node manually instead.");
   setLeadingText("#remoteDisconnectPolicy", "Handle remote records when disconnected");
   setLeadingText("#settingsPanelSystem label:nth-of-type(8)", "Remote records key");
-  setText("#manageLocalAssets span", "Manage local assets");
+  setTitle("#manageLocalAssets", "Manage local assets");
   setText("#globalSettingsForm .settings-form-actions button span", "Save settings");
   setText("#settingsPanelUpload .settings-help", "Images over 1 MB are compressed locally before upload.");
   setLeadingText("#globalSeedControl", "Random seed");
