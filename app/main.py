@@ -47,6 +47,7 @@ ExecutionMode = Literal["native", "turbo-lora", "dual-sampling", "h3-sa", "vdn-h
 ModelVariant = Literal["fl2va-fp8", "ref2va-fp8", "music3-int8"]
 TaskType = Literal["generation", "upscale"]
 UpscaleCategory = Literal["real", "anime", "3d"]
+APP_VERSION = "6.0.0"
 UpscaleScale = int
 
 
@@ -98,7 +99,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="MiniMax H3 and Music3 API",
-    version="6.0.0",
+    version=APP_VERSION,
     description="MiniMax H3 video and MiniMax Music3 audio generation through ComfyUI and RunningHub API nodes.",
     lifespan=lifespan,
 )
@@ -673,6 +674,7 @@ async def health():
         "online_nodes": online,
         "parallel_capacity": manager.parallel_capacity,
         "health_interval_seconds": manager.health_interval,
+        "version": APP_VERSION,
         "revision": store.revision,
         "platform": "macos" if sys.platform == "darwin" else "windows" if os.name == "nt" else "linux",
     }

@@ -18,7 +18,7 @@ Authorization: Bearer YOUR_API_KEY
 curl http://127.0.0.1:8193/health
 ```
 
-响应中的 `nodes` 包含各推理节点的类型、在线状态、容量、当前任务和手动队列深度。`parallel_capacity` 为所有在线节点的容量总和。服务默认每 60 秒检查并保活一次节点。
+响应中的 `version` 为当前服务版本号，用于 Skill 版本一致性检查；`nodes` 包含各推理节点的类型、在线状态、容量、当前任务和手动队列深度。`parallel_capacity` 为所有在线节点的容量总和。服务默认每 60 秒检查并保活一次节点。
 
 创建 ComfyUI 任务时使用 `comfy_node=auto` 自动调度，或填写 `nodes[].id` 手动指定节点。网页请求可传入 `workflow_id` 选择内置预设或自定义工作流；省略时仍按 `model_variant` 和 `execution_mode` 选择原有预设。自定义工作流的 `comfy_node` 只能指向该工作流中已同步的目标节点。RunningHub 工作流可以填写 `rh:<runninghub_resource_id>`，在绑定同一资源 ID 的可用节点之间自动调度。未填写时默认为 `auto`。
 

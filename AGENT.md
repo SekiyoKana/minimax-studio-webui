@@ -144,6 +144,7 @@ curl -H "Authorization: Bearer $H3_API_KEY" "$BASE_URL/api/v1/comfy/nodes"
 - `online_nodes`：当前在线节点数。
 - `parallel_capacity`：在线节点并发容量总和。
 - `queue_depth`：服务队列深度。
+- `version`：服务版本号，用于 Skill 的版本一致性检查。
 - `revision`：任务存储修订号。
 
 `/api/v1/comfy/nodes` 返回节点配置和运行状态。节点提供方为 `comfyui` 或 `runninghub`。创建和修改节点需要管理员级别的服务访问权限，RunningHub 节点还需要 `api_key` 和 `workflow_url`。查询节点时不会返回密钥内容，只返回 `has_api_key`。
@@ -539,6 +540,18 @@ Content-Type: application/json
 9. 下载工具在状态为 `completed` 后再请求 `result`，需要预览时使用 `preview`，不要把预览文件当作正式产物。
 10. 删除工具必须在客户端完成明确确认。清理 30 天前视频时，先请求 preview，展示完整条目和总大小，再调用执行接口。
 11. 验收时使用测试节点或 fake engine 创建一个最小 8 步 LoRA 任务，完成状态轮询、产物下载、文件夹归类、重命名和清理路径验证。
+
+### 版本一致性与 Skill 更新
+
+Skill 学习或创建时必须记录当前服务版本，并在后续调用中检查版本是否发生变化：
+
+1. 首次读取 `{BASE_URL}/AGENT.md` 或创建 Skill 时，调用 `GET {BASE_URL}/health`，将返回的 `version` 写入 Skill 元数据（例如 `project_version`）。
+2. 每次使用 Skill 前读取当前 `/health.version`，与 Skill 中记录的 `project_version` 比较。
+3. 如果版本不一致，重新读取 `{BASE_URL}/AGENT.md` 并检查内容是否更新：
+   - 有更新：按新文档修改 Skill，并更新 Skill 中记录的 `project_version`。
+   - 没有更新：在 Skill 中标记版本不一致（例如 `version_mismatch`），保留原 Skill 继续使用，不阻塞任务。
+4. 版本号由项目维护者主动提示更新；Agent 不得自行推断、递增或提交版本号变更。
+5. 版本检查只用于发现文档或接口变化，不替代 `openapi.json` 的接口校验。
 
 推荐的 Skill 工具抽象：
 

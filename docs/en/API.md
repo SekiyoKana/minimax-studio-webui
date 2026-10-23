@@ -18,7 +18,7 @@ The current web interface has no service-level API-key field. Public deployments
 curl http://127.0.0.1:8193/health
 ```
 
-The `nodes` array reports each inference node's provider, health, capacity, active jobs, and manual queue depth. `parallel_capacity` is the sum of all online node capacities. The service checks and keeps each node active every 60 seconds by default.
+The response includes `version`, the current service version used for Skill consistency checks. The `nodes` array reports each inference node's provider, health, capacity, active jobs, and manual queue depth. `parallel_capacity` is the sum of all online node capacities. The service checks and keeps each node active every 60 seconds by default.
 
 Use `comfy_node=auto` to schedule a ComfyUI task automatically or provide a `nodes[].id` value to select a node manually. For a RunningHub workflow, use `rh:<runninghub_resource_id>` to schedule across available nodes bound to the same resource ID. The default is `auto`.
 
