@@ -18,6 +18,8 @@ from cryptography.exceptions import InvalidTag
 
 
 TERMINAL_STATES = {"completed", "failed", "cancelled"}
+# Marker used by scripts/seed_demo_jobs.py; such records are UI-only fixtures.
+PLACEHOLDER_FLAG = "demo_placeholder"
 ROOT_FOLDER_ID = "__root__"
 UNFILED_FOLDER_ID = "__unfiled__"
 RUNNINGHUB_TARGET_PREFIX = "rh:"
@@ -119,7 +121,9 @@ class JobStore:
                 restored_event = deepcopy(event)
                 restored_event["_restricted"] = restricted
                 self._events.append(restored_event)
-            if job.get("status") in {"queued", "running"}:
+            # Placeholder records from scripts/seed_demo_jobs.py keep their fake
+            # status across restarts and are never handed to the scheduler.
+            if job.get("status") in {"queued", "running"} and not job.get(PLACEHOLDER_FLAG):
                 checkpoint = job.get("remote_checkpoint")
                 if isinstance(checkpoint, dict) and checkpoint.get("remote_id"):
                     job.update(
@@ -526,7 +530,11 @@ class JobStore:
 
     def queued_ids(self) -> list[str]:
         with self._lock:
-            queued = [job for job in self._jobs.values() if job.get("status") == "queued"]
+            queued = [
+                job
+                for job in self._jobs.values()
+                if job.get("status") == "queued" and not job.get(PLACEHOLDER_FLAG)
+            ]
             queued.sort(key=lambda job: job.get("created_at", ""))
             return [job["id"] for job in queued]
 
