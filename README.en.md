@@ -34,17 +34,17 @@ MiniMax H3 Studio provides one web interface, HTTP API, desktop entry and Androi
 | VDN H3 | 8 to 50 steps with automatic DMD or B-stage selection |
 | Job queue | Persistent queue, node scheduling, cancel, regenerate, checkpoint recovery and live progress |
 | Total elapsed time | Measured from the moment an inference node starts the job; queue wait time is excluded |
-| Asset library | Search, paging, status filters, cached video posters, preview, download and rename |
-| Asset preview | Every asset opens in a preview dialog: images, a video player, audio as "file name + player", and unknown files with an unknown-file icon |
-| Folders | Single-level folders, double-click to open, bulk move, an ungrouped root and deletion guards |
-| Local assets | Capacity stats, 30-day video cleanup preview, ownership checks and artifact deletion |
-| Detail windows | Several detail windows at once, independent drag and a collapsible sidebar |
-| Node management | ComfyUI and RunningHub nodes, health checks, start/stop, concurrency and local/remote detection |
-| Workflows | Import ComfyUI API workflows, map fields, references, ratio and MP, select result nodes, sync and validate |
-| Run logs | Toolbar entry with a queue badge, a draggable dialog, live progress, and workflow sync/generation errors |
-| Local ComfyUI | Experimental: launch and supervise a local ComfyUI from the app, with launch paths, private environments and process shutdown on exit |
+| Asset library | Search, paging, status filters, poster frames, dialog preview, download and rename |
+| Folders | Single-level folders, bulk move, an ungrouped root and deletion guards |
+| Local assets | Capacity stats, 30-day video cleanup and artifact deletion |
+| Detail windows | Multiple windows with drag and a collapsible sidebar |
+| Node management | ComfyUI and RunningHub node configuration, health checks and start/stop |
+| Workflows | Import ComfyUI API workflows, configure fields and references, then sync |
+| Run logs | Toolbar entry, queue badge, draggable log window and live errors |
+| Local ComfyUI | Experimental: launch and supervise a local ComfyUI from the app |
 | Multi-device | LAN or Tailscale pairing, authorization revocation, proxied jobs and read-only remote assets |
 | Android client | Phone and tablet remote client pinned to FL2VA FP8 + 8-step LoRA, supporting remote ComfyUI, RunningHub, multi-device, progress and downloads; Beta, not yet tested on devices |
+| Appearance | Day, night and follow-system themes; follow-system by default |
 | Agent access | A public `AGENT.md`, OpenAPI JSON and Skill authoring rules |
 
 
@@ -62,10 +62,6 @@ MiniMax H3 Studio provides one web interface, HTTP API, desktop entry and Androi
 | ![Workflow manager](docs/images/h3-studio-workflows.jpg) | ![Inference nodes](docs/images/h3-studio-nodes.jpg) |
 
 ![Run logs](docs/images/h3-studio-ops.jpg)
-
-## Appearance
-
-Day, night and follow-system appearance modes are available under Settings → Appearance. Follow-system is the default.
 
 ## Workflows
 
@@ -97,25 +93,11 @@ Built-in presets only allow changing whether they appear in the composer; they c
 
 ### Custom workflows
 
-The web workflow dialog imports ComfyUI API-format JSON and configures:
-
-- Generic field mappings: `prompt`, `lyrics`, `width`, `height`, `ratio`, `megapixels`, `duration`, `num_frames`, `steps`, `seed`
-- Reference mappings by image, video or audio type and index
-- Reference slots: `ref_images` / `ref_videos` / `ref_audios` create loader nodes for every uploaded file
-- Static inputs, result node, result media type, target ComfyUI nodes and composer visibility
-
-Jobs run from a snapshot of the graph, mappings, version and target nodes captured at submission. Scheduling only picks synced online nodes. Official reference limits are 9 images, 3 videos and 3 audio clips. After saving, the service syncs the workflow into each target ComfyUI user workflow directory as `H3Studio_{workflow_id}.json` and verifies its hash. Import, validation and sync errors appear in the run log.
+The web workflow dialog imports ComfyUI API-format JSON and configures field mappings, references, result and target nodes, and composer visibility. Jobs run from the snapshot captured at submission, and scheduling only picks synced online nodes; reference limits are 9 images, 3 videos and 3 audio clips. Saving syncs the workflow into the target ComfyUI user workflow directory and verifies it, with errors written to the run log.
 
 ## Local ComfyUI
 
-"Bind a local ComfyUI service" under Settings → Experimental is off by default. Once enabled:
-
-- ComfyUI nodes detected as local (`localhost`, `127.0.0.1`, local NIC addresses) show a yellow "Manageable" badge in the node list; once the supervised service is running the badge turns green and reads "Managed".
-- The node editor accepts a ComfyUI launch path (a directory or `main.py`), written the Windows or macOS way: `~` expands, forward and back slashes are interchangeable, and a `file://` prefix is accepted.
-- The switch in the top-right corner of a node card starts or stops the supervised process. A private environment inside the launch directory (`venv`, `.venv`, `env`, with `Scripts/python` on Windows and `bin/python` on macOS) is preferred; otherwise the global Python is used.
-- The child process runs with `--listen 127.0.0.1 --port <node port>`, logs to `data/local-comfy/<node>.log` and mirrors into the run log; failures show the original error on the card.
-- Quitting the app terminates the processes it started (with a Windows Job object as a backstop). ComfyUI started elsewhere is left alone and cannot be stopped from the app; the UI asks you to close it manually.
-- Settings includes a "ComfyUI launch command" field, defaulting to `{python} {script} --listen {host} --port {port}`. It supports `{python}`, `{script}`, `{workdir}`, `{host}` and `{port}` placeholders and accepts extra arguments.
+"Bind a local ComfyUI service" under Settings → Experimental is off by default. Once enabled, local ComfyUI nodes show a manageable state and can be started or stopped from the node card. The app prefers a private environment inside the node directory, writes logs to `data/local-comfy/` and the run log, and stops the processes it started on exit; ComfyUI started elsewhere is left alone. The launch command accepts common placeholders.
 
 ## Data flow
 
@@ -150,28 +132,14 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 
 ### 2026-10-23
 
-- Added a cancel button (below the progress caption) to grid task cards so queued or running jobs can be cancelled without opening details; grid mode's Fill composer now returns to the newest position (top).
-- Added a floating Back to latest button: top for grid mode, bottom for the conversation; switching conversation styles now always lands on the newest content.
-- Moved Show asset library below Optimize Markdown; hiding the library now animates its width and opacity to the left, the desktop grid expands to 6 columns, and re-enabling restores it.
-- Replaced the text H3 brand mark with the application logo image while keeping the STUDIO wordmark.
-- Removed the 4-step LoRA presets together with their 4-step workflow files and model-manifest entries: output quality did not meet the generation bar, so LoRA acceleration now ships only with the 8-step plan. Existing jobs keep their workflow snapshots and are unaffected.
-- Custom workflows support variable references, `ratio` / `megapixels` mappings, result/target node configuration and ComfyUI sync.
-- Built-in workflows are seeded into the database on first start; runtime execution no longer depends on workflow environment variables.
-- Bundled workflows and synced custom workflows use the `H3Studio_` filename prefix.
-- Upgraded the 8-step FL2VA / Ref2VA LoRAs to lightx2v Minimax-h3-Turbo v1.1 768p, added 4-step workflows (FL2VA v1.3 / Ref2VA v1.0), and updated the SA workflows to reference the new LoRAs.
-- Removed the RunningHub resource-group auto-scheduling entry from the inference node selector; individual RunningHub nodes remain selectable.
-- Dialogs and detail windows now animate in and out; top-right toasts use an icon + message layout with an exit animation.
-- The asset library now defaults to a width that shows exactly 3 columns; the redundant New generation button was removed.
-- Renamed the conversation title to Messages, added Markdown prompt rendering, zoomable asset previews, and Default / Minimal / Grid conversation styles. Grid mode puts the newest job at the top-left, uses 5 vertical columns, and shows a loading hint while fetching history at the bottom.
-- Renamed the Appearance tab to Display and added an "Optimize Markdown in the conversation" switch, enabled by default.
-- Moved Manage local assets to an icon button in the asset library header.
-- The 4-step and 8-step LoRAs keep their default step counts, but sampling steps are editable.
-- Grid style is now cover-only: the white caption strip is gone and a translucent veil on hover/focus reveals the prompt, parameters, and node info. Long prompts ellipsize, and a quick delete button sits in the top-right corner.
-- Grid history now rises one card at a time, and the conversation feed and asset library use keyed DOM reuse, so loading and status updates no longer flash, reload covers, or jump the scroll position.
-- Display settings gained a Show asset library switch (on by default) and a Composer style selector (fixed / floating). Hiding the library moves Manage local assets into the top-right toolbar; the floating composer docks to the bottom edge and slides up when the pointer enters that region.
-- Added soft fade transitions at the asset library and conversation scroll boundaries, including a natural dissolve where the floating composer meets the feed.
-- Reference and asset files open in a unified preview dialog.
-- Local ComfyUI supervision: launch path, editable launch command, private environment, managed process and live logs.
+- Conversation styles now include Default, Minimal and Grid. Prompts support Markdown; grid mode uses cover-only cards with a hover info veil, ellipsized prompts, quick delete and task cancellation.
+- Grid history rises in one card at a time, and the feed and asset library reuse DOM in place so updates no longer flash or jump the scroll position.
+- Added a jump-to-latest control: top for grid mode and bottom for the conversation; grid Fill composer and style switches now land on the newest content.
+- Display settings gained an asset library switch (animated collapse, six grid columns on wide screens) and fixed/floating composer styles, plus soft fades at the library and conversation scroll edges.
+- The top-left brand now uses the application logo.
+- Custom workflows support fields, references, result and target nodes plus ComfyUI sync; bundled and synced workflows use the `H3Studio_` prefix.
+- Local ComfyUI supports launch paths, private environments, run logs and exit cleanup.
+- The 8-step FL2VA / Ref2VA LoRAs were upgraded to v1.1 768p.
 
 ### 2026-10-22
 
@@ -187,7 +155,6 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 - The web workflow panel uploads ComfyUI API JSON, configures generic fields and reference mappings, selects result nodes, saves static inputs and picks the target node and generation-area visibility.
 - Custom workflows run from per-job snapshots; scheduling only uses nodes that are synced and online.
 - A new `auto_compress_large_images` setting compresses reference images above 1 MB in the browser before upload.
-- The settings window was split into model, system and upload tabs; custom workflows recognise video, audio and image artifacts.
 
 ### 2026-10-02: Database workflow configuration (Beta)
 
@@ -312,12 +279,6 @@ On Windows use `gradlew.bat assembleDebug`. The installable APK lands at `androi
 ### API documentation
 
 After the service starts, open `/docs` for the FastAPI-generated Swagger UI and `/openapi.json` for the OpenAPI description. The API reference is no longer maintained in this README.
-
-## Asset management
-
-- **Preview and download**: clicking a reference asset, a message asset or a detail source file opens a preview dialog. Images, videos, audio and unknown files each have a suitable view; downloads only happen from an explicit download button.
-- **Folders**: single-level folders with create, rename, delete, double-click open, bulk move and an ungrouped root. Deletion checks active tasks; remote assets are read-only.
-- **Local assets**: capacity and file counts, 30-day video cleanup preview, artifact deletion and ownership checks.
 
 ## Node packs and installation assets
 
