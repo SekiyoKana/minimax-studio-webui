@@ -1599,17 +1599,18 @@ button { appearance: none; -webkit-appearance: none; }
 .minimal-exchange .message-actions { margin-top: 9px; }
 
 .conversation-feed.is-message-grid {
-  display: block;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-content: start;
+  gap: 16px 12px;
   padding: 20px 24px 36px;
-  columns: 4 220px;
-  column-gap: 14px;
+  overflow-y: auto;
 }
 .conversation-feed.is-message-grid .chat-empty { column-span: all; }
 .grid-job-card {
-  display: inline-block;
+  display: block;
   width: 100%;
-  break-inside: avoid;
-  margin: 0 0 14px;
+  margin: 0;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -1745,12 +1746,18 @@ button { appearance: none; -webkit-appearance: none; }
 
 .asset-detail-preview img { display: block; max-width: 100%; max-height: min(600px, 60dvh); margin: auto; object-fit: contain; }
 
-@media (max-width: 1100px) {
-  .conversation-feed.is-message-grid { columns: 3 200px; }
+@media (max-width: 1280px) {
+  .conversation-feed.is-message-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (max-width: 1080px) {
+  .conversation-feed.is-message-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 880px) {
+  .conversation-feed.is-message-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 720px) {
-  .conversation-feed.is-message-grid { columns: 2 150px; padding: 12px 14px 24px; column-gap: 10px; }
-  .grid-job-card { margin-bottom: 10px; border-radius: 14px; }
+  .conversation-feed.is-message-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px 14px 24px; gap: 10px; }
+  .grid-job-card { border-radius: 14px; }
   .message-style-grid { grid-template-columns: 1fr 1fr 1fr; }
   .message-style-card { padding: 6px; }
   .message-style-copy small { display: none; }

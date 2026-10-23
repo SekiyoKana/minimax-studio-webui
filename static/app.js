@@ -3409,8 +3409,14 @@ function upsertConversation(job) {
     if (state.conversations.length && jobTime < newestTime) return;
     state.conversations.unshift(job);
     el("conversationFeed").querySelector(".chat-empty")?.remove();
-    el("conversationFeed").append(elementFromHtml(renderJobExchange(job)));
-    el("conversationFeed").scrollTop = el("conversationFeed").scrollHeight;
+    const card = elementFromHtml(renderJobExchange(job));
+    if (currentMessageStyle() === "grid") {
+      el("conversationFeed").prepend(card);
+      if (state.conversationScrollTop <= 24) el("conversationFeed").scrollTop = 0;
+    } else {
+      el("conversationFeed").append(card);
+      el("conversationFeed").scrollTop = el("conversationFeed").scrollHeight;
+    }
   }
   if (!state.conversations.length) el("conversationFeed").innerHTML = `${chatEmptyMarkup()}`;
   refreshIcons();
@@ -3763,7 +3769,7 @@ function applyMessageStyle(style, { persist = true, render = true } = {}) {
     try { localStorage.setItem(MESSAGE_STYLE_STORAGE_KEY, state.messageStyle); } catch (error) { /* storage disabled */ }
   }
   renderMessageStyleOptions();
-  if (render) renderConversationFeed("preserve");
+  if (render) renderConversationFeed(state.messageStyle === "grid" ? "bottom" : "preserve");
   return state.messageStyle;
 }
 
@@ -3920,11 +3926,14 @@ function renderConversationFeed(mode = "preserve") {
     .reverse()
     .map((job) => ({ type: "job", at: job.created_at, data: job }))
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
-  const content = timeline.map((item) => renderJobExchange(item.data)).join("");
+  const orderedTimeline = messageStyle === "grid" ? [...timeline].reverse() : timeline;
+  const content = orderedTimeline.map((item) => renderJobExchange(item.data)).join("");
   feed.innerHTML = content || `${chatEmptyMarkup()}`;
   refreshIcons();
   requestAnimationFrame(() => {
-    if (mode === "bottom" || (mode === "preserve" && nearBottom)) {
+    if (messageStyle === "grid") {
+      feed.scrollTop = mode === "bottom" ? 0 : oldTop;
+    } else if (mode === "bottom" || (mode === "preserve" && nearBottom)) {
       feed.scrollTop = feed.scrollHeight;
     } else if (mode === "prepend") {
       feed.scrollTop = oldTop + (feed.scrollHeight - oldHeight);
@@ -3932,7 +3941,12 @@ function renderConversationFeed(mode = "preserve") {
       feed.scrollTop = oldTop;
     }
     state.conversationScrollTop = feed.scrollTop;
-    requestAnimationFrame(() => { state.conversationReady = true; });
+    requestAnimationFrame(() => {
+      state.conversationReady = true;
+      if (messageStyle === "grid" && feed.scrollHeight <= feed.clientHeight + 8) {
+        loadOlderMessages();
+      }
+    });
   });
 }
 
@@ -6011,10 +6025,16 @@ el("conversationFeed").addEventListener("keydown", (event) => {
   openAssetDetail(gridCard.dataset.gridJob);
 });
 el("conversationFeed").addEventListener("scroll", () => {
-  const currentTop = el("conversationFeed").scrollTop;
+  const feed = el("conversationFeed");
+  const currentTop = feed.scrollTop;
   const movingUp = currentTop < state.conversationScrollTop;
   state.conversationScrollTop = currentTop;
-  if (state.conversationReady && movingUp && currentTop < 72) loadOlderMessages();
+  if (!state.conversationReady) return;
+  if (currentMessageStyle() === "grid") {
+    if (feed.scrollHeight - currentTop - feed.clientHeight < 240) loadOlderMessages();
+    return;
+  }
+  if (movingUp && currentTop < 72) loadOlderMessages();
 }, { passive: true });
 
 el("queueList").addEventListener("click", (event) => {
