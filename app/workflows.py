@@ -45,6 +45,13 @@ REFERENCE_SLOT_FAMILIES = {
     "ref_videos": ("video", "ref_video"),
     "ref_audios": ("audio", "ref_audio"),
 }
+
+# Official H3 conditioning limits for one generation.
+REFERENCE_LIMITS = {
+    "image": 9,
+    "video": 3,
+    "audio": 3,
+}
 MAX_WORKFLOW_BYTES = 5 * 1024 * 1024
 
 

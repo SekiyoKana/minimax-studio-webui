@@ -40,7 +40,7 @@ from .ref2va_prompts import REF2VA_SYSTEM_PROMPT
 from .tts_prompts import TTS_SYSTEM_PROMPT
 from .runninghub import assign_media_fields, normalize_parameters, output_media_type
 from .settings import settings
-from .workflows import WorkflowRegistry, eligible_node_ids, validate_workflow_config
+from .workflows import REFERENCE_LIMITS, WorkflowRegistry, eligible_node_ids, validate_workflow_config
 
 
 ExecutionMode = Literal["native", "turbo-lora", "dual-sampling", "h3-sa", "vdn-h3", "h3-nsfw", "digital-human", "tts", "music3"]
@@ -2655,6 +2655,13 @@ def validate_custom_reference_mappings(workflow: dict[str, Any], kinds: list[str
     counts: dict[str, int] = {}
     for kind in kinds:
         counts[kind] = counts.get(kind, 0) + 1
+    for kind, count in counts.items():
+        limit = REFERENCE_LIMITS.get(kind)
+        if limit and count > limit:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{kind} 参考素材最多添加 {limit} 份",
+            )
     mappings = {
         (str(item["type"]), int(item["index"])): item
         for item in workflow.get("reference_mappings") or []

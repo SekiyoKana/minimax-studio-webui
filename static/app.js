@@ -437,7 +437,7 @@ function applyStaticLocale() {
   setText('label[for="workflowJsonFile"]', "API workflow JSON");
   setText(".workflow-config-section:first-of-type h4", "Common field mappings");
   setText(".workflow-config-section:nth-of-type(2) h4", "Reference mappings");
-  setText("#workflowReferenceHint", "Use ref_images / ref_videos / ref_audios slot mappings to create a loader for every file, with no fixed count.");
+  setText("#workflowReferenceHint", "Slot mappings create a loader for every file. Official limits apply: 9 images, 3 videos, and 3 audio clips.");
   setText('label[for="workflowStaticInputs"]', "Static inputs JSON");
   setText('label[for="workflowResultNode"]', "Result node");
   setText('label[for="workflowMediaType"]', "Media type");
@@ -1350,6 +1350,8 @@ const REFERENCE_SLOT_FAMILIES = {
   ref_videos: { kind: "video", suffix: "ref_video" },
   ref_audios: { kind: "audio", suffix: "ref_audio" },
 };
+// Official H3 conditioning limits for one generation.
+const REFERENCE_LIMITS = { image: 9, video: 3, audio: 3 };
 
 function workflowSlotTargets(graph) {
   const found = new Map();
@@ -2118,9 +2120,12 @@ function referenceLimits(variant = selectedVariant()) {
     mappings.forEach((mapping) => {
       limits[mapping.type] = Math.max(limits[mapping.type] || 0, Number(mapping.index) || 0);
     });
-    // A slot family materialises loaders on demand, so one binding can take
-    // any number of files up to the per-type limit supported by the backend.
-    slotKinds.forEach((kind) => { limits[kind] = 15; });
+    Object.keys(limits).forEach((kind) => {
+      limits[kind] = Math.min(limits[kind], REFERENCE_LIMITS[kind] || 15);
+    });
+    // A slot family materialises loaders on demand, but the model still has
+    // official per-media caps: 9 images, 3 videos and 3 audio clips.
+    slotKinds.forEach((kind) => { limits[kind] = REFERENCE_LIMITS[kind] || 15; });
     return limits;
   }
   if (isMusic3(variant)) return { image: 0, video: 0, audio: 0 };
@@ -2199,7 +2204,11 @@ function validateReferenceSet(references = state.references, variant = selectedV
       }
     }
     for (const [kind, count] of Object.entries(counts)) {
-      if (count > 15) return localized(`${kind} 参考素材最多添加 15 份`, `This workflow accepts up to 15 ${kind} references`);
+      const limit = REFERENCE_LIMITS[kind] || 15;
+      if (count > limit) {
+        const kindName = { image: localized("图片", "images"), video: localized("视频", "videos"), audio: localized("音频", "audio") }[kind] || kind;
+        return localized(`${kindName}参考素材最多添加 ${limit} 份`, `This workflow accepts up to ${limit} ${kindName}`);
+      }
       for (let index = 1; index <= count; index += 1) {
         if (!mappings.has(`${kind}:${index}`) && !slotKinds.has(kind)) {
           return localized(`${kind} ${index} 没有配置到工作流输入`, `${kind} reference ${index} is not mapped`);

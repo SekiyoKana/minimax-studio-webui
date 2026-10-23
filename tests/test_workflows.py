@@ -27,6 +27,27 @@ def sample_workflow():
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_slot_reference_limits_follow_media_type(self):
+        workflow = {
+            "reference_mappings": [
+                {"type": "image", "index": 1, "node_id": "44", "input": "ref_images", "slot": True, "required": True},
+                {"type": "video", "index": 1, "node_id": "44", "input": "ref_videos", "slot": True, "required": True},
+                {"type": "audio", "index": 1, "node_id": "44", "input": "ref_audios", "slot": True, "required": True},
+            ]
+        }
+        main_module.validate_custom_reference_mappings(
+            workflow,
+            ["image"] * 9 + ["video"] * 3 + ["audio"] * 3,
+        )
+        for kinds, detail in (
+            (["image"] * 10, "9 份"),
+            (["image"] * 1 + ["video"] * 4, "3 份"),
+            (["image"] * 1 + ["audio"] * 4, "3 份"),
+        ):
+            with self.assertRaises(HTTPException) as ctx:
+                main_module.validate_custom_reference_mappings(workflow, kinds)
+            self.assertIn(detail, str(ctx.exception.detail))
+
     def test_slot_binding_requires_one_file_per_family(self):
         workflow = {
             "reference_mappings": [
