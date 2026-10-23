@@ -1383,7 +1383,14 @@ async function saveNode(event) {
 
 async function deleteNode(nodeId) {
   const node = state.managedNodes.find((item) => item.id === nodeId);
-  if (!node || !window.confirm(localized(`确认删除节点“${node.name}”？`, `Delete node "${node.name}"?`))) return;
+  if (!node) return;
+  const confirmed = await confirmAction({
+    title: localized("删除推理节点", "Delete inference node"),
+    subtitle: localized("节点配置会从本机移除", "The node configuration will be removed"),
+    message: localized(`确认删除节点“${node.name}”？`, `Delete node "${node.name}"?`),
+    icon: "server-off",
+  });
+  if (!confirmed) return;
   el("nodeManagerError").textContent = "";
   try {
     await api(`/api/v1/comfy/nodes/${encodeURIComponent(nodeId)}`, { method: "DELETE" });
@@ -1811,7 +1818,14 @@ async function downloadWorkflow(workflowId) {
 
 async function deleteWorkflow(workflowId) {
   const workflow = state.workflows.find((item) => item.id === workflowId);
-  if (!workflow || !window.confirm(localized(`确认删除工作流“${workflow.name}”？`, `Delete workflow "${workflow.name}"?`))) return;
+  if (!workflow) return;
+  const confirmed = await confirmAction({
+    title: localized("删除工作流", "Delete workflow"),
+    subtitle: localized("内置预设不能删除", "Built-in presets cannot be deleted"),
+    message: localized(`确认删除工作流“${workflow.name}”？`, `Delete workflow "${workflow.name}"?`),
+    icon: "workflow",
+  });
+  if (!confirmed) return;
   try {
     const result = await api(`/api/v1/workflows/${encodeURIComponent(workflowId)}`, { method: "DELETE" });
     if (result.remote_cleanup_errors?.length) setWorkflowManagerError(result.remote_cleanup_errors.map((item) => `${item.node_id}: ${item.error}`).join(" · "));
@@ -3147,7 +3161,12 @@ async function moveJobsToFolder(jobIds, folderId) {
 }
 
 async function deleteAssetFolder(folderId) {
-  if (!window.confirm(t("folderDeleteConfirm"))) return;
+  const confirmed = await confirmAction({
+    title: localized("删除文件夹", "Delete folder"),
+    message: t("folderDeleteConfirm"),
+    icon: "folder-x",
+  });
+  if (!confirmed) return;
   try {
     await api(`/api/v1/asset-folders/${encodeURIComponent(folderId)}`, { method: "DELETE" });
     if (state.assetFolderId === folderId) state.assetFolderId = "";
@@ -5007,7 +5026,12 @@ async function cancelJob(jobId) {
 }
 
 async function deleteJob(jobId) {
-  if (!window.confirm(t("deleteConfirm"))) return false;
+  const confirmed = await confirmAction({
+    title: t("deleteRecord"),
+    message: t("deleteConfirm"),
+    icon: "trash-2",
+  });
+  if (!confirmed) return false;
   try {
     await api(`/api/v1/generations/${jobId}`, { method: "DELETE" });
     if (state.editingJobId === jobId) resetComposer();
@@ -5046,7 +5070,15 @@ async function renameJobOutput(jobId) {
 }
 
 async function regenerateJob(jobId) {
-  if (!window.confirm(t("regenerateConfirm"))) return false;
+  const confirmed = await confirmAction({
+    title: t("regenerate"),
+    subtitle: localized("将使用当前任务参数创建新任务", "A new job will be created with the current parameters"),
+    message: t("regenerateConfirm"),
+    confirmLabel: t("regenerate"),
+    tone: "primary",
+    icon: "rotate-ccw",
+  });
+  if (!confirmed) return false;
   const folderId = await pickAssetFolder(t("regenerate"), t("regenerateFolder"));
   if (folderId === undefined) return false;
   const detailRecord = [...state.assetDetailWindows.values()].find((item) => item.jobId === jobId);
@@ -5734,7 +5766,13 @@ function closeLocalAssets() {
 async function deleteLocalArtifacts() {
   const ids = Array.from(state.localAssetSelected).filter((assetId) => localAssetCanDelete(state.localAssets.find((asset) => asset.id === assetId) || {}));
   if (!ids.length) return;
-  if (!window.confirm(localized(`确认删除选中的 ${ids.length} 项本地产物？任务与工作流记录会保留。`, `Delete the selected ${ids.length} local outputs? Task and workflow records are kept.`))) return;
+  const confirmed = await confirmAction({
+    title: localized("删除本地产物", "Delete local outputs"),
+    subtitle: localized("任务与工作流记录会保留", "Task and workflow records are kept"),
+    message: localized(`确认删除选中的 ${ids.length} 项本地产物？`, `Delete the selected ${ids.length} local outputs?`),
+    icon: "trash-2",
+  });
+  if (!confirmed) return;
   try {
     const result = await api("/api/v1/assets/local/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset_ids: ids }) });
     state.localAssetChanged = Boolean(result.deleted?.length);
@@ -5773,7 +5811,13 @@ async function confirmOldVideoCleanup() {
   const confirmMessage = state.locale === "en"
     ? `Delete the following ${summary} of video assets? Task records will be kept.`
     : `确认清除以下 ${summary} 的视频素材？任务记录会保留。`;
-  if (!window.confirm(confirmMessage)) return;
+  const confirmed = await confirmAction({
+    title: localized("清除旧视频", "Clear old videos"),
+    subtitle: localized("任务记录会保留", "Task records are kept"),
+    message: confirmMessage,
+    icon: "calendar-minus",
+  });
+  if (!confirmed) return;
   try {
     const result = await api("/api/v1/assets/local/clear-old-video", { method: "POST" });
     closeOldVideoCleanup();
@@ -6122,6 +6166,71 @@ function stopSidebarResize() {
   ensureAssetGridFilled().catch((error) => showError(error.message));
 }
 
+let confirmResolver = null;
+let confirmReturnFocus = null;
+
+function confirmAction({
+  title = localized("确认删除", "Confirm deletion"),
+  subtitle = localized("此操作无法撤销", "This action cannot be undone"),
+  message = "",
+  confirmLabel = t("delete"),
+  cancelLabel = t("cancel"),
+  tone = "danger",
+  icon: iconName = "trash-2",
+} = {}) {
+  if (confirmResolver) finishConfirm(false);
+  const modal = el("confirmModal");
+  confirmReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  el("confirmTitle").textContent = title;
+  el("confirmSubtitle").textContent = subtitle;
+  el("confirmSubtitle").hidden = !subtitle;
+  el("confirmMessage").textContent = message;
+  el("confirmCancel").textContent = cancelLabel;
+  el("confirmAccept").textContent = confirmLabel;
+  const accept = el("confirmAccept");
+  accept.className = tone === "danger" ? "danger" : "primary";
+  const mark = el("confirmMark");
+  mark.classList.toggle("danger", tone === "danger");
+  mark.innerHTML = icon(iconName);
+  modal.hidden = false;
+  document.body.classList.add("modal-open");
+  refreshIcons();
+  requestAnimationFrame(() => el("confirmCancel").focus());
+  return new Promise((resolve) => { confirmResolver = resolve; });
+}
+
+function finishConfirm(value) {
+  const resolve = confirmResolver;
+  confirmResolver = null;
+  el("confirmModal").hidden = true;
+  const otherModalOpen = [...document.querySelectorAll(".modal-overlay:not(#confirmModal), .secret-overlay, .asset-detail-layer")]
+    .some((node) => !node.hidden);
+  if (!otherModalOpen) document.body.classList.remove("modal-open");
+  if (confirmReturnFocus?.isConnected) confirmReturnFocus.focus();
+  confirmReturnFocus = null;
+  if (resolve) resolve(Boolean(value));
+}
+
+function initConfirmDialog() {
+  el("confirmCancel").addEventListener("click", () => finishConfirm(false));
+  el("confirmAccept").addEventListener("click", () => finishConfirm(true));
+  el("confirmModal").addEventListener("click", (event) => {
+    if (event.target === el("confirmModal")) finishConfirm(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (el("confirmModal").hidden) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      finishConfirm(false);
+    } else if (event.key === "Enter" && document.activeElement?.id !== "confirmCancel") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      finishConfirm(true);
+    }
+  }, true);
+}
+
 function dismissToast(toast) {
   if (!toast || toast.dataset.leaving === "true") return;
   toast.dataset.leaving = "true";
@@ -6307,7 +6416,14 @@ async function connectPeer(event) {
 }
 
 async function revokePeer(deviceId) {
-  if (!window.confirm(localized("确认撤销该设备的素材库访问授权？", "Revoke this device's library access?"))) return;
+  const confirmed = await confirmAction({
+    title: localized("撤销设备访问", "Revoke device access"),
+    subtitle: localized("该设备将无法再访问本机素材库", "The device will lose access to this library"),
+    message: localized("确认撤销该设备的素材库访问授权？", "Revoke this device's library access?"),
+    confirmLabel: localized("撤销", "Revoke"),
+    icon: "user-x",
+  });
+  if (!confirmed) return;
   try {
     const result = await api(`/api/v1/peering/peers/${encodeURIComponent(deviceId)}`, { method: "DELETE" });
     const peer = state.peering?.peers?.find((item) => item.device_id === deviceId);
@@ -7158,6 +7274,7 @@ window.addEventListener("resize", () => {
 });
 
 async function initialize() {
+  initConfirmDialog();
   applyTheme(currentTheme(), { persist: false });
   applyMessageStyle(storedMessageStyle(), { persist: false, render: false });
   applyAssetLibraryVisibility(storedShowAssetLibrary(), { persist: false, animate: false });

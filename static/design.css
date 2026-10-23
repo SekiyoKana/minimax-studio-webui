@@ -2142,3 +2142,50 @@ html[data-composer-style="floating"] .composer-hotzone:focus-visible { outline: 
   html[data-composer-style="floating"] .composer-hotzone { height: 72px; }
   .conversation-jump { right: 14px; bottom: calc(var(--composer-offset, 120px) + 12px); width: 36px; height: 36px; }
 }
+
+/* In-app confirmation dialog */
+.confirm-modal { z-index: 160; }
+.confirm-dialog {
+  width: min(430px, 100%);
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: 0 26px 70px rgba(18, 20, 22, .22), 0 4px 16px rgba(18, 20, 22, .08);
+}
+.confirm-header { display: flex; align-items: flex-start; gap: 13px; }
+.confirm-mark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--fill-quaternary);
+  color: var(--muted);
+}
+.confirm-mark.danger {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+.confirm-mark svg { width: 18px; height: 18px; }
+.confirm-dialog h2 { margin: 1px 0 0; color: var(--ink); font-size: var(--text-heading); font-weight: 600; letter-spacing: -.02em; }
+.confirm-subtitle { margin: 4px 0 0; color: var(--quiet); font-size: var(--text-caption); line-height: 1.4; }
+.confirm-message { margin: 16px 0 22px; color: var(--muted); font-size: var(--text-ui); line-height: 1.6; overflow-wrap: anywhere; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.confirm-actions button {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: var(--text-caption);
+  font-weight: 500;
+}
+.confirm-actions button:hover { background: var(--surface-soft); }
+.confirm-actions button.danger { border-color: var(--danger); background: var(--danger); color: #fff; }
+.confirm-actions button.danger:hover { background: color-mix(in srgb, var(--danger) 88%, #000); }
+.confirm-actions button.primary { border-color: var(--blue); background: var(--blue); color: #fff; }
+.confirm-actions button.primary:hover { background: #0077ed; }

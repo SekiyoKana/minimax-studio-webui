@@ -28,13 +28,13 @@
       })();
     </script>
     <link rel="stylesheet" href="/assets/styles.css?v=68&rev=78">
-    <link rel="stylesheet" href="/assets/design.css?v=61">
+    <link rel="stylesheet" href="/assets/design.css?v=62">
     <link rel="stylesheet" href="/assets/skins/skins.css?v=10">
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
     <script src="/assets/dropdown.js?v=4" defer></script>
     <script src="/assets/motion.js?v=4" defer></script>
-    <script src="/assets/app.js?v=124&rev=136&upscale=1" defer></script>
+    <script src="/assets/app.js?v=125&rev=137&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -641,6 +641,20 @@
         <div class="old-video-cleanup-summary" id="oldVideoCleanupSummary">0 项 · 0 B</div>
         <div class="old-video-cleanup-list" id="oldVideoCleanupList"></div>
         <footer class="old-video-cleanup-footer"><button type="button" id="cancelOldVideoCleanup">取消</button><button class="danger" type="button" id="confirmOldVideoCleanup"><i data-lucide="trash-2"></i><span>确认清除</span></button></footer>
+      </section>
+    </div>
+
+    <div class="modal-overlay confirm-modal" id="confirmModal" hidden>
+      <section class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+        <header class="confirm-header">
+          <span class="confirm-mark" id="confirmMark"><i data-lucide="trash-2"></i></span>
+          <div><h2 id="confirmTitle">确认删除</h2><p id="confirmSubtitle">此操作无法撤销</p></div>
+        </header>
+        <p class="confirm-message" id="confirmMessage"></p>
+        <footer class="confirm-actions">
+          <button type="button" id="confirmCancel">取消</button>
+          <button type="button" class="danger" id="confirmAccept">删除</button>
+        </footer>
       </section>
     </div>
 

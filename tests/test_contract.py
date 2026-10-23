@@ -1015,7 +1015,7 @@ class ContractTests(unittest.TestCase):
         self.assertIn('download.href = downloadable ? job.result_url : "#"', app_js)
         self.assertIn('function mediaDownloadLabel(mediaType)', app_js)
         self.assertIn('data-job-action="regenerate"', app_js)
-        self.assertIn('window.confirm(t("regenerateConfirm"))', app_js)
+        self.assertIn('message: t("regenerateConfirm")', app_js)
         self.assertIn('async function regenerateJob(jobId)', app_js)
         self.assertIn('"/api/v1/generations/{job_id}/regenerate"', main)
         self.assertIn("shutil.copy2(source, destination)", main)
