@@ -287,6 +287,7 @@ class GeneralSettingsUpdate(BaseModel):
     remote_disconnect_policy: Literal["encrypt", "delete"] | None = None
     remote_records_key: str | None = Field(default=None, min_length=8, max_length=256)
     bind_local_comfyui: bool | None = None
+    local_comfy_command: str | None = Field(default=None, max_length=2000)
 
 
 class AssetArtifactsDeleteRequest(BaseModel):
@@ -821,6 +822,7 @@ async def start_local_comfy_node(node_id: str):
             str(node.get("name") or node_id),
             str(node.get("url") or ""),
             str(node.get("launch_path") or ""),
+            command_template=local_state.general_settings().get("local_comfy_command"),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

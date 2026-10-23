@@ -115,6 +115,7 @@ Jobs run from a snapshot of the graph, mappings, version and target nodes captur
 - The switch in the top-right corner of a node card starts or stops the supervised process. A private environment inside the launch directory (`venv`, `.venv`, `env`, with `Scripts/python` on Windows and `bin/python` on macOS) is preferred; otherwise the global Python is used.
 - The child process runs with `--listen 127.0.0.1 --port <node port>`, logs to `data/local-comfy/<node>.log` and mirrors into the run log; failures show the original error on the card.
 - Quitting the app terminates the processes it started (with a Windows Job object as a backstop). ComfyUI started elsewhere is left alone and cannot be stopped from the app; the UI asks you to close it manually.
+- Settings includes a "ComfyUI launch command" field, defaulting to `{python} {script} --listen {host} --port {port}`. It supports `{python}`, `{script}`, `{workdir}`, `{host}` and `{port}` placeholders and accepts extra arguments.
 
 ## Data flow
 
@@ -153,7 +154,7 @@ Once a job reaches a terminal state, `elapsed_seconds` is derived from `started_
 - Built-in workflows are seeded into the database on first start; runtime execution no longer depends on workflow environment variables.
 - Bundled workflows and synced custom workflows use the `H3Studio_` filename prefix.
 - Reference and asset files open in a unified preview dialog.
-- Local ComfyUI supervision: launch path, private environment, managed process and live logs.
+- Local ComfyUI supervision: launch path, editable launch command, private environment, managed process and live logs.
 
 ### 2026-10-22
 

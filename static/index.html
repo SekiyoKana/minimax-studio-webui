@@ -29,7 +29,7 @@
     <link rel="stylesheet" href="/assets/dropdown.css?v=4">
     <script id="lucideScript" src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" async></script>
     <script src="/assets/dropdown.js?v=4" defer></script>
-    <script src="/assets/app.js?v=102&rev=114&upscale=1" defer></script>
+    <script src="/assets/app.js?v=103&rev=115&upscale=1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversationFeed">跳到对话</a>
@@ -557,6 +557,8 @@
           <section class="settings-tab-panel" id="settingsPanelExperimental" role="tabpanel" aria-labelledby="settingsTabExperimental" data-settings-panel="experimental" hidden>
             <label class="switch-row"><span>绑定本地 ComfyUI 服务</span><input id="bindLocalComfyui" type="checkbox"><span class="switch"></span></label>
             <p class="settings-help" id="bindLocalComfyuiHelp">开启后，本机环境的 ComfyUI 节点会显示「可接管」标签；在节点编辑中填写启动路径后，可在推理节点面板直接开启或关闭该 ComfyUI 服务。</p>
+            <label id="localComfyCommandField" hidden><span id="localComfyCommandLabel">ComfyUI 启动命令</span><input id="localComfyCommand" type="text" maxlength="2000" autocomplete="off" spellcheck="false" value="{python} {script} --listen {host} --port {port}"></label>
+            <p class="settings-help" id="localComfyCommandHelp" hidden>支持 {python}、{script}、{workdir}、{host}、{port} 占位符；默认使用当前 ComfyUI 启动方式。</p>
             <p class="settings-help" id="bindLocalComfyuiEnvHelp">启动时优先使用节点目录中的私有环境（如 venv、.venv、env），找不到时回退到全局 Python 环境。启动失败会在「实时日志」中记录失败原因和原始报错。</p>
           </section>
           <p class="settings-error" id="globalSettingsError" role="alert"></p>

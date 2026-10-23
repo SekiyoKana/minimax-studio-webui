@@ -248,6 +248,10 @@ class LocalStateStore:
                 "remote_disconnect_policy", "encrypt"
             ),
             "bind_local_comfyui": self.get_setting("bind_local_comfyui", "0") == "1",
+            "local_comfy_command": self.get_setting(
+                "local_comfy_command",
+                "{python} {script} --listen {host} --port {port}",
+            ),
         }
         if include_secret:
             result["remote_records_key"] = self.get_setting("remote_records_key")
@@ -265,6 +269,7 @@ class LocalStateStore:
         remote_disconnect_policy: str | None = None,
         remote_records_key: str | None = None,
         bind_local_comfyui: bool | None = None,
+        local_comfy_command: str | None = None,
     ) -> dict[str, Any]:
         bool_values = {
             "show_runtime_logs": show_runtime_logs,
@@ -285,6 +290,11 @@ class LocalStateStore:
         if remote_records_key is not None:
             self.validate_remote_records_key(remote_records_key)
             self.set_setting("remote_records_key", remote_records_key)
+        if local_comfy_command is not None:
+            command = local_comfy_command.strip()
+            if not 1 <= len(command) <= 2000 or "\n" in command or "\r" in command:
+                raise ValueError("ComfyUI 启动命令长度必须为 1 至 2000 个字符，且不能包含换行")
+            self.set_setting("local_comfy_command", command)
         self.record_event("general_settings_updated")
         return self.general_settings()
 

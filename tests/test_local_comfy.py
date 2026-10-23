@@ -18,8 +18,10 @@ from fastapi import HTTPException
 
 from app import main as main_module
 from app.local_comfy import (
+    DEFAULT_COMMAND_TEMPLATE,
     LocalComfySupervisor,
     _path_variants,
+    render_launch_command,
     resolve_launch_target,
     url_port,
     venv_python_candidates,
@@ -90,6 +92,40 @@ class LaunchTargetTests(unittest.TestCase):
         home = str(Path.home())
         variants = _path_variants("~/ComfyUI")
         self.assertIn(os.path.normpath(os.path.join(home, "ComfyUI")), [os.path.normpath(str(item)) for item in variants])
+
+    def test_launch_command_template_uses_placeholders(self):
+        command = render_launch_command(
+            DEFAULT_COMMAND_TEMPLATE,
+            ["/usr/bin/python3"],
+            Path("/opt/ComfyUI/main.py"),
+            Path("/opt/ComfyUI"),
+            "127.0.0.1",
+            8193,
+        )
+        self.assertEqual(
+            command,
+            ["/usr/bin/python3", "/opt/ComfyUI/main.py", "--listen", "127.0.0.1", "--port", "8193"],
+        )
+
+    def test_launch_command_template_accepts_custom_arguments(self):
+        command = render_launch_command(
+            "{python} {script} --preview-method auto --port {port}",
+            ["python3"],
+            Path("/opt/ComfyUI/main.py"),
+            Path("/opt/ComfyUI"),
+            "localhost",
+            8188,
+        )
+        self.assertEqual(
+            command,
+            ["python3", "/opt/ComfyUI/main.py", "--preview-method", "auto", "--port", "8188"],
+        )
+
+    def test_launch_command_template_rejects_empty_or_invalid_quotes(self):
+        with self.assertRaises(ValueError):
+            render_launch_command("   ", ["python3"], Path("main.py"), Path("."), "127.0.0.1", 8188)
+        with self.assertRaises(ValueError):
+            render_launch_command('"unterminated', ["python3"], Path("main.py"), Path("."), "127.0.0.1", 8188)
 
     def test_rejects_empty_path(self):
         with self.assertRaises(ValueError) as ctx:

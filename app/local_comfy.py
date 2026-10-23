@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -30,6 +31,7 @@ VENV_DIR_NAMES = ("venv", ".venv", "env", ".env", "python_env")
 EMBEDDED_PYTHON_DIRS = ("python_embeded", "python_embedded")
 LOG_TAIL_LINES = 40
 LOG_MAX_BYTES = 5 * 1024 * 1024
+DEFAULT_COMMAND_TEMPLATE = "{python} {script} --listen {host} --port {port}"
 SAFE_ID = re.compile(r"[^A-Za-z0-9_.-]+")
 SHUTDOWN_TIMEOUT = 6.0
 
@@ -310,6 +312,50 @@ class _ProcessTreeGuard:
             return None
 
 
+def _command_tokens(template: str) -> list[str]:
+    """Split a launch command while keeping Windows paths intact."""
+    try:
+        tokens = shlex.split(template, posix=os.name != "nt")
+    except ValueError as exc:
+        raise ValueError(f"ComfyUI 启动命令格式无效：{exc}") from exc
+    if os.name == "nt":
+        tokens = [
+            token[1:-1]
+            if len(token) >= 2 and token[0] == token[-1] and token[0] in {"'", '"'}
+            else token
+            for token in tokens
+        ]
+    return tokens
+
+
+def render_launch_command(
+    template: str,
+    python_command: list[str],
+    script: Path,
+    workdir: Path,
+    listen: str,
+    port: int,
+) -> list[str]:
+    tokens = _command_tokens((template or "").strip())
+    if not tokens:
+        raise ValueError("ComfyUI 启动命令不能为空")
+    result: list[str] = []
+    for token in tokens:
+        if token == "{python}":
+            result.extend(python_command)
+            continue
+        value = token.replace("{python}", " ".join(python_command))
+        value = value.replace("{script}", str(script))
+        value = value.replace("{workdir}", str(workdir))
+        value = value.replace("{host}", listen)
+        value = value.replace("{port}", str(port))
+        if value:
+            result.append(value)
+    if not result:
+        raise ValueError("ComfyUI 启动命令不能为空")
+    return result
+
+
 class LocalComfySupervisor:
     """托管本机 ComfyUI 进程：启动、就绪探测、关闭与日志收集。"""
 
@@ -352,6 +398,7 @@ class LocalComfySupervisor:
         url: str,
         launch_path: str,
         *,
+        command_template: str | None = None,
         wait: float | None = None,
     ) -> dict[str, Any]:
         key = str(node_id)
@@ -420,13 +467,25 @@ class LocalComfySupervisor:
             with self._lock:
                 self._states.pop(key, None)
             raise
-        log_path = self._log_path(key)
-        self._rotate_log(log_path)
-        offset = log_path.stat().st_size if log_path.exists() else 0
         port = url_port(url)
         host = url_host(url)
         listen = "127.0.0.1" if host in {"localhost", "::1", "0.0.0.0"} else host
-        command = [*python_command, str(script), "--listen", listen, "--port", str(port)]
+        try:
+            command = render_launch_command(
+                command_template or DEFAULT_COMMAND_TEMPLATE,
+                python_command,
+                script,
+                workdir,
+                listen,
+                port,
+            )
+        except ValueError:
+            with self._lock:
+                self._states.pop(key, None)
+            raise
+        log_path = self._log_path(key)
+        self._rotate_log(log_path)
+        offset = log_path.stat().st_size if log_path.exists() else 0
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
         env["PYTHONIOENCODING"] = "utf-8"

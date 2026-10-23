@@ -401,6 +401,8 @@ function applyStaticLocale() {
   setText("#settingsTabUpload", "Upload");
   setText("#settingsTabExperimental", "Experimental");
   setText("#bindLocalComfyuiHelp", "When enabled, ComfyUI nodes on this machine show a Manageable badge; fill in a launch path in the node editor to start and stop that ComfyUI from the inference node panel.");
+  setText("#localComfyCommandLabel", "ComfyUI launch command");
+  setText("#localComfyCommandHelp", "Placeholders: {python}, {script}, {workdir}, {host}, {port}. The default mirrors the current ComfyUI launch.");
   setText("#bindLocalComfyuiEnvHelp", "Launching prefers the node directory's private environment (venv, .venv, env) and falls back to the global Python environment. Failures are logged with the original error in Live logs.");
   setText("#videoUpscaleTitle", "Video upscale");
   setText("#videoUpscaleSubtitle", "Choose the upscale type and scale. This runs an independent upscale workflow without changing your current selection.");
@@ -1005,6 +1007,9 @@ function launchPathPlaceholder() {
 }
 
 function syncLocalComfyFields() {
+  const enabled = state.bindLocalComfyui === true;
+  if (el("localComfyCommandField")) el("localComfyCommandField").hidden = !enabled;
+  if (el("localComfyCommandHelp")) el("localComfyCommandHelp").hidden = !enabled;
   const field = el("nodeLaunchPathField");
   if (!field) return;
   const runningHub = el("nodeProvider")?.value === "runninghub";
@@ -4597,6 +4602,7 @@ async function loadGeneralSettings() {
   el("excludeRunningHubAuto").checked = state.excludeRunningHubAuto;
   state.bindLocalComfyui = payload.bind_local_comfyui === true;
   el("bindLocalComfyui").checked = state.bindLocalComfyui;
+  el("localComfyCommand").value = payload.local_comfy_command || "{python} {script} --listen {host} --port {port}";
   syncLocalComfyFields();
   applyRunningHubAvailability();
   el("remoteDisconnectPolicy").value = payload.remote_disconnect_policy || "encrypt";
@@ -4621,6 +4627,10 @@ async function saveGeneralSettings(event) {
     errorBox.textContent = localized("远程记录密钥长度必须为 8 至 256 个字符", "Remote records key must be 8 to 256 characters");
     return;
   }
+  if (el("bindLocalComfyui").checked && !el("localComfyCommand").value.trim()) {
+    errorBox.textContent = localized("请填写 ComfyUI 启动命令", "Enter the ComfyUI launch command");
+    return;
+  }
   try {
     const payload = await api("/api/v1/settings/general", {
       method: "PATCH",
@@ -4633,6 +4643,7 @@ async function saveGeneralSettings(event) {
         runninghub_enabled: el("runninghubEnabled").checked,
         exclude_runninghub_auto: el("excludeRunningHubAuto").checked,
         bind_local_comfyui: el("bindLocalComfyui").checked,
+        local_comfy_command: el("localComfyCommand").value,
         remote_disconnect_policy: el("remoteDisconnectPolicy").value,
         remote_records_key: key,
       }),
@@ -5821,6 +5832,10 @@ el("themeGrid")?.addEventListener("keydown", (event) => {
 el("closeGlobalSettings").addEventListener("click", closeGlobalSettings);
 el("globalSettingsModal").addEventListener("click", (event) => { if (event.target === el("globalSettingsModal")) closeGlobalSettings(); });
 el("globalSettingsForm").addEventListener("submit", saveGeneralSettings);
+el("bindLocalComfyui").addEventListener("change", () => {
+  state.bindLocalComfyui = el("bindLocalComfyui").checked;
+  syncLocalComfyFields();
+});
 el("toggleRemoteRecordsKey").addEventListener("click", () => togglePasswordField("remoteRecordsKey", "toggleRemoteRecordsKey"));
 el("manageLocalAssets").addEventListener("click", openLocalAssets);
 el("closeLocalAssets").addEventListener("click", closeLocalAssets);

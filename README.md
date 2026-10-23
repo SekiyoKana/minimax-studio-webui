@@ -115,6 +115,7 @@ MiniMax H3 Studio 为 MiniMax H3、H3 TTS、数字人、Music3 和通用 Running
 - 节点卡片右上角的开关用于启动 / 停止托管进程。启动时优先使用启动目录中的私有环境（`venv`、`.venv`、`env`，Windows 取 `Scripts/python`，macOS 取 `bin/python`），找不到则回退全局 Python。
 - 子进程以 `--listen 127.0.0.1 --port <节点端口>` 运行，日志写入 `data/local-comfy/<节点>.log` 并同步到运行日志；启动失败会在卡片内显示原始报错。
 - 应用退出时会结束自己启动的托管进程（Windows 额外用 Job 对象兜底）；外部启动的 ComfyUI 不受影响，应用内也无法关闭，只会提示手动关闭。
+- 设置页提供「ComfyUI 启动命令」，默认 `{python} {script} --listen {host} --port {port}`，支持 `{python}`、`{script}`、`{workdir}`、`{host}`、`{port}` 占位符，可自行追加参数。
 
 ## 数据流程
 
@@ -153,7 +154,7 @@ flowchart LR
 - 内置工作流改为首次建库时从 `workflows/` 写入数据库，运行时不再依赖工作流环境变量。
 - 所有内置和同步到 ComfyUI 的工作流文件统一使用 `H3Studio_` 前缀。
 - 素材、参考文件和详情源文件支持统一弹窗预览。
-- 增加本地 ComfyUI 接管：启动路径、私有环境、托管进程和实时日志。
+- 增加本地 ComfyUI 接管：启动路径、可编辑启动命令、私有环境、托管进程和实时日志。
 
 ### 2026-10-22
 
