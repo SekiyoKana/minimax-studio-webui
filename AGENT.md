@@ -217,7 +217,7 @@ DELETE /api/v1/workflows/{workflow_id}
 POST   /api/v1/workflows/{workflow_id}/sync
 ```
 
-自定义工作流通过 `POST /api/v1/workflows` 创建，`workflow_json` 必须是 ComfyUI API 格式（编辑器 UI 格式不能直接使用），并按需提供 `field_mappings`、`reference_mappings`、`static_inputs`、`result_node_id`、`media_type`、`target_node_ids` 和 `visible_in_composer`。`field_mappings` 支持 `prompt`、`lyrics`、`width`、`height`、`duration`、`num_frames`、`steps` 和 `seed`。
+自定义工作流通过 `POST /api/v1/workflows` 创建，`workflow_json` 必须是 ComfyUI API 格式（编辑器 UI 格式不能直接使用），并按需提供 `field_mappings`、`reference_mappings`、`static_inputs`、`result_node_id`、`media_type`、`target_node_ids` 和 `visible_in_composer`。`field_mappings` 支持 `prompt`、`lyrics`、`width`、`height`、`ratio`、`megapixels`、`duration`、`num_frames`、`steps` 和 `seed`。
 
 在私密模式中创建的自定义工作流及 H3 NSFW · NaughtyTimes LoRA 预设仅对携带有效 `X-H3-Incognito-Code` 请求头的工作流接口可见或可操作。提交私密工作流任务还必须设置 `incognito=true`；普通模式不能提交或重新生成私密工作流任务。
 

@@ -601,7 +601,7 @@ button:active:not(:disabled) { transform: scale(.97); }
 /* Header actions and toolbar widths after moving utilities to the right */
 .header-actions { gap: 6px; }
 .engine-state { gap: 8px; }
-.composer-toolbar .compact-control select { max-width: 120px; }
+.composer-toolbar .compact-control select { max-width: 128px; }
 .composer-toolbar .execution-control select { max-width: 150px; }
 .composer-toolbar .node-control select { max-width: 145px; }
 .composer-toolbar .workflow-control select { max-width: 155px; }
@@ -2075,7 +2075,7 @@ html[data-composer-style="floating"] .composer {
   z-index: 24;
   bottom: 0;
   left: 50%;
-  width: min(780px, calc(100% - 48px));
+  width: min(880px, calc(100% - 40px));
   margin: 0;
   opacity: 0;
   transform: translate(-50%, 106%);

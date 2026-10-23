@@ -490,6 +490,148 @@ class ComfyUIH3Engine:
             uploaded.append(f"{stored_folder}/{stored_name}" if stored_folder else stored_name)
         return uploaded
 
+    def _align_workflow_combo_values(
+        self, client, workflow: dict[str, Any], snapshot: dict[str, Any]
+    ) -> None:
+        """Match compact composer tokens against declared combo options.
+
+        The composer sends short tokens such as ``16:9``, while custom nodes
+        declare full option labels such as ``16:9 (Widescreen)``. ComfyUI
+        rejects anything that is not one of the declared labels, so map each
+        mapped input onto the option it prefixes before queueing the prompt.
+        """
+        bindings = snapshot.get("field_mappings")
+        if not isinstance(bindings, dict):
+            return
+        cache: dict[str, dict[str, list[str]]] = {}
+        for binding in bindings.values():
+            if not isinstance(binding, dict):
+                continue
+            node = workflow.get(str(binding.get("node_id")))
+            inputs = node.get("inputs") if isinstance(node, dict) else None
+            input_name = str(binding.get("input") or "")
+            if not isinstance(inputs, dict) or input_name not in inputs:
+                continue
+            value = inputs[input_name]
+            class_type = str(node.get("class_type") or "")
+            if not isinstance(value, str) or not value or not class_type:
+                continue
+            if class_type not in cache:
+                cache[class_type] = self._comfy_combo_options(client, class_type)
+            options = cache[class_type].get(input_name) or []
+            if not options or value in options:
+                continue
+            match = next(
+                (option for option in options if option.split(" (")[0].strip() == value),
+                None,
+            )
+            if match is not None:
+                inputs[input_name] = match
+
+    @staticmethod
+    def _comfy_combo_options(client, class_type: str) -> dict[str, list[str]]:
+        try:
+            response = client.get(f"/object_info/{class_type}")
+            response.raise_for_status()
+            definition = (response.json() or {}).get(class_type) or {}
+        except Exception:
+            return {}
+        options: dict[str, list[str]] = {}
+        for section in ("required", "optional"):
+            specs = (definition.get("input") or {}).get(section) or {}
+            for name, spec in specs.items():
+                choices: list[Any] = []
+                if isinstance(spec, list) and spec:
+                    if isinstance(spec[0], list):
+                        choices = spec[0]
+                    elif spec[0] == "COMBO" and len(spec) > 1 and isinstance(spec[1], dict):
+                        choices = spec[1].get("options") or []
+                options[str(name)] = [item for item in choices if isinstance(item, str)]
+        return {name: values for name, values in options.items() if values}
+
+    @staticmethod
+    def _custom_node_stage_label(class_type: str) -> str:
+        """Best-effort Chinese stage label for a third-party node class."""
+        text = (class_type or "").lower()
+        if any(token in text for token in ("checkpoint", "unet", "diffusion", "gguf", "model")):
+            return "加载模型"
+        if "lora" in text:
+            return "加载 LoRA"
+        if any(token in text for token in ("clip", "textencode", "text_encode", "t5", "qwen", "encoder")):
+            return "编码提示词"
+        if "vae" in text:
+            return "VAE 编解码"
+        if any(token in text for token in ("sampler", "guider", "scheduler", "sigmas", "noise", "cfg")):
+            return "采样"
+        if "latent" in text:
+            return "处理潜空间"
+        if any(token in text for token in ("save", "preview", "output")):
+            return "保存结果"
+        if "load" in text:
+            return "加载素材"
+        if any(token in text for token in ("upscale", "resize", "scale")):
+            return "放大/缩放"
+        if "video" in text:
+            return "视频处理"
+        if "audio" in text:
+            return "音频处理"
+        if "image" in text:
+            return "图像处理"
+        if any(token in text for token in ("condition", "control")):
+            return "条件控制"
+        if any(token in text for token in ("detail", "face")):
+            return "细节修复"
+        if any(token in text for token in ("resolution", "aspect", "math", "primitive", "value", "number")):
+            return "准备参数"
+        return "执行节点"
+
+    @staticmethod
+    def _custom_workflow_stages(workflow: dict[str, Any]) -> dict[str, tuple[int, str]]:
+        """Derive generic stage hints for an arbitrary ComfyUI graph.
+
+        Preset node ids are meaningless for third-party workflows: node ``13``
+        may be a music captions encoder in the Music3 preset but a scheduler in
+        someone else's graph. Label nodes from their ``class_type`` instead and
+        spread percentages along dependency depth so the bar still advances.
+        """
+        nodes = {
+            str(node_id): node
+            for node_id, node in (workflow or {}).items()
+            if isinstance(node, dict)
+        }
+        if not nodes:
+            return {}
+        order = list(nodes)
+        index = {node_id: position for position, node_id in enumerate(order)}
+        depths: dict[str, int] = {}
+
+        def depth(node_id: str, visiting: frozenset[str] = frozenset()) -> int:
+            if node_id in depths:
+                return depths[node_id]
+            if node_id in visiting:
+                return 0
+            value = 0
+            for item in (nodes[node_id].get("inputs") or {}).values():
+                if (
+                    isinstance(item, list)
+                    and len(item) == 2
+                    and isinstance(item[0], str)
+                    and item[0] in nodes
+                    and item[0] != node_id
+                ):
+                    value = max(value, depth(item[0], visiting | {node_id}) + 1)
+            depths[node_id] = value
+            return value
+
+        ordered = sorted(order, key=lambda node_id: (depth(node_id), index[node_id]))
+        total = len(ordered)
+        stages: dict[str, tuple[int, str]] = {}
+        for position, node_id in enumerate(ordered, start=1):
+            class_type = str(nodes[node_id].get("class_type") or "")
+            label = ComfyUIH3Engine._custom_node_stage_label(class_type)
+            stages[node_id] = (min(96, 6 + round(position / total * 88)), label)
+        return stages
+
     @staticmethod
     def _comfy_cuda_device(system_stats: dict[str, Any]) -> str:
         for device in system_stats.get("devices", []):
@@ -1155,6 +1297,11 @@ class ComfyUIH3Engine:
             tts = not custom and self._execution_mode(job) == "tts"
             sa = self._execution_mode(job) == "h3-sa"
             vdn = self._execution_mode(job) == "vdn-h3"
+            custom_stages = (
+                self._custom_workflow_stages(workflow_snapshot.get("workflow_json") or {})
+                if custom
+                else None
+            )
             progress(2, "准备 ComfyUI 自定义工作流" if custom else "准备 ComfyUI Music3 工作流" if music3 else "准备 ComfyUI H3 TTS 工作流" if tts else "准备 ComfyUI H3 SA 工作流" if sa else "准备 ComfyUI VDN-H3 工作流" if vdn else "准备 ComfyUI FP8 工作流")
             timeout = httpx.Timeout(30, connect=10)
             with httpx.Client(
@@ -1172,6 +1319,7 @@ class ComfyUIH3Engine:
                         cancelled,
                         tts,
                         recovering=True,
+                        stage_map=custom_stages,
                     )
                     progress(98, "回传 ComfyUI 生成产物")
                     output = self._copy_result(job, history, client)
@@ -1189,6 +1337,8 @@ class ComfyUIH3Engine:
                     save_latent_prefix=save_latent_prefix,
                     save_latent_clip_index=save_latent_clip_index,
                 )
+                if custom:
+                    self._align_workflow_combo_values(client, workflow, workflow_snapshot)
                 with connect(
                     f"{websocket_url}/ws?clientId={client_id}",
                     additional_headers=self.api_headers or None,
@@ -1215,7 +1365,10 @@ class ComfyUIH3Engine:
                         client_id=client_id,
                     )
                     progress(4, f"已提交 ComfyUI 任务 {prompt_id[:8]}")
-                    history = self._wait_for_finished(socket, client, prompt_id, progress, cancelled, tts)
+                    history = self._wait_for_finished(
+                        socket, client, prompt_id, progress, cancelled, tts,
+                        stage_map=custom_stages,
+                    )
                 if cancelled():
                     self._cancel_prompt(client, prompt_id)
                     raise InterruptedError("generation cancelled")
@@ -1277,6 +1430,7 @@ class ComfyUIH3Engine:
         cancelled,
         audio_only=False,
         recovering=False,
+        stage_map=None,
     ):
         import httpx
 
@@ -1340,6 +1494,8 @@ class ComfyUIH3Engine:
             stage = (
                 "ComfyUI H3 TTS 工作流执行中"
                 if audio_only and prompt_id in running
+                else "ComfyUI 自定义工作流执行中"
+                if stage_map is not None and prompt_id in running
                 else "ComfyUI FP8 工作流执行中"
                 if prompt_id in running
                 else "等待 ComfyUI 执行"
@@ -1356,7 +1512,10 @@ class ComfyUIH3Engine:
         cancelled,
         audio_only=False,
         recovering=False,
+        stage_map=None,
     ):
+        executed: set[str] = set()
+        current_percent = 6
         while True:
             if cancelled():
                 self._cancel_prompt(client, prompt_id)
@@ -1374,6 +1533,7 @@ class ComfyUIH3Engine:
                         cancelled,
                         audio_only,
                         recovering=True,
+                        stage_map=stage_map,
                     )
                 if history:
                     return history
@@ -1389,6 +1549,7 @@ class ComfyUIH3Engine:
                         cancelled,
                         audio_only,
                         recovering=True,
+                        stage_map=stage_map,
                     )
                 active = self._prompt_ids(queue_data.get("queue_running", []))
                 active.update(self._prompt_ids(queue_data.get("queue_pending", [])))
@@ -1400,6 +1561,7 @@ class ComfyUIH3Engine:
                         cancelled,
                         audio_only,
                         recovering=True,
+                        stage_map=stage_map,
                     )
                 continue
             except Exception:
@@ -1410,6 +1572,7 @@ class ComfyUIH3Engine:
                     cancelled,
                     audio_only,
                     recovering=True,
+                    stage_map=stage_map,
                 )
             if isinstance(raw, bytes):
                 continue
@@ -1422,30 +1585,44 @@ class ComfyUIH3Engine:
             if data.get("prompt_id") != prompt_id:
                 continue
             if event_type == "execution_start":
-                progress(5, "ComfyUI H3 TTS 工作流开始执行" if audio_only else "ComfyUI FP8 工作流开始执行")
+                if stage_map is not None:
+                    progress(5, "ComfyUI 自定义工作流开始执行")
+                else:
+                    progress(5, "ComfyUI H3 TTS 工作流开始执行" if audio_only else "ComfyUI FP8 工作流开始执行")
             elif event_type == "executing":
                 node = str(data.get("node"))
-                if node in self.NODE_STAGES:
-                    percent, stage = self.NODE_STAGES[node]
+                stages = self.NODE_STAGES if stage_map is None else stage_map
+                if node in stages:
+                    if stage_map is None:
+                        percent, stage = stages[node]
+                    else:
+                        executed.add(node)
+                        percent = min(96, 6 + round(len(executed) / max(1, len(stage_map)) * 88))
+                        stage = stages[node][1]
+                        current_percent = percent
                     if audio_only and node == "92":
                         stage = "保存音频产物"
                     progress(percent, stage)
-                elif node.isdigit() and int(node) >= 200:
+                elif stage_map is None and node.isdigit() and int(node) >= 200:
                     progress(10, "加载 Ref2VA 参考素材")
                 elif data.get("node") is None:
                     history = self._history(client, prompt_id)
                     if history:
                         return history
-            elif event_type == "progress" and str(data.get("node")) == "125":
+            elif event_type == "progress":
+                node = str(data.get("node"))
                 value = int(data.get("value") or 0)
                 total = max(1, int(data.get("max") or 1))
-                percent = 15 + round(min(value, total) / total * 73)
-                progress(percent, f"TTS 音频采样 {value}/{total}" if audio_only else f"联合音视频采样 {value}/{total}")
-            elif event_type == "progress" and str(data.get("node")) == "9":
-                value = int(data.get("value") or 0)
-                total = max(1, int(data.get("max") or 1))
-                percent = 15 + round(min(value, total) / total * 73)
-                progress(percent, f"Music3 音频采样 {value}/{total}")
+                if stage_map is not None:
+                    stage = stage_map.get(node)
+                    if stage is not None:
+                        progress(current_percent, f"{stage[1]} {value}/{total}")
+                elif node == "125":
+                    percent = 15 + round(min(value, total) / total * 73)
+                    progress(percent, f"TTS 音频采样 {value}/{total}" if audio_only else f"联合音视频采样 {value}/{total}")
+                elif node == "9":
+                    percent = 15 + round(min(value, total) / total * 73)
+                    progress(percent, f"Music3 音频采样 {value}/{total}")
             elif event_type == "execution_success":
                 for _ in range(10):
                     history = self._history(client, prompt_id)

@@ -337,8 +337,8 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .runninghub-media-input b { font-size: var(--text-caption); font-weight: 500; }
 .runninghub-media-input small { color: var(--quiet); font-size: var(--text-micro); }
 .composer-toolbar { display: flex; min-height: 48px; align-items: center; gap: 7px; padding: 5px 7px 7px; }
-.toolbar-left { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 2px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
-.toolbar-row { display: flex; min-width: max-content; min-height: 34px; flex: 0 0 auto; align-items: center; gap: 2px; }
+.toolbar-left { display: flex; min-width: 0; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 2px; }
+.toolbar-row { display: flex; min-width: 0; min-height: 34px; flex: 0 1 auto; flex-wrap: wrap; align-items: center; gap: 2px; }
 .toolbar-actions { display: flex; min-width: 0; flex: 0 0 auto; align-items: center; gap: 2px; white-space: nowrap; }
 .attach-button { border: 1px dashed var(--line-strong); }
 .compact-control { display: inline-flex; height: 34px; flex: 0 0 auto; align-items: center; gap: 4px; padding: 0 5px 0 7px; border-radius: 10px; color: var(--muted); }

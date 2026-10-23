@@ -43,7 +43,18 @@ RETIRED_PRESET_IDS: tuple[str, ...] = (
     "preset-ref2va-turbo-4step",
 )
 
-FIELD_NAMES = {"prompt", "lyrics", "width", "height", "duration", "num_frames", "steps", "seed"}
+FIELD_NAMES = {
+    "prompt",
+    "lyrics",
+    "width",
+    "height",
+    "ratio",
+    "megapixels",
+    "duration",
+    "num_frames",
+    "steps",
+    "seed",
+}
 MEDIA_TYPES = {"image", "video", "audio"}
 REFERENCE_TYPES = MEDIA_TYPES
 # Link-style reference inputs on conditioning nodes, e.g. "ref_images.ref_image_0".

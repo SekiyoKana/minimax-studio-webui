@@ -1395,7 +1395,8 @@ async function deleteNode(nodeId) {
 }
 
 const WORKFLOW_FIELDS = [
-  ["prompt", "提示词"], ["lyrics", "歌词"], ["width", "宽度"], ["height", "高度"],
+  ["prompt", "提示词"], ["lyrics", "歌词"],
+  ["width", "宽度（由比例+像素换算）"], ["height", "高度（由比例+像素换算）"],
   ["ratio", "画面比例"], ["megapixels", "像素（MP）"],
   ["duration", "时长"], ["num_frames", "帧数"], ["steps", "步数"], ["seed", "随机种子"],
 ];

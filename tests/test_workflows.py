@@ -139,6 +139,35 @@ class WorkflowTests(unittest.TestCase):
                 media_type="video",
             )
 
+    def test_mapping_validation_accepts_ratio_and_megapixels(self):
+        graph = sample_workflow()
+        graph["1"]["inputs"].update({"ratio": "16:9", "megapixels": 0.4})
+        config = validate_workflow_config(
+            name="画幅工作流",
+            workflow_json=graph,
+            field_mappings={
+                "prompt": {"node_id": "1", "input": "text"},
+                "ratio": {"node_id": "1", "input": "ratio"},
+                "megapixels": {"node_id": "1", "input": "megapixels"},
+            },
+            reference_mappings=[],
+            static_inputs={},
+            result_node_id="2",
+            media_type="video",
+        )
+        self.assertEqual(config["field_mappings"]["ratio"]["input"], "ratio")
+        self.assertEqual(config["field_mappings"]["megapixels"]["input"], "megapixels")
+        with self.assertRaisesRegex(ValueError, "不支持的字段"):
+            validate_workflow_config(
+                name="未知字段工作流",
+                workflow_json=graph,
+                field_mappings={"guidance": {"node_id": "1", "input": "text"}},
+                reference_mappings=[],
+                static_inputs={},
+                result_node_id="2",
+                media_type="video",
+            )
+
     def test_registry_seeds_presets_and_custom_crud_is_persistent(self):
         with tempfile.TemporaryDirectory() as temp:
             database = Path(temp) / "config.db"
@@ -359,6 +388,132 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(output.read_bytes(), b"video")
             self.assertEqual(output.suffix, ".mp4")
 
+    def test_custom_workflow_combo_tokens_match_declared_options(self):
+        class StubResponse:
+            status_code = 200
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {
+                    "ResolutionSelector": {
+                        "input": {
+                            "required": {
+                                "aspect_ratio": [
+                                    "COMBO",
+                                    {"options": ["1:1 (Square)", "16:9 (Widescreen)", "9:16 (Portrait Widescreen)"]},
+                                ],
+                                "megapixels": ["FLOAT", {"default": 0.4}],
+                            }
+                        }
+                    }
+                }
+
+        class StubClient:
+            def __init__(self):
+                self.paths = []
+
+            def get(self, path):
+                self.paths.append(path)
+                return StubResponse()
+
+        engine = ComfyUIH3Engine(Settings(), ComfyNodeConfig("node", "Node", "http://comfy.test:8188"))
+        workflow = {
+            "7": {
+                "class_type": "ResolutionSelector",
+                "inputs": {"aspect_ratio": "16:9", "megapixels": 0.4, "multiple": 32},
+            }
+        }
+        snapshot = {
+            "field_mappings": {
+                "ratio": {"node_id": "7", "input": "aspect_ratio"},
+                "megapixels": {"node_id": "7", "input": "megapixels"},
+            }
+        }
+        client = StubClient()
+        engine._align_workflow_combo_values(client, workflow, snapshot)
+        self.assertEqual(workflow["7"]["inputs"]["aspect_ratio"], "16:9 (Widescreen)")
+        self.assertEqual(workflow["7"]["inputs"]["megapixels"], 0.4)
+        self.assertEqual(workflow["7"]["inputs"]["multiple"], 32)
+        self.assertEqual(client.paths, ["/object_info/ResolutionSelector"])
+
+    def test_custom_workflow_stages_derive_generic_labels(self):
+        workflow = {
+            "13": {"class_type": "BasicScheduler", "inputs": {"steps": 8}},
+            "9": {"class_type": "KSampler", "inputs": {"model": ["13", 0]}},
+            "125": {"class_type": "VAEDecode", "inputs": {"samples": ["9", 0]}},
+            "92": {"class_type": "SaveVideo", "inputs": {"video": ["125", 0]}},
+            "7": {"class_type": "ResolutionSelector", "inputs": {"aspect_ratio": "16:9 (Widescreen)"}},
+        }
+        stages = ComfyUIH3Engine._custom_workflow_stages(workflow)
+        self.assertEqual(set(stages), set(workflow))
+        labels = {node: stage[1] for node, stage in stages.items()}
+        self.assertEqual(labels["13"], "采样")
+        self.assertEqual(labels["9"], "采样")
+        self.assertEqual(labels["125"], "VAE 编解码")
+        self.assertEqual(labels["92"], "保存结果")
+        self.assertEqual(labels["7"], "准备参数")
+        self.assertNotIn("编码音乐描述与歌词", labels.values())
+        self.assertLess(stages["13"][0], stages["92"][0])
+        self.assertGreaterEqual(stages["7"][0], 6)
+        self.assertLessEqual(stages["92"][0], 96)
+        self.assertEqual(ComfyUIH3Engine._custom_workflow_stages({}), {})
+
+    def test_custom_workflow_waits_with_generic_stages(self):
+        class StubResponse:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return self.payload
+
+        class StubClient:
+            def get(self, path):
+                return StubResponse({"p": {"status": {"completed": True, "status_str": "success"}}})
+
+        class StubSocket:
+            def __init__(self, messages):
+                self.messages = list(messages)
+
+            def recv(self, timeout=None):
+                return self.messages.pop(0)
+
+        events = [
+            {"type": "execution_start", "data": {"prompt_id": "p"}},
+            {"type": "executing", "data": {"prompt_id": "p", "node": "13"}},
+            {"type": "progress", "data": {"prompt_id": "p", "node": "9", "value": 3, "max": 10}},
+            {"type": "executing", "data": {"prompt_id": "p", "node": "92"}},
+            {"type": "execution_success", "data": {"prompt_id": "p"}},
+        ]
+        stages = ComfyUIH3Engine._custom_workflow_stages(
+            {
+                "13": {"class_type": "BasicScheduler", "inputs": {}},
+                "9": {"class_type": "KSampler", "inputs": {"model": ["13", 0]}},
+                "92": {"class_type": "SaveVideo", "inputs": {"video": ["9", 0]}},
+            }
+        )
+        engine = ComfyUIH3Engine(Settings(), ComfyNodeConfig("node", "Node", "http://comfy.test:8188"))
+        calls = []
+        history = engine._wait_for_finished(
+            StubSocket([json.dumps(event) for event in events]),
+            StubClient(),
+            "p",
+            lambda percent, message: calls.append((percent, message)),
+            lambda: False,
+            False,
+            stage_map=stages,
+        )
+        self.assertTrue(history["status"]["completed"])
+        messages = [message for _, message in calls]
+        self.assertEqual(messages[0], "ComfyUI 自定义工作流开始执行")
+        self.assertEqual(messages[1], "采样")
+        self.assertEqual(messages[2], "采样 3/10")
+        self.assertIn("保存结果", messages)
+        self.assertFalse(any("Music3" in message or "音乐" in message for message in messages))
 
     def test_custom_workflow_reference_slots_build_loader_nodes(self):
         with tempfile.TemporaryDirectory() as temp:

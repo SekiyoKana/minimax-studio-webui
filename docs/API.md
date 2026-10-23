@@ -112,7 +112,7 @@ DELETE /api/v1/workflows/{workflow_id}
 POST   /api/v1/workflows/{workflow_id}/sync
 ```
 
-自定义工作流的 `workflow_json` 必须是 ComfyUI API 格式。`field_mappings` 使用 `{字段: {"node_id": "节点 ID", "input": "输入名"}}`，支持 `prompt`、`lyrics`、`width`、`height`、`duration`、`num_frames`、`steps` 和 `seed`。`reference_mappings` 使用 `type`、`index`、`node_id`、`input` 和 `required` 绑定参考素材，`index` 是按媒体类型从 1 开始的序号；`input` 也可以填 `ref_images` / `ref_videos` / `ref_audios` 并附加 `"slot": true`，此时按 `index` 动态创建 `LoadImage` / `VHS_LoadVideo` / `LoadAudio` 节点并接到 `ref_image_N` / `ref_video_N` / `ref_audio_N` 上，参考素材数量不再受固定节点数量限制（同类素材可超过已声明的槽位数量）。`result_node_id` 必须指向包含 `filename_prefix` 输入的结果节点。
+自定义工作流的 `workflow_json` 必须是 ComfyUI API 格式。`field_mappings` 使用 `{字段: {"node_id": "节点 ID", "input": "输入名"}}`，支持 `prompt`、`lyrics`、`width`、`height`、`ratio`、`megapixels`、`duration`、`num_frames`、`steps` 和 `seed`。`reference_mappings` 使用 `type`、`index`、`node_id`、`input` 和 `required` 绑定参考素材，`index` 是按媒体类型从 1 开始的序号；`input` 也可以填 `ref_images` / `ref_videos` / `ref_audios` 并附加 `"slot": true`，此时按 `index` 动态创建 `LoadImage` / `VHS_LoadVideo` / `LoadAudio` 节点并接到 `ref_image_N` / `ref_video_N` / `ref_audio_N` 上，参考素材数量不再受固定节点数量限制（同类素材可超过已声明的槽位数量）。`result_node_id` 必须指向包含 `filename_prefix` 输入的结果节点。
 
 创建任务时提交 `workflow_id`。服务保存工作流图、映射、版本和目标节点快照，任务执行使用该快照。自定义工作流只能调度到已同步且在线的目标 ComfyUI 节点；RunningHub 和互联代理继续使用原有接口。
 
